@@ -17,6 +17,11 @@ def set_working_dir():
     
     logging.info(f"Setting logfile in working dir")
 
+    plot_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    if not os.path.exists(plot_dir):
+        os.makedirs(plot_dir)
+
+
  
 
 
@@ -192,32 +197,46 @@ def execute_aoflagger_strategy():
     report_flag(aoflagger_flagging_summary, 'field')
 
 
+
+
 def sbd_fringefit():
 
-    try:
-        casaplotms.plotms(
-            vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
-            timerange=timerange, correlation='LL', avgtime='1200',
-            showgui=False, plotfile=vis.replace('.ms','.png'), coloraxis='spw', overwrite=True,
-            gridcols=3, gridrows=3, iteraxis='baseline'
-        )
-    except Exception as plotms_error:
-        logging.critical(f"Error occurred during plotms: {plotms_error}")
+    plot_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    sbd_plotfile_before = "before_sbd_fringefit.png"
 
-    try:
-        sbd_table = vis.replace('.ms', '.sbd')
-        os.system(f'rm -rf {sbd_table}.*')
-    except Exception as rm_error:
-        logging.critical(f"Error occurred during file removal: {rm_error}")
+    sbd_table = vis.replace('.ms', '_sbd.gcal')
+    # try:
+    #     casaplotms.plotms(
+    #         vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
+    #         timerange=timerange, correlation='LL',avgtime='1200',
+    #         showgui=False, plotfile= sbd_plotfile_before, coloraxis='spw', overwrite=True,
+    #         gridcols=3, gridrows=3, iteraxis='baseline',
+    #     )
+    # except Exception as plotms_error:
+    #     logging.critical(f"Error occurred during plotms: {plotms_error}")
 
-    try:
-        casatasks.fringefit(
-            vis=vis, caltable=sbd_table, solint='inf',
-            zerorates=True, timerange=timerange, refant=refant,
-            minsnr=snr_sbd, parang=True
-        )
-    except Exception as fringefit_error:
-        logging.critical(f"Error occurred during fringefit: {fringefit_error}")
+    # try:
+    #     sbd_table = vis.replace('.ms', '_sbd.gcal')
+    #     os.system(f'rm -rf {sbd_table}.*')
+    # except Exception as rm_error:
+    #     logging.critical(f"Error occurred during file removal: {rm_error}")
+
+    # try:
+    #     casatasks.fringefit(
+    #         vis=vis, caltable=sbd_table, solint='inf',
+    #         zerorates=True, timerange=timerange, refant=refant,
+    #         minsnr=snr_sbd, parang=True
+    #     )
+    # except Exception as fringefit_error:
+    #     logging.critical(f"Error occurred during fringefit: {fringefit_error}")
+
+
+
+    ### create an empty dict to hold the cal tables
+    global cal_tables_dict
+    cal_tables_dict = {}
+    cal_tables_dict[sbd_table] = "nearest"
+    logging.info(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
 
 def applycal_sbd_fringe():
 
@@ -226,24 +245,23 @@ def applycal_sbd_fringe():
 
     """
 
-    sbd_table = vis.replace(".ms",".sbd")
-    sbd_plotfile_corr = sbd_table.replace("time_jump.png","_corrected_time_jump.png")
+    sbd_plotfile_after = "after_sbd_fringefit.png"
 
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
 
-    casatasks.applycal(
-        vis = vis, field = '',gaintable=sbd_table,
-        interp = ['nearest'], parang = True,
+    logging.info(f"======>>>Applying {table} using interpolation {interp}")  
+    casatasks.applycal(vis = vis, field = '',gaintable=[table],interp = [interp], parang = True,
+    )
+    
+    casaplotms.plotms(vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
+        timerange=timerange, correlation='LL',showgui=False, coloraxis='spw',avgtime='1200', width=1920, height=1080,
+        gridcols=3, gridrows=3, iteraxis='baseline',plotfile=sbd_plotfile_after,overwrite=True
         )
     
-    casaplotms.plotms(
-        vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
-        timerange=timerange, 
-        correlation='LL',showgui=False, coloraxis='spw',avgtime='1200',
-        gridcols=3, gridrows=3, iteraxis='baseline',
-        plotfile=sbd_plotfile_corr+'_corrected_time_jump.png',overwrite=True
-        )
-    
-
+    sbd_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after applying sbd corrections")
+    report_flag(sbd_flagging_summary, 'field')
 
 def mbd_fringefit():
     """
@@ -251,60 +269,56 @@ def mbd_fringefit():
 
     """
 
+    mbd_table = vis.replace('.ms', '_mbd.gcal')
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
 
-    sbd_table = vis.replace('.ms', '.sbd')
-    mbd_table = vis.replace('.ms', '.mbd')
+    os.system('rm -rf {}*'.format(mbd_table))
 
-    try:
-        if not os.path.exists(sbd_table):
-            raise FileNotFoundError(f"The table file '{sbd_table}' does not exist. You need to run instr fring")
+    casatasks.fringefit(
+        vis=vis, caltable=mbd_table, solint=solint,
+        zerorates=False, field=phase_calibrator, refant=refant, minsnr=snr_mbd, combine='spw',
+        corrdepflags=True,
+        gaintable=table,
+        interp=interp, parang=True,
+    )
 
-        os.system('rm -rf {}*'.format(mbd_table))
-
-        casatasks.fringefit(
-            vis=vis, caltable=mbd_table, solint=solint,
-            zerorates=False, field=phase_calibrator, refant=refant, minsnr=snr_mbd, combine='spw',
-            corrdepflags=True,
-            gaintable=[sbd_table],
-            interp=['nearest'], parang=True,
+    for m in ['delay', 'phase', 'rate']:
+        plotfile = '{}_mbd_{}'.format(vis.replace(".ms", ""), m) + ".png"
+        casaplotms.plotms(
+            vis=mbd_table, yaxis=m, xaxis='time', gridcols=3, gridrows=3,
+            coloraxis='corr', iteraxis='antenna', highres=True, showgui=False,  width=1920, height=1080,
+            overwrite=True, plotfile=plotfile,
         )
+    else:
+        logging.info("Multiband fringe successfully completed")
+ 
+    cal_tables_dict[mbd_table] = "linear"
 
-        for m in ['delay', 'phase', 'rate']:
-            plotfile = '{}_mbd_{}'.format(vis.replace(".ms", ""), m) + ".png"
-            casaplotms.plotms(
-                vis=mbd_table, yaxis=m, xaxis='time', gridcols=3, gridrows=3,
-                coloraxis='corr', iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500,
-                height=750, overwrite=True, plotfile=plotfile,
-            )
-        else:
-            logging.info("Multiband fringe successfully completed")
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
+
 
 def applycal_mbd_fringe():
     """
     Applying all the global fringe fit solutions to the data and plotting the data 
     """
-    # logging.info("Applying mbd corrections")
 
-
-    mbd_table = vis.replace(".ms",".mbd")
-    sbd_table = vis.replace(".ms",".sbd")
-
-    casatasks.applycal(
-            vis = vis, field = phase_calibrator + ',' + target, 
-            gaintable=[sbd_table,mbd_table],
-            interp = ['nearest','linear'], spwmap = [[], 8*[0]], parang = True,
-        )
-    mbd_plotfile_corr = vis.replace(".ms","_corrected_phases.png")
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
+    logging.info(f"======>>>Applying {table} using interpolation {interp}")    
+    # casatasks.applycal(
+    #         vis = vis, field = phase_calibrator + ',' + target, gaintable=table,
+    #         interp = interp, spwmap = [[], 8*[0]], parang = True,
+    #     )
 
     casaplotms.plotms(
-            vis=sbd_table, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
+            vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
             correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw',
-            plotfile=mbd_plotfile_corr,overwrite=True
+            plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
         ) 
     
-    
+    mbd_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after applying mbd corrections")
+    report_flag(mbd_flagging_summary, 'field')
 
 def bpass():
     
@@ -313,27 +327,28 @@ def bpass():
     """
 
 
-    mbd_table = vis.replace(".ms",".mbd")
-    sbd_table = vis.replace(".ms",".sbd")
-    bpass_table = vis.replace(".ms",".bpass")
+    bpass_table = vis.replace(".ms","_gcal.bpass")
 
 
     os.system(f'rm -rf {bpass_table}*')
 
     logging.info("Calculating bandpass solutions")
-
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
     casatasks.bandpass(
         vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, field = phase_calibrator, 
-        refant=refant, caltable = bpass_table,gaintable = [sbd_table,mbd_table], 
-        interp = ['nearest','linear'],spwmap = [[], 8*[0]], parang=True 
+        refant=refant, caltable = bpass_table,gaintable = table, 
+        interp = interp,spwmap = [[], 8*[0]], parang=True 
         )
     
     for m in ['amp','phase']:
         casaplotms.plotms(
                 vis=bpass_table, yaxis=m, xaxis='frequency', gridcols=3, gridrows=3, 
-                coloraxis='spw',iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, 
-                height=750, overwrite=True, plotfile='{}_{}'.format(vis.replace(".ms",".bpass"),m)+'.png',
+                coloraxis='spw',iteraxis='antenna', highres=True, showgui=False, width=1920, height=1080,
+                overwrite=True, plotfile='{}_{}'.format(vis.replace(".ms",".bpass"),m)+'.png',
             )  
+    
+    cal_tables_dict[bpass_table] = "nearest,nearest"
 
 def applycal_bpass():
 
@@ -342,19 +357,21 @@ def applycal_bpass():
     """
     logging.info("Applying bandpass solutions")
 
+    bpass_plotfile = vis.replace(".ms","_gcal.png")
 
-    mbd_table = vis.replace(".ms",".mbd")
-    sbd_table = vis.replace(".ms",".sbd")
-    bpass_table = vis.replace(".ms",".bpass")
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
+    logging.info(f"======>>>Applying {table} using interpolation {interp}")   
 
 
-    casatasks.applycal(
-            vis = vis, field = '', gaintable = [sbd_table,mbd_table,bpass_table],
-            interp = ['nearest','linear','nearest,nearest'],
-            spwmap = [[], 8*[0],[]],
-            parang = True,
+
+    casatasks.applycal(vis = vis, field = '', gaintable = table,interp = interp,
+            spwmap = [[], 8*[0],[]],parang = True,
         )
-
+    casaplotms.plotms(vis=vis, xaxis='frequency', yaxis='amp', antenna='EF&*', ydatacolumn='corrected',
+        timerange=timerange, correlation='LL',showgui=False, coloraxis='spw',avgtime='1200',
+        gridcols=3, gridrows=3, iteraxis='baseline',plotfile=bpass_plotfile,overwrite=True
+        )
 
 # def getimaging_params():
 
