@@ -405,7 +405,6 @@ def mytclean(source,niter):
 
     if niter == 0:
         # cell_size = getimaging_params()
-        cell_size='1mas'
         logging.info(f"Making dirty map for {source}")
         
     imagename = source+f"_num_{niter}_iterations"
@@ -414,10 +413,8 @@ def mytclean(source,niter):
     os.system(f"rm -r {imagename}.*")
     
     logging.info("Running tclean")
-    casatasks.tclean(
-        vis=vis,imsize=imsize,imagename=imagename,cell=cell_size,
-        niter=niter, deconvolver='clark',interactive=False, gridder='standard',
-        field=source,
+    casatasks.tclean(vis=vis,imsize=imsize,imagename=imagename,cell=cell,
+        niter=niter, deconvolver='clark',interactive=False, gridder='standard',field=source,
         )  
 
 
