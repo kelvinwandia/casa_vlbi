@@ -104,24 +104,23 @@ def flagging():
         print("Manual flagging file not supplied")
 
 
-def run_aoflagger_container():
 
-    """
-    Executes singularity containers from python
-
-    """
+def execute_aoflagger_strategy():
 
     try:
-        container = singularity_path.rstrip('/')+'/' + aoflagger_sif
+        # container = os.path.join(aoflagger_path.rstrip('/'), aoflagger_sif)
+        container = aoflagger_path
+        print(f"Checking for container at: {container}")
         if os.path.exists(container):
             logging.info(f"Found {container}")
-            singularity_bind = os.path.join(os.path.dirname(os.path.dirname(singularity_path)))
+            singularity_bind = os.path.join(os.path.dirname(os.path.dirname(aoflagger_path)))
             logging.info(f"You are binding singularity to {singularity_bind}")
-
+        else:
+            print(f"{container} not found")
     except FileNotFoundError:
         logging.critical(f"Singularity container not found")
- 
-    fields = getfields() 
+
+    fields  = getfields()
 
     phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
     fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
@@ -130,74 +129,43 @@ def run_aoflagger_container():
     faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
 
 
+    for field in fields.values():
         
-    for _,value in fields.items():
-        logging.info(f"Flagging {value}")
-        if value in phase_calibrator:
-            # logging.info(f"Using strategy {bright_strategy} for {phase_calibrator}")
-            command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + bright_strategy
-            try:
-                logging.info("Executing: %s", ' '.join(command_to_execute))
-                process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-                stdout, stderr = process.communicate()
-                logging.info("stdout: %s", stdout)
-                logging.info("stderr: %s", stderr)
+        # Determine the appropriate strategy based on the type of field
+        if field in phase_calibrator:
+            strategy = bright_strategy
+        elif field in fringe_finder:
+            strategy = bright_strategy
+        elif field in target:
+            strategy = faint_strategy
+        else:
+            logging.critical(f"No strategy defined for field {field}")
+            
 
-                return_code = process.returncode
-                if return_code == 0:
-                    logging.info(f"Strategy executed successfully. Output:\n{stdout}")
-                else:
-                    logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
+        logging.info(f"Flagging {field}")
+        logging.info(f"Using strategy {strategy}")
+        command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + strategy
 
-                logging.info(f"Finished flagging field {value}")
+        try:
+            logging.info("Executing: %s", ' '.join(command_to_execute))
+            process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            stdout, stderr = process.communicate()
+            logging.info("stdout: %s", stdout)
+            logging.info("stderr: %s", stderr)
 
-            except Exception as e:
-                logging.critical(f"An error occurred: {e}")
+            return_code = process.returncode
+            if return_code == 0:
+                logging.info(f"Strategy executed successfully. Output:\n{stdout}")
+            else:
+                logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
 
-    
-        elif value in target:
-            logging.info(f"Flagging {value}")
-            # logging.info(f"Using strategy {faint_strategy} for {target}")
-            command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + faint_strategy
-            try:
-                logging.info("Executing: %s", ' '.join(command_to_execute))
-                process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-                stdout, stderr = process.communicate()
-                logging.info("stdout: %s", stdout)
-                logging.info("stderr: %s", stderr)
+            logging.info(f"Finished flagging field {value}")
 
-                return_code = process.returncode
-                if return_code == 0:
-                    logging.info(f"Strategy executed successfully. Output:\n{stdout}")
-                else:
-                    logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
+        except Exception as e:
+            logging.critical(f"An error occurred: {e}")
 
-                logging.info(f"Finished flagging field {value}")
 
-            except Exception as e:
-                logging.critical(f"An error occurred: {e}")
 
-        elif value in fringe_finder:
-            logging.info(f"Flagging {value}")
-            logging.info(f"Using strategy {bright_strategy} for {fringe_finder}")
-            command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + bright_strategy
-            try:
-                # logging.info("Executing: %s", ' '.join(command_to_execute))
-                process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-                stdout, stderr = process.communicate()
-                logging.info("stdout: %s", stdout)
-                logging.info("stderr: %s", stderr)
-
-                return_code = process.returncode
-                if return_code == 0:
-                    logging.info(f"Strategy executed successfully. Output:\n{stdout}")
-                else:
-                    logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
-
-                logging.info(f"Finished flagging field {value}")
-
-            except Exception as e:
-                logging.critical(f"An error occurred: {e}")
 
 
 def sbd_fringefit():

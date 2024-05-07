@@ -12,20 +12,37 @@ import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-logfile_name = datetime.now().strftime('casa_cal_%H_%M_%S_%d_%m_%Y.log')
-logging.basicConfig(filename=logfile_name,level=logging.DEBUG)
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-logging.getLogger('').addHandler(console)
+print("Creating log dir")
+log_dir = os.path.join(os.getcwd(), 'logs')
+
+if not os.path.exists(log_dir):
+    print(f"Log directory '{log_dir}' does not exist, creating it...")
+    os.makedirs(log_dir, exist_ok=True)
+else:
+    print(f"Log directory '{log_dir}' exists")
+
+try:
+    console
+except:
+    logfile_name = datetime.now().strftime('casa_vlbi_%H:%M:%S_%d:%m:%Y.log')
+    filename = os.path.join(log_dir, logfile_name)
+    
+    logging.basicConfig(filename=filename, level=logging.DEBUG)
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
+
 
 
 load_data = config.getboolean('globals','load_data')
 experiment = config.get('globals','experiment_name')
 working_directory = config.get('globals', 'working_directory')
 uvfits_file = config.get('globals','uvfits_file')
-singularity_path = config.get('globals','singularity_path')
+aoflagger_path = config.get('globals','aoflagger_path')
 use_singularity = config.getboolean('globals','use_singularity')
-
+# singularity_bind = config.get('globals','singularity_bind')
 
 target = config.get('basic','target')
 phase_calibrator = config.get('basic','phase_calibrator')
@@ -121,8 +138,8 @@ if load_data == True:
 if do_flagging == True:
     try:
         logging.info("Flagging data")
-        flagging()
-        run_aoflagger_container()
+        # flagging()
+        execute_aoflagger_strategy()
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
