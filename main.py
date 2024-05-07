@@ -10,7 +10,7 @@ import matplotlib
 
 import configparser
 config = configparser.ConfigParser()
-config.read('config_casa.ini')
+config.read('config.ini')
 
 logfile_name = datetime.now().strftime('casa_cal_%H_%M_%S_%d_%m_%Y.log')
 logging.basicConfig(filename=logfile_name,level=logging.DEBUG)
@@ -84,9 +84,9 @@ apply_to_target = config.getboolean('selfcal','apply_to_target')
 # pb corrections
 do_pbcor = config.getboolean('pbcor','do_pbcor')
 
-exec(open(".calibration/calibrate.py").read())
-exec(open(".selfcal/selfcal.py").read())
-exec(open(".calibration/pbcor.py"))
+exec(open("./calibration/calibrate.py").read())
+exec(open("./selfcal/selfcal.py").read())
+# exec(open("./calibration/pbcor.py").read())
 
 
 if not os.path.exists(working_directory):
