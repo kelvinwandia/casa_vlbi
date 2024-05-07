@@ -251,7 +251,7 @@ def applycal_sbd_fringe():
     interp = list(cal_tables_dict.values())
 
     logging.info(f"======>>>Applying {table} using interpolation {interp}")  
-    casatasks.applycal(vis = vis, field = '',gaintable=[table],interp = [interp], parang = True,
+    casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
     
     casaplotms.plotms(vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
