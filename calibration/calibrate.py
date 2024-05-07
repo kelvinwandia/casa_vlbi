@@ -59,14 +59,8 @@ def getfields():
         for index, item in enumerate(fieldnames):
             if any(char.isdigit() for char in item):
                 fields[index] = item
-
-        try:
-            if phase_calibrator in fields.values() and target in fields.values():
-                logging.info(f"{phase_calibrator} and {target} found in {vis}")
-
-        except Exception as e:
-            logging.critical(f"{fields} not present in {vis}")
-
+       
+        logging.info(f"{fields} found in measurement set")
         
         return fields
 
@@ -107,6 +101,10 @@ def flagging():
 
 def execute_aoflagger_strategy():
 
+    """
+    Flags using aoflagger
+    """
+
     try:
         # container = os.path.join(aoflagger_path.rstrip('/'), aoflagger_sif)
         container = aoflagger_path
@@ -125,17 +123,18 @@ def execute_aoflagger_strategy():
     phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
     fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
     target_keys = [key for key, value in fields.items() if value in target]
-    bright_strategy = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
+    bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
     faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
+    bright_strategy_fringefinder = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, fringe_finder_keys)), '-strategy', bright_source_strategy, vis]
 
 
     for field in fields.values():
         
         # Determine the appropriate strategy based on the type of field
         if field in phase_calibrator:
-            strategy = bright_strategy
+            strategy = bright_strategy_phasecal
         elif field in fringe_finder:
-            strategy = bright_strategy
+            strategy = bright_strategy_fringefinder
         elif field in target:
             strategy = faint_strategy
         else:
@@ -163,7 +162,6 @@ def execute_aoflagger_strategy():
 
         except Exception as e:
             logging.critical(f"An error occurred: {e}")
-
 
 
 
