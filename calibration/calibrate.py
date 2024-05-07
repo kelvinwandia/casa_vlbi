@@ -66,6 +66,16 @@ def getfields():
 
 
 
+def report_flag(summary, axis):
+    # logging.info("REPORTING FLAGGING STATS")
+    try:
+        for id, stats in summary[axis].items():
+            logging.info('%s %s: %5.1f percent flagged' % (axis, id, 100. * stats['flagged'] / stats['total']))
+    except Exception as e:
+        logging.info(f"Exception {e} while reporting flags")
+    
+
+
 
 def flagging():
 
@@ -75,7 +85,10 @@ def flagging():
             vis = vis, autocorr=True )
     logging.info("Auto-correlations flagged successfully")
 
-    
+    autocorr_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after flagging autocorr")
+    report_flag(autocorr_flagging_summary, 'field')
+
     logging.info(f"Quacking every {integration_time}s from each scan")
     casatasks.flagdata(
         vis = vis, mode='quack', quackinterval=integration_time, quackmode='beg',
@@ -87,6 +100,11 @@ def flagging():
         )
     logging.info("Finished quacking")
 
+    flagmanager(vis=vis, mode='save', versionname="after_quacking")
+
+    quacking_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after quacking")
+    report_flag(quacking_flagging_summary, 'field')
 
     if os.path.exists(manual_file):
         logging.info(f"Flagging file {manual_file} exists")
@@ -97,7 +115,11 @@ def flagging():
     else:
         print("Manual flagging file not supplied")
 
+    flagmanager(vis=vis, mode='save', versionname="after_manual_flagging")
 
+    manual_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after manual flagging")
+    report_flag(manual_flagging_summary, 'field')
 
 def execute_aoflagger_strategy():
 
@@ -158,12 +180,16 @@ def execute_aoflagger_strategy():
             else:
                 logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
 
-            logging.info(f"Finished flagging field {value}")
+            logging.info(f"Finished flagging field {field}")
 
         except Exception as e:
             logging.critical(f"An error occurred: {e}")
 
+    flagmanager(vis=vis, mode='save', versionname="after_automatic_flagging")
 
+    aoflagger_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after automatic flagging")
+    report_flag(aoflagger_flagging_summary, 'field')
 
 
 def sbd_fringefit():
