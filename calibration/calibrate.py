@@ -301,7 +301,7 @@ def applycal_mbd_fringe():
     """
     Applying all the global fringe fit solutions to the data and plotting the data 
     """
-
+    mbd_plotfile = 'applied_mbd.png'
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")    
