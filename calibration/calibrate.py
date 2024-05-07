@@ -205,30 +205,30 @@ def sbd_fringefit():
     sbd_plotfile_before = "before_sbd_fringefit.png"
 
     sbd_table = vis.replace('.ms', '_sbd.gcal')
-    # try:
-    #     casaplotms.plotms(
-    #         vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
-    #         timerange=timerange, correlation='LL',avgtime='1200',
-    #         showgui=False, plotfile= sbd_plotfile_before, coloraxis='spw', overwrite=True,
-    #         gridcols=3, gridrows=3, iteraxis='baseline',
-    #     )
-    # except Exception as plotms_error:
-    #     logging.critical(f"Error occurred during plotms: {plotms_error}")
+    try:
+        casaplotms.plotms(
+            vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
+            timerange=timerange, correlation='LL',avgtime='1200',
+            showgui=False, plotfile= sbd_plotfile_before, coloraxis='spw', overwrite=True,
+            gridcols=3, gridrows=3, iteraxis='baseline',
+        )
+    except Exception as plotms_error:
+        logging.critical(f"Error occurred during plotms: {plotms_error}")
 
-    # try:
-    #     sbd_table = vis.replace('.ms', '_sbd.gcal')
-    #     os.system(f'rm -rf {sbd_table}.*')
-    # except Exception as rm_error:
-    #     logging.critical(f"Error occurred during file removal: {rm_error}")
+    try:
+        sbd_table = vis.replace('.ms', '_sbd.gcal')
+        os.system(f'rm -rf {sbd_table}.*')
+    except Exception as rm_error:
+        logging.critical(f"Error occurred during file removal: {rm_error}")
 
-    # try:
-    #     casatasks.fringefit(
-    #         vis=vis, caltable=sbd_table, solint='inf',
-    #         zerorates=True, timerange=timerange, refant=refant,
-    #         minsnr=snr_sbd, parang=True
-    #     )
-    # except Exception as fringefit_error:
-    #     logging.critical(f"Error occurred during fringefit: {fringefit_error}")
+    try:
+        casatasks.fringefit(
+            vis=vis, caltable=sbd_table, solint='inf',
+            zerorates=True, timerange=timerange, refant=refant,
+            minsnr=snr_sbd, parang=True
+        )
+    except Exception as fringefit_error:
+        logging.critical(f"Error occurred during fringefit: {fringefit_error}")
 
 
 
@@ -305,10 +305,11 @@ def applycal_mbd_fringe():
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")    
-    # casatasks.applycal(
-    #         vis = vis, field = phase_calibrator + ',' + target, gaintable=table,
-    #         interp = interp, spwmap = [[], 8*[0]], parang = True,
-    #     )
+
+    casatasks.applycal(
+            vis = vis, field = phase_calibrator + ',' + target, gaintable=table,
+            interp = interp, spwmap = [[], 8*[0]], parang = True,
+        )
 
     casaplotms.plotms(
             vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
@@ -357,13 +358,11 @@ def applycal_bpass():
     """
     logging.info("Applying bandpass solutions")
 
-    bpass_plotfile = vis.replace(".ms","_gcal.png")
+    bpass_plotfile = vis.replace(".ms","_bpass_gcal.png")
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")   
-
-
 
     casatasks.applycal(vis = vis, field = '', gaintable = table,interp = interp,
             spwmap = [[], 8*[0],[]],parang = True,
@@ -372,6 +371,10 @@ def applycal_bpass():
         timerange=timerange, correlation='LL',showgui=False, coloraxis='spw',avgtime='1200',
         gridcols=3, gridrows=3, iteraxis='baseline',plotfile=bpass_plotfile,overwrite=True
         )
+    
+    bpass_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after applying bpass corrections")
+    report_flag(bpass_flagging_summary, 'field')
 
 # def getimaging_params():
 
@@ -410,12 +413,9 @@ def mytclean(source,niter):
     
     os.system(f"rm -r {imagename}.*")
     
-
-   
-    im_size = [int(x) for x in imsize.split(',')]
     logging.info("Running tclean")
     casatasks.tclean(
-        vis=vis,imsize=im_size,imagename=imagename,cell=cell_size,
+        vis=vis,imsize=imsize,imagename=imagename,cell=cell_size,
         niter=niter, deconvolver='clark',interactive=False, gridder='standard',
         field=source,
         )  
