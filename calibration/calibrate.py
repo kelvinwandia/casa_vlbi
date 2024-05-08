@@ -220,6 +220,35 @@ def calc_flagged_data(field):
         pass
 
 
+
+def get_msinfo():
+
+    nchan = []
+    msmd = casatools.msmetadata()
+    msmd.open(vis)
+    bandwidth = msmd.bandwidths()
+    nspw = len(bandwidth)
+    for spw in range(nspw):
+        nchan.append(msmd.nchan(spw))
+    msmd.close()
+
+    return nspw,nchan
+
+
+
+
+
+def flag_edge_channels(edge_fraction=0.1):
+
+    _,  nchan = get_msinfo()
+
+    edge_channels = int(nchan[0]/(100*edge_fraction))
+    start = str(edge_channels - 1)
+    end = str(nchan[0] - edge_channels)
+
+    flagdata(vis=vis,mode='manual',spw=f"*:0~{start};{end}~{nchan[0]-1}",flagbackup=False)
+
+
 def sbd_fringefit():
 
     plot_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
