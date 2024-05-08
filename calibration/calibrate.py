@@ -196,6 +196,27 @@ def execute_aoflagger_strategy():
     logging.info("======>>>REPORTING FLAGGING STATS after automatic flagging")
     report_flag(aoflagger_flagging_summary, 'field')
 
+def calc_flagged_data(field):
+
+    # Get the scan data
+    tb = casatools.table()
+    tb.open(vis + '/ANTENNA')
+    antenna_names = tb.getcol('NAME')
+    # antenna_names = [int(name) for name in antenna_names.tolist()]
+    tb.close()
+
+    try:
+        for antenna in antenna_names:
+            print(f"Calculating the flagging statistics for scans in antenna {antenna}")
+            flagged_vis = flagdata(vis=vis,mode='summary',field=field,antenna=antenna)
+            for key in sorted(flagged_vis['scan']):
+                value = flagged_vis['scan'][key]
+                flagged_scan = value['flagged']
+                total_scan = value['total']
+                ratio = flagged_scan / total_scan
+                print(f"{ratio * 100:.2f}% of antenna {antenna} in scan {key} are flagged")
+    except Exception as e:
+        print(f"Exception exception {e}: Antenna {antenna} may not have data due to flagging")
 
 
 
