@@ -207,7 +207,7 @@ def calc_flagged_data(field):
 
     try:
         for antenna in antenna_names:
-            print(f"Calculating the flagging statistics for scans in antenna {antenna}")
+            print(f"======>>>Calculating the flagging statistics for scans in antenna {antenna}")
             flagged_vis = flagdata(vis=vis,mode='summary',field=field,antenna=antenna)
             for key in sorted(flagged_vis['scan']):
                 value = flagged_vis['scan'][key]
@@ -216,8 +216,8 @@ def calc_flagged_data(field):
                 ratio = flagged_scan / total_scan
                 print(f"{ratio * 100:.2f}% of antenna {antenna} in scan {key} are flagged")
     except Exception as e:
-        print(f"Exception exception {e}: Antenna {antenna} may not have data due to flagging")
-
+        print(f"======>>>Exception exception {e}: Antenna {antenna} may not have data due to flagging")
+        pass
 
 
 def sbd_fringefit():
