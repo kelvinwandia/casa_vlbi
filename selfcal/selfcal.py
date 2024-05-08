@@ -50,7 +50,40 @@ def get_im_stats(imagename):
 
         txt_file.write(f"For {imagename}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
 
+def make_mms():
 
+    # Use mms to speed up casa imaging -- this needs a flag
+    # such that it can be easily disabled
+    ## split for the field -- e
+
+    # msmd = casatasks.msmetadata()
+    # msmd.open(vis)
+    # scans = msmd.scansforfield(field=field)
+    # nscans = len(scans)
+
+    # sources = [phase_calibrator,target]
+    # for source in sources:
+    #     mstransform(
+    #         vis=vis, outputvis=source+'.ms', datacolumn='corrected',field=source, 
+    #         createmms=True, separationaxis = 'scan', numsubms = msmd.nscans()
+    #     )
+    # vis = '/home/kelvin/Desktop/gv020_working_dir/gv020b/J2139+1423.ms'
+    # phase_calibrator = 'J2139+1423'
+    # imagename = f'imagename_{phase_calibrator}'
+    # # logging.info(f"Making {imagename}")
+    
+    # os.system(f"rm -r {imagename}.*")
+    
+    # imsize = [640,640]
+    # cell='1mas'
+    
+    # logging.info("Running tclean")
+    # casatasks.tclean(vis=vis,imsize=imsize,imagename=imagename,cell=cell,
+    #     niter=0, deconvolver='clark',interactive=False, gridder='standard',field=phase_calibrator,
+    #     parallel=True
+    #     )  
+
+    pass
 
 def pybdsf(input_image):
 
@@ -77,6 +110,8 @@ def pybdsf(input_image):
 
     return regionfile
 
+
+
 def selfcal_part1(field):
 
     """
@@ -91,7 +126,7 @@ def selfcal_part1(field):
         print(f"Making {first_part_imagename}")
         tclean(
             vis = vis, imagename=first_part_imagename, imsize=imsize, cell=cell, field=field,
-            gridder = 'standard', weighting = weighting, robust = robust, niter=100000, threshold = '100mJy',   
+            gridder = 'standard', weighting = weighting, robust = robust, niter=pybdsf_niter, threshold = pybdsf_threshold,   
         )
 
     regionfile = pybdsf(input_image=first_part_imagename+'.image')
@@ -106,8 +141,8 @@ def selfcal_part2(field):
     delmod(vis=vis,otf=True)
 
     for selfcal_loop in range(nloops):
-        caltable = f'caltable_{selfcal_loop}.gcal'
-        prev_caltables = sorted(glob.glob('*.gcal'))
+        caltable = f'caltable_{selfcal_loop}.tb'
+        prev_caltables = sorted(glob.glob('*.tb'))
         if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
             applycal(vis=vis, gaintable = prev_caltables, parang=False )
     
@@ -149,17 +184,17 @@ def selfcal_part2(field):
                     plotms(
                         vis = caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
                         iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
-                        plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750,
+                        plotfile=caltable.replace('.tb',f'_{color}.png'), dpi=300, width=1500, height=750,
                     )
                 else:
                     plotms(
                             vis = caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
                             iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
-                            plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750
+                            plotfile=caltable.replace('.tb',f'_{color}.png'), dpi=300, width=1500, height=750
                         )
 
             if selfcal_loop == nloops-1:
-                prev_caltables = sorted(glob.glob('*.gcal'))
+                prev_caltables = sorted(glob.glob('*.tb'))
                 print("Applying the caltable derived from last gaincal iteration")
                 applycal(vis=vis, gaintable = prev_caltables, parang=False )
         
@@ -184,7 +219,7 @@ def selfcal_part2(field):
 #     """
 #     Applies cal to the target field
 #     """
-#     prev_caltables = sorted(glob.glob('*.gcal'))
+#     prev_caltables = sorted(glob.glob('*.tb'))
 #     applycal(
 #         vis = vis_tocal, gaintable = prev_caltables, parang=False
 #     )
