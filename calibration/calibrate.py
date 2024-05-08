@@ -147,48 +147,50 @@ def execute_aoflagger_strategy():
 
     fields  = getfields()
 
-    phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
-    fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
-    target_keys = [key for key, value in fields.items() if value in target]
-    bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
-    faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
-    bright_strategy_fringefinder = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, fringe_finder_keys)), '-strategy', bright_source_strategy, vis]
+    # phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
+    # fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
+    # target_keys = [key for key, value in fields.items() if value in target]
+    # bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
+    # faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
+    # bright_strategy_fringefinder = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, fringe_finder_keys)), '-strategy', bright_source_strategy, vis]
+    aoflagger_cmds = ['aoflagger', '-v', '-indirect-read', '-strategy', flagging_strategy, vis]
 
 
-    for field in fields.values():
+
+    # for field in fields.values():
         
-        # Determine the appropriate strategy based on the type of field
-        if field in phase_calibrator:
-            strategy = bright_strategy_phasecal
-        elif field in fringe_finder:
-            strategy = bright_strategy_fringefinder
-        elif field in target:
-            strategy = faint_strategy
-        else:
-            logging.critical(f"No strategy defined for field {field}")
+    #     # Determine the appropriate strategy based on the type of field
+    #     if field in phase_calibrator:
+    #         strategy = bright_strategy_phasecal
+    #     elif field in fringe_finder:
+    #         strategy = bright_strategy_fringefinder
+    #     elif field in target:
+    #         strategy = faint_strategy
+    #     else:
+    #         logging.critical(f"No strategy defined for field {field}")
             
 
-        logging.info(f"Flagging {field}")
-        logging.info(f"Using strategy {strategy}")
-        command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + strategy
+        # logging.info(f"Flagging {field}")
+    logging.info(f"Using strategy {flagging_strategy}")
+    command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + aoflagger_cmds
 
-        try:
-            logging.info("Executing: %s", ' '.join(command_to_execute))
-            process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            stdout, stderr = process.communicate()
-            logging.info("stdout: %s", stdout)
-            logging.info("stderr: %s", stderr)
+    try:
+        logging.info("Executing: %s", ' '.join(command_to_execute))
+        process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        stdout, stderr = process.communicate()
+        logging.info("stdout: %s", stdout)
+        logging.info("stderr: %s", stderr)
 
-            return_code = process.returncode
-            if return_code == 0:
-                logging.info(f"Strategy executed successfully. Output:\n{stdout}")
-            else:
-                logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
+        return_code = process.returncode
+        if return_code == 0:
+            logging.info(f"Strategy executed successfully. Output:\n{stdout}")
+        else:
+            logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
 
-            logging.info(f"Finished flagging field {field}")
+        # logging.info(f"Finished flagging field {field}")
 
-        except Exception as e:
-            logging.critical(f"An error occurred: {e}")
+    except Exception as e:
+        logging.critical(f"An error occurred: {e}")
 
     flagmanager(vis=vis, mode='save', versionname="after_automatic_flagging")
 

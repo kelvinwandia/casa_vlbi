@@ -56,12 +56,12 @@ width = config.getint('basic','width')
 do_flagging = config.getboolean('flagging','do_flagging')
 aoflagger_sif = config.get('flagging','aoflagger_sif')
 # aoflagger_strategies = config.get('flagging','aoflagger_strategies')
-faint_source_strategy = config.get('flagging','faint_source_strategy')
-bright_source_strategy = config.get('flagging','bright_source_strategy')
+# faint_source_strategy = config.get('flagging','faint_source_strategy')
+# bright_source_strategy = config.get('flagging','bright_source_strategy')
 manual_file = config.get('flagging','manual_file')
 edge_channel_fraction = config.getfloat('flagging','edge_channel_fraction')
 use_aoflagger = config.getboolean('flagging','use_aoflagger')
-
+flagging_strategy = config.get('flagging','flagging_strategy')
 
 
 # calibrate
@@ -141,9 +141,9 @@ if load_data == True:
 
 if do_flagging == True:
     try:
-        # logging.info("Flagging data")
+        logging.info("Flagging data")
         # flagging()
-        flag_edge_channels()
+        # flag_edge_channels()
         if use_aoflagger == True:
             execute_aoflagger_strategy()
     except Exception as e:
