@@ -235,18 +235,17 @@ def get_msinfo():
     return nspw,nchan
 
 
-
-
-
-def flag_edge_channels(edge_fraction=0.1):
+def flag_edge_channels():
 
     _,  nchan = get_msinfo()
-
-    edge_channels = int(nchan[0]/(100*edge_fraction))
-    start = str(edge_channels - 1)
+    edge_channels = int(nchan[0]/(100*edge_channel_fraction))
+    start = str(edge_channels-1)
     end = str(nchan[0] - edge_channels)
-
     flagdata(vis=vis,mode='manual',spw=f"*:0~{start};{end}~{nchan[0]-1}",flagbackup=False)
+
+    edge_channel_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after flagging the edge channels")
+    report_flag(edge_channel_flagging_summary, 'field')
 
 
 def sbd_fringefit():
