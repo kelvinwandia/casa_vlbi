@@ -210,7 +210,7 @@ def sbd_fringefit():
             vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
             timerange=timerange, correlation='LL',avgtime='1200',
             showgui=False, plotfile= sbd_plotfile_before, coloraxis='spw', overwrite=True,
-            gridcols=3, gridrows=3, iteraxis='baseline',
+            gridcols=3, gridrows=3, iteraxis='baseline', width=1920, height=1080
         )
     except Exception as plotms_error:
         logging.critical(f"Error occurred during plotms: {plotms_error}")
