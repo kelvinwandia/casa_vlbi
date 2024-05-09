@@ -6,7 +6,7 @@ import numpy as np
 import subprocess
 import matplotlib
 # matplotlib.use('Agg')  
-
+import time
 
 import configparser
 config = configparser.ConfigParser()
@@ -43,6 +43,7 @@ uvfits_file = config.get('globals','uvfits_file')
 aoflagger_path = config.get('globals','aoflagger_path')
 use_singularity = config.getboolean('globals','use_singularity')
 # singularity_bind = config.get('globals','singularity_bind')
+wsclean_sif = config.get('globals','wsclean_sif')
 
 target = config.get('basic','target')
 phase_calibrator = config.get('basic','phase_calibrator')
@@ -84,6 +85,8 @@ detection_threshold = config.getfloat('selfcal','detection_threshold')
 # selfcal
 do_selfcal = config.getboolean('selfcal','do_selfcal')
 
+pybdsf_threshold = config.get('selfcal','pybdsf_threshold')
+pybdsf_niter = config.getint('selfcal','pybdsf_niter')
 
 weighting = config.get('selfcal','weighting')
 robust = config.getfloat('selfcal','robust')
@@ -95,8 +98,8 @@ cell =  config.get('selfcal', 'cell')
 threshold = config.get('selfcal','threshold').split(',')
 minsnr = [float(part) for part in config.get('selfcal', 'minsnr').split(',')]
 imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
-niter = [int(part) for part in config.get('selfcal', 'niter').split(',')]
-
+# niter = [int(part) for part in config.get('selfcal', 'niter').split(',')]
+niter = config.get('selfcal','niter')
 niter_final = config.getint('selfcal','niter_final')
 threshold_final = config.get('selfcal','threshold_final')
 solint_selfcal = config.get('selfcal','solint_selfcal').split(',')
@@ -108,6 +111,9 @@ do_pbcor = config.getboolean('pbcor','do_pbcor')
 exec(open("./calibration/calibrate.py").read())
 exec(open("./selfcal/selfcal.py").read())
 # exec(open("./calibration/pbcor.py").read())
+
+
+
 
 
 if not os.path.exists(working_directory):
@@ -142,8 +148,8 @@ if load_data == True:
 if do_flagging == True:
     try:
         logging.info("Flagging data")
-        # flagging()
-        # flag_edge_channels()
+        flagging()
+        flag_edge_channels()
         if use_aoflagger == True:
             execute_aoflagger_strategy()
     except Exception as e:
@@ -201,8 +207,9 @@ if make_dirty_map == True:
 if do_selfcal == True:
     try:
         logging.info("Self calibrating the data")
-        # selfcal_part1(phase_calibrator)
-        selfcal_part2(phase_calibrator)
+        split_selfcal()
+        selfcal_part1()
+        selfcal_part2()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 

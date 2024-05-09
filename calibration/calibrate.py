@@ -1,5 +1,12 @@
-
-
+def time_execution(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        execution_time = (end_time - start_time) / 60  # Divide by 60 to convert seconds to minutes
+        print(f"Execution time for {func.__name__}: {execution_time:.2f} minutes")
+        return result
+    return wrapper
 
 def set_working_dir():
 
