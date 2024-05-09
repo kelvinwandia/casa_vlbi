@@ -385,7 +385,6 @@ def applycal_tsys_gc():
     )
     
 
-
 @time_execution
 def sbd_fringefit():
 
@@ -485,7 +484,8 @@ def mbd_fringefit():
  
     cal_tables_dict[mbd_table] = "linear"
 
-
+#### TODO: Fix the spw mapping here --
+### Loop through the dict and map properly for mbd
 @time_execution
 def applycal_mbd_fringe():
     """
