@@ -7,52 +7,7 @@ import casalogger
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
-
-
-# vis = '/home/kelvin/Desktop/gv020_working_dir/gv020b/J2139+1423.ms'
-
-def plot_fits(fitsname):
-    """
-    Plots fitsfiles using astropy
-    """
-    fitsfile = fits.open(fitsname)
-    image_data = fitsfile[0].data[0,0,:,:]
-    ny, nx = image_data.shape
-    x_center = nx // 2
-    y_center = ny // 2
-    x_new = np.arange(nx) - x_center
-    y_new = np.arange(ny) - y_center
-
-    fig, ax = plt.subplots()
-
-    # image_plot = ax.imshow(image_data, origin='lower', 
-    #                    extent=[x_new.min(), x_new.max(), y_new.min(), y_new.max()],cmap='viridis')
-    image_plot = ax.imshow(image_data, origin='lower', 
-                       extent=[-32, 32, -32, 32],cmap='viridis')
-    cbar = plt.colorbar(image_plot,ax=ax,orientation='vertical')
-    # ax.set_title(sources_to_image,fontsize=16)
-    plt.savefig(fitsname.replace('.fits','.pdf'))
-
-def get_im_stats(imagename):
-    
-    """
-    Gets the statistics for either a 256x256 pix image and writes
-    them to a logfile
-    """
-
-
-    rms=casatasks.imstat(imagename=imagename,box='60,60,580,240')['rms'][0]  # for 640x640 px
-    peak=casatasks.imstat(imagename=imagename,box='300,300,340,340')['max'][0]
-    print('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
-                (imagename, peak*1e3, rms*1e3, peak/rms))
-    
-    logfile = 'imstat.txt'
-    casa_imstat = imstat(imagename)
-    with open(logfile,"a") as txt_file:
-        txt_file.write('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
-                    (imagename, peak*1e3, rms*1e3, peak/rms))
-
-        txt_file.write(f"For {imagename}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
+from utils.helper_functions import *
 
 def make_mms():
 
@@ -89,7 +44,7 @@ def make_mms():
 
     pass
 
-
+@time_execution
 def split_selfcal():
     
     sources = [phase_calibrator,target]
@@ -107,58 +62,8 @@ def split_selfcal():
     phasecal_ms = phase_calibrator+'.ms'
     target_ms = target+'.ms'
 
-def pybdsf(input_image):
 
-    imagename = input_image
-    fitsname = imagename
-
-    img = bdsf.process_image(fitsname,adaptive_rms_box=True, thresh='hard',
-                            thresh_isl=True, thresh_pix = detection_threshold, advanced_opts=True,
-                            mean_map='map', rms_map =True, group_by_isl=True)
-    # adaptive_rms_box=False, spline_rank=4, thresh='hard', thresh_isl=True, thresh_pix = detection_threshold
-    # Write out island mask and FITS catalog -- for the large map
-    fits_maskfile = imagename.replace('.fits','.maskfile.fits')
-    catalog_file = imagename.replace('.fits','.cat')
-    img.export_image(outfile=fits_maskfile,img_type='island_mask',img_format='fits',clobber=True)
-    img.write_catalog(outfile=catalog_file, format='fits', clobber=True, catalog_type ='gaul')
-    
-    regionfile = imagename.replace('.fits','.casabox')
-    ascii_file = imagename.replace('.fits','.ascii')
-    rmsfile = imagename.replace('.fits','.rmsfile')
-
-    img.write_catalog(outfile=regionfile,format='casabox',clobber=True,catalog_type='srl')
-    img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
-    img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
-
-    return regionfile
-
-def run_wsclean(command):
-
-    """
-    Runs wsclean commands 
-    """
-
-    container = wsclean_sif
-    if os.path.exists(container):
-        singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
-
-    command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
-    try:
-        print("Executing: %s", ' '.join(command_to_execute))
-        process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        stdout, stderr = process.communicate()
-        print("stdout: %s", stdout)
-        print("stderr: %s", stderr)
-
-        return_code = process.returncode
-        if return_code == 0:
-            print(f"Strategy executed successfully. Output:\n{stdout}")
-        else:
-            print(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")  
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
+@time_execution
 def selfcal_part1():
 
     """
@@ -178,7 +83,7 @@ def selfcal_part1():
     regionfile = pybdsf(input_image=pybdsf_imagename+'-image.fits')
 
 
-
+@time_execution
 def selfcal_part2():
 
     pybdsf_imagename = phasecal_ms.replace('.ms','')+'_pybdsf'
@@ -258,7 +163,7 @@ def selfcal_part2():
     imagename_final = phasecal_ms.replace('.ms','')+f'final_map_loop_{nloops-1}'
     ##  tclean here to make the final image
     print("Make final image with all selfcal corrections applied")
-    wsclean_cmd_final = ['wsclean', '-log-time', '-auto-threshold',f'{threshold_final[0]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename_final}', \
+    wsclean_cmd_final = ['wsclean', '-log-time', '-auto-threshold',f'{threshold_final}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename_final}', \
             '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
             '-mgain', '0.8', '-niter', f'{niter_final}', f'{phasecal_ms}']
 
@@ -269,16 +174,17 @@ def selfcal_part2():
     plot_fits(wsclean_fitsfile)
 
 
+@time_execution
+def applycal_target():
 
-# def applycal_target():
-
-#     """
-#     Applies cal to the target field
-#     """
-#     prev_caltables = sorted(glob.glob('*.tb'))
-#     applycal(
-#         vis = vis_tocal, gaintable = prev_caltables, parang=False
-#     )
+    """
+    Applies cal to the target field
+    """
+    prev_caltables = sorted(glob.glob('*.tb'))
+    print(f"Applying calibration tables {prev_caltables} to {target_ms}")
+    applycal(
+        vis = target_ms, gaintable = prev_caltables, parang=False
+    )
 
 
 
