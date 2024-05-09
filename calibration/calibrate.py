@@ -30,14 +30,15 @@ def attach_metadata():
     Attaches the metadata to the FITS IDI files
     """
 
-    idifitsfiles = sorted(idifitsfiles,key=lambda x: int(re.findall(r'\d+$', x)[0]))
+    idifitsfiles = glob.glob(f"{idifitsfiles_path.rstrip('/')}/{experiment}_1_1.IDI*")
 
+    idifitsfiles = sorted(idifitsfiles,key=lambda x: int(re.findall(r'\d+$', x)[0]))
     ### Download helper scripts from jive-vlbi
 
     helper_scripts = 'casa-vlbi-master.zip'
     if not os.path.exists(helper_scripts):
         repo_url = 'https://github.com/jive-vlbi/casa-vlbi/archive/refs/heads/master.zip'
-        subprocess.run(['wget', '-c', repo_url, '-O', helper_scripts], check=True)
+        subprocess.run(['wget','-P',working_directory, '-c', repo_url, '-O', helper_scripts], check=True)
 
         with zipfile.ZipFile(helper_scripts,'r') as zip_ref:
             zip_ref.extractall()
@@ -45,7 +46,7 @@ def attach_metadata():
             shutil.move(helper_scripts.strip('.zip'),'casa-vlbi') # rename the file to casa-vlbi
     else:
         print("JIVE helper scripts already downloaded: ",helper_scripts)
-
+  
     sys.path.append('casa-vlbi')
 
     from casavlbitools.fitsidi import append_tsys,append_gc
@@ -88,25 +89,19 @@ def attach_metadata():
             # Close the FITS file
             hdul.close()
     
-    ## Attaching gaincurves
-    replace = False
-    hdul = fits.open(filename,mode='update')
-    try:
-        hdu = hdul['GAIN_CURVE']
-        if not replace:
-            print("Warning:GAIN_CURVE table already present in FITS-IDI file")
-            sys.exit(1)
-        else:
-            hdul.pop('GAIN_CURVE')
-            print("Existing GAIN_CURVE table removed from FITS-IDI file")
+    extension_name = 'GAIN_CURVE'
+    hdul = fits.open(idifitsfiles[0])
+    if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
+        print(f"'{extension_name}' exists in the FITS file.")
+        hdul.close()
+    else:
+        print(f"Extension '{extension_name}' does not exist in the {filename} file.")
+        print(f"Attaching {extension_name}")
+        append_gc(antab_file, idifitsfiles[0])
         
-    except KeyError:
-        print("GAIN_CURVE table does not exist")
+        print("Finished attaching TSYS table")
+        hdul.close()
 
-        print("Attaching GAIN_CURVE table")
-        append_gc(antab_file, idifitsfiles[0])  # Gain curve requires only one of the fits-idi files
-        print("Finished attaching GAIN_CURVE table")
-    hdul.close()
 
 
 @time_execution
@@ -114,11 +109,13 @@ def makems(vis,splitvis=None):
 
     if not os.path.exists(vis):
         logging.info(f"Making {vis}")
-        if load_idifiles:
+        if load_idifiles == True:
+            idifitsfiles = glob.glob(f"{idifitsfiles_path.rstrip('/')}/{experiment}_1_1.IDI*")
             idifitsfiles = sorted(idifitsfiles,key=lambda x: int(re.findall(r'\d+$', x)[0]))
             print("You have chosen to import fitsidifiles")
-            casatasks.importfitsidi(fitsidifile=idifitsfiles, vis = vis, scanreindexgap_s='15.0')
+            casatasks.importfitsidi(fitsidifile=idifitsfiles, vis = vis, scanreindexgap_s=15.0)
         else:
+            print("You have chosen to import uvfits")
             casatasks.importuvfits(
                 vis=vis, fitsfile=uvfits_file
             )

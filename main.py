@@ -1,4 +1,4 @@
-import os, glob, re, logging
+import os, glob, re, logging, sys, zipfile, shutil
 from datetime import datetime
 import casatasks, casatools
 import casaplotms
@@ -7,6 +7,7 @@ import subprocess
 import matplotlib
 # matplotlib.use('Agg')  
 import time
+from astropy.io import fits
 
 msmd = casatools.msmetadata()
 tb = casatools.table()
@@ -60,6 +61,13 @@ integration_time = config.getfloat('basic','integration_time')
 do_split = config.getboolean('basic','do_split')
 timebin = config.get('basic','timebin')
 width = config.getint('basic','width')
+
+
+## idifits
+load_idifiles = config.getboolean('globals','load_idifiles')
+idifitsfiles_path = config.get('globals','idifitsfiles_path')
+uvflg_file = config.get('globals','uvflg_file')
+antab_file = config.get('globals','antab_file')
 
 # flag
 do_flagging = config.getboolean('flagging','do_flagging')
@@ -122,7 +130,7 @@ do_pbcor = config.getboolean('pbcor','do_pbcor')
 if not os.path.exists(working_directory):
     logging.info(f"{working_directory} does not exist, making one")
     try:
-        set_working_dir(working_directory)
+        set_working_dir()
     except Exception as e:
         logging.error(f"An error occured while creating the working directory: {e}")
 else:
@@ -130,13 +138,16 @@ else:
     os.chdir(working_directory)
 
 if load_data == True:
+    if load_idifiles == True:
+        attach_metadata()
+
     try:
         vis = experiment + '.ms'
-        splitvis = None
+        splitvis = None      
         logging.info("Running CASA task importuvfits")
         makems(vis)
 
-        if do_split:
+        if do_split == True:
             splitvis = vis.replace('.ms', f'_split_{timebin}_{width}_chan.ms')
             makems(vis,splitvis)
             vis = splitvis
