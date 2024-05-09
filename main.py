@@ -169,6 +169,14 @@ if do_flagging == True:
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
+
+if load_idifiles == True:
+    try:
+        gencal_tsys_gc()
+        applycal_tsys_gc()
+    except Exception as e:
+        logging.critical(f"Exception {e} occurred")
+
 if do_sbd_fringe == True:
     try:
         logging.info(f"Deriving corrections for instrumental")

@@ -1,6 +1,10 @@
 
 from utils.helper_functions import *
 
+
+global cal_tables_dict
+cal_tables_dict = {}
+
 def set_working_dir():
 
     """
@@ -54,9 +58,15 @@ def attach_metadata():
     from casavlbitools.casa import convert_gaincurve
 
     # convert uvflg to casa compatible file
-    if not os.path.exists:
-        apriori_flagging_file = uvflg_file.replace('.uvflg','.flag')
+    apriori_flagging_file = uvflg_file.replace('.uvflg','.flag')
+    if not os.path.exists(apriori_flagging_file):
         convert_flags(infile=uvflg_file,idifiles=idifitsfiles,outfp = sys.stdout,outfile=apriori_flagging_file)
+
+    # convert gaincurves
+    gaincurve_infile = experiment+'.gc'
+    if not os.path.exists(gaincurve_infile):
+        convert_gaincurve(antab_file,gaincurve_infile, min_elevation=0.0,max_elevation=90.0)
+
 
     """
     check if system temperatures have been appended to fitsfiles
@@ -337,6 +347,46 @@ def flag_edge_channels():
     report_flag(edge_channel_flagging_summary, 'field')
 
 @time_execution
+def gencal_tsys_gc():
+    
+    """
+    This function generates the system temperatures and gaincurve calibration tables
+
+    """
+    global tsys_caltable, gcal_caltable
+    tsys_table = vis.replace('.ms','_tsys.gcal')
+    gc_table = vis.replace('.ms','_gc.gcal')
+
+    casatasks.gencal(vis=vis, caltable= tsys_table, caltype='tsys', uniform = False)
+
+    casatasks.gencal(vis = vis, caltable=gc_table, caltype='gc', infile= f'{experiment}.gc')
+
+    # Plot the caltable
+    for m in ['frequency','time']:
+        casaplotms.plotms(
+            vis=tsys_table, yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
+            iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, height=750,
+            overwrite=True, plotfile=f'{experiment}_tsys_{m}.png')
+    
+    cal_tables_dict[gc_table] = "nearest"
+    logging.info(f"Cal table {gc_table} added to cal_tables_dict {cal_tables_dict}")
+
+    cal_tables_dict[tsys_table] = "nearest,nearest"
+    logging.info(f"Cal table {tsys_table} added to cal_tables_dict {cal_tables_dict}")
+
+@time_execution
+def applycal_tsys_gc():
+
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
+
+    logging.info(f"======>>>Applying {table} using interpolation {interp}")  
+    casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
+    )
+    
+
+
+@time_execution
 def sbd_fringefit():
 
     plot_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
@@ -370,9 +420,9 @@ def sbd_fringefit():
 
 
 
-    ### create an empty dict to hold the cal tables
-    global cal_tables_dict
-    cal_tables_dict = {}
+    # ### create an empty dict to hold the cal tables
+    # global cal_tables_dict
+    # cal_tables_dict = {}
     cal_tables_dict[sbd_table] = "nearest"
     logging.info(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
 
