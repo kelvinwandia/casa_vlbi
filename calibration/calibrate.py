@@ -21,7 +21,7 @@ def set_working_dir():
     if not os.path.exists(plot_dir):
         os.makedirs(plot_dir)
 
-
+@time_execution
 def attach_metadata():
 
     """
@@ -31,9 +31,6 @@ def attach_metadata():
     """
 
     idifitsfiles = sorted(idifitsfiles,key=lambda x: int(re.findall(r'\d+$', x)[0]))
-    uvflg_file = uvflg_file 
-    antab_file = antab_file
-
 
     ### Download helper scripts from jive-vlbi
 
@@ -117,9 +114,14 @@ def makems(vis,splitvis=None):
 
     if not os.path.exists(vis):
         logging.info(f"Making {vis}")
-        casatasks.importuvfits(
-            vis=vis, fitsfile=uvfits_file
-        )
+        if load_idifiles:
+            idifitsfiles = sorted(idifitsfiles,key=lambda x: int(re.findall(r'\d+$', x)[0]))
+            print("You have chosen to import fitsidifiles")
+            casatasks.importfitsidi(fitsidifile=idifitsfiles, vis = vis, scanreindexgap_s='15.0')
+        else:
+            casatasks.importuvfits(
+                vis=vis, fitsfile=uvfits_file
+            )
 
 
         listfile = vis.replace(".ms","_listobs.list")
