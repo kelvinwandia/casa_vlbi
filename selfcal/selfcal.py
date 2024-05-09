@@ -105,12 +105,14 @@ def pybdsf(input_image):
                             mean_map='map', rms_map =True, group_by_isl=True)
     # adaptive_rms_box=False, spline_rank=4, thresh='hard', thresh_isl=True, thresh_pix = detection_threshold
     # Write out island mask and FITS catalog -- for the large map
-    img.export_image(outfile=imagename+'.maskfile.fits',img_type='island_mask',img_format='fits',clobber=True)
-    img.write_catalog(outfile=imagename+'.cat', format='fits', clobber=True, catalog_type ='gaul')
+    fits_maskfile = imagename.replace('.fits','.maskfile.fits')
+    catalog_file = imagename.replace('.fits','.cat')
+    img.export_image(outfile=fits_maskfile,img_type='island_mask',img_format='fits',clobber=True)
+    img.write_catalog(outfile=catalog_file, format='fits', clobber=True, catalog_type ='gaul')
     
-    regionfile = imagename+'.casabox'
-    ascii_file = imagename+'.ascii'
-    rmsfile = imagename+'.rmsfile'
+    regionfile = imagename.replace('.fits','.casabox')
+    ascii_file = imagename.replace('.fits','.ascii')
+    rmsfile = imagename.replace('.fits','.rmsfile')
 
     img.write_catalog(outfile=regionfile,format='casabox',clobber=True,catalog_type='srl')
     img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
@@ -153,22 +155,22 @@ def selfcal_part1():
     """
     
     # global first_part_imagename
-    imagename = vis.replace('.ms','')+'_pybdsf'
-    if not os.path.exists(imagename+'-image.fits'):
-        print(f"Making {imagename}")
-        wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold','5', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
+    pybdsf_imagename = vis.replace('.ms','')+'_pybdsf'
+    if not os.path.exists(pybdsf_imagename+'-image.fits'):
+        print(f"Making {pybdsf_imagename}")
+        wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold','5', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
                             '-mgain', '0.8', '-niter', f'{pybdsf_niter}', f'{vis}']
         
         run_wsclean(wsclean_cmd)
 
-    regionfile = pybdsf(input_image=imagename+'-image.fits')
+    regionfile = pybdsf(input_image=pybdsf_imagename+'-image.fits')
 
 
 
-def selfcal_part2(field):
+def selfcal_part2():
 
-
-    regionfile = field+'_pybdsf_masking.casabox' 
+    pybdsf_imagename = vis.replace('.ms','')+'_pybdsf'
+    maskfile = pybdsf_imagename+ '-image.maskfile.fits'
 
     print("Deleting model column before selfcal")
     delmod(vis=vis,otf=True)
@@ -179,36 +181,33 @@ def selfcal_part2(field):
         if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
             applycal(vis=vis, gaintable = prev_caltables, parang=False )
     
-        imagename = f'{field}_{selfcal_loop}'
+        imagename = vis.replace('.ms','')+f'_selfcal_loop_{selfcal_loop}'
         if os.path.exists(imagename):
             print("Continuing to the next image")
         
         else:
-            imagename = f'target_selfcal_{selfcal_loop}'
+            imagename =  vis.replace('.ms','')+f'_selfcal_loop_{selfcal_loop}'
             print(f"Making image {imagename}")
-            tclean(
-                vis = vis, imagename=imagename, imsize=imsize, cell=cell,
-                parallel=False,
-                gridder = 'standard', weighting = weighting, robust = robust, niter=niter[selfcal_loop], threshold = threshold[selfcal_loop],
-                interactive=False, usemask='user', mask=regionfile, field=field
-            )
-            # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold','10', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
-            #         '-mgain', '0.8', '-niter', f'{niter[selfcal_loop]}','-field', '7', f'{vis}']
 
-            # run_wsclean(wsclean_cmd)
+            wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold','7', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
+                        '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
+                        '-mgain', '0.8', '-niter', f'{niter[selfcal_loop]}', f'{vis}']
 
-            # exportfits(imagename=imagename+'.image',fitsimage=imagename+'.fits',overwrite=True)
-            # get_im_stats(imagename+'.image')
-            # plot_fits(imagename+'.fits')
+            run_wsclean(wsclean_cmd)
+
+            wsclean_fitsfile = imagename+'-image.fits'
+            get_im_stats(wsclean_fitsfile)
+            plot_fits(wsclean_fitsfile)
           
-            # model_fits = imagename.replace('-image.fits','-model.fits')
-            print("Adding modelcolumn to data")
-            # model images from the MTMFS images,
-            ft(vis = vis, model= imagename+'.model',usescratch=True)
-            # predict_cmd = ['wsclean', '-log-time', '-predict', '-field', '7', '-reorder' ,'-name', f'{imagename}', '-abs-mem', vis]
-            # plot the model column
-            ## Predicting
-            # run_wsclean(predict_cmd)
+            model_fits = imagename.replace('-image.fits','-model.fits')
+
+            print(f"Adding modelcolumn to data. Using {model_fits} to predict")
+            predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-name', f'{imagename}', vis]
+
+            # Predicting
+            run_wsclean(predict_cmd)
+
+            # Plot the model column
             plotms(
                 vis=vis, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
                 showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
@@ -233,21 +232,21 @@ def selfcal_part2(field):
                             plotfile=caltable.replace('.tb',f'_{color}.png'), dpi=300, width=1500, height=750
                         )
 
-            if selfcal_loop == nloops-1:
-                prev_caltables = sorted(glob.glob('*.tb'))
-                print("Applying the caltable derived from last gaincal iteration")
-                applycal(vis=vis, gaintable = prev_caltables, parang=False )
+            # if selfcal_loop == nloops-1:
+            #     prev_caltables = sorted(glob.glob('*.tb'))
+            #     print("Applying the caltable derived from last gaincal iteration")
+            #     applycal(vis=vis, gaintable = prev_caltables, parang=False )
         
         # ### Get the last imagename from the loop and generate a final mask
         
-    imagename = field +f'_{nloops-1}'+'.final'
-    ##  tclean here to make the final image
-    print("Make final image with all selfcal corrections applied")
-    tclean(
-        vis = vis, imagename = imagename, imsize=imsize, cell=cell, weighting = weighting,
-        robust = robust, niter=niter_final, threshold = threshold_final, field=field,
-        interactive=False, usemask = 'user', mask=regionfile,
-    )
+    # imagename = field +f'_{nloops-1}'+'.final'
+    # ##  tclean here to make the final image
+    # print("Make final image with all selfcal corrections applied")
+    # tclean(
+    #     vis = vis, imagename = imagename, imsize=imsize, cell=cell, weighting = weighting,
+    #     robust = robust, niter=niter_final, threshold = threshold_final, field=field,
+    #     interactive=False, usemask = 'user', mask=regionfile,
+    # )
 
 
 ### Use the output here to peel -- wsclean predict should work
