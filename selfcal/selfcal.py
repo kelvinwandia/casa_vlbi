@@ -6,6 +6,10 @@ import bdsf
 import casalogger
 from astropy.io import fits
 import numpy as np
+import matplotlib.pyplot as plt
+
+
+vis = '/home/kelvin/Desktop/gv020_working_dir/gv020b/J2139+1423.ms'
 
 def plot_fits(fitsname):
     """
@@ -85,12 +89,16 @@ def make_mms():
 
     pass
 
+
+    """
+    ### TODO: could replace all instances of tclean with wsclean 
+    ### gaincal remains the same
+    """
+
 def pybdsf(input_image):
 
-    # The input image is a casa .image that then gets exported to a FITS
-    imagename = input_image.replace('.image','')
-    fitsname = imagename+'.fits'
-    exportfits(imagename = input_image, fitsimage=fitsname, overwrite=True)
+    imagename = input_image
+    fitsname = imagename
 
     img = bdsf.process_image(fitsname,adaptive_rms_box=True, thresh='hard',
                             thresh_isl=True, thresh_pix = detection_threshold, advanced_opts=True,
@@ -110,9 +118,34 @@ def pybdsf(input_image):
 
     return regionfile
 
+def run_wsclean(command):
 
+    """
+    Runs wsclean commands 
+    """
 
-def selfcal_part1(field):
+    container = wsclean_sif
+    if os.path.exists(container):
+        singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
+
+    command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
+    try:
+        print("Executing: %s", ' '.join(command_to_execute))
+        process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        stdout, stderr = process.communicate()
+        print("stdout: %s", stdout)
+        print("stderr: %s", stderr)
+
+        return_code = process.returncode
+        if return_code == 0:
+            print(f"Strategy executed successfully. Output:\n{stdout}")
+        else:
+            print(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")  
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+def selfcal_part1():
 
     """
     Creates an (a large) an image that is used to create a casa region file using pybdsf 
@@ -120,16 +153,16 @@ def selfcal_part1(field):
     """
     
     # global first_part_imagename
-    first_part_imagename = field+'_pybdsf_masking'
+    imagename = vis.replace('.ms','')+'_pybdsf'
+    if not os.path.exists(imagename+'-image.fits'):
+        print(f"Making {imagename}")
+        wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold','5', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
+                            '-mgain', '0.8', '-niter', f'{pybdsf_niter}', f'{vis}']
+        
+        run_wsclean(wsclean_cmd)
 
-    if not os.path.exists(first_part_imagename):
-        print(f"Making {first_part_imagename}")
-        tclean(
-            vis = vis, imagename=first_part_imagename, imsize=imsize, cell=cell, field=field,
-            gridder = 'standard', weighting = weighting, robust = robust, niter=pybdsf_niter, threshold = pybdsf_threshold,   
-        )
+    regionfile = pybdsf(input_image=imagename+'-image.fits')
 
-    regionfile = pybdsf(input_image=first_part_imagename+'.image')
 
 
 def selfcal_part2(field):
@@ -159,16 +192,23 @@ def selfcal_part2(field):
                 gridder = 'standard', weighting = weighting, robust = robust, niter=niter[selfcal_loop], threshold = threshold[selfcal_loop],
                 interactive=False, usemask='user', mask=regionfile, field=field
             )
-            exportfits(imagename=imagename+'.image',fitsimage=imagename+'.fits',overwrite=True)
-            get_im_stats(imagename+'.image')
-            plot_fits(imagename+'.fits')
-          
+            # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold','10', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
+            #         '-mgain', '0.8', '-niter', f'{niter[selfcal_loop]}','-field', '7', f'{vis}']
 
+            # run_wsclean(wsclean_cmd)
+
+            # exportfits(imagename=imagename+'.image',fitsimage=imagename+'.fits',overwrite=True)
+            # get_im_stats(imagename+'.image')
+            # plot_fits(imagename+'.fits')
+          
+            # model_fits = imagename.replace('-image.fits','-model.fits')
             print("Adding modelcolumn to data")
             # model images from the MTMFS images,
             ft(vis = vis, model= imagename+'.model',usescratch=True)
-
+            # predict_cmd = ['wsclean', '-log-time', '-predict', '-field', '7', '-reorder' ,'-name', f'{imagename}', '-abs-mem', vis]
             # plot the model column
+            ## Predicting
+            # run_wsclean(predict_cmd)
             plotms(
                 vis=vis, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
                 showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,

@@ -388,7 +388,7 @@ def bpass():
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     casatasks.bandpass(
-        vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, field = phase_calibrator, 
+        vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, field = phase_calibrator + ',' + fringe_finder, 
         refant=refant, caltable = bpass_table,gaintable = table, 
         interp = interp,spwmap = [[], 8*[0]], parang=True 
         )
@@ -420,7 +420,7 @@ def applycal_bpass():
         )
     casaplotms.plotms(vis=vis, xaxis='frequency', yaxis='amp', antenna='EF&*', ydatacolumn='corrected',
         timerange=timerange, correlation='LL',showgui=False, coloraxis='spw',avgtime='1200',
-        gridcols=3, gridrows=3, iteraxis='baseline',plotfile=bpass_plotfile,overwrite=True
+        gridcols=3, gridrows=3, iteraxis='baseline',plotfile=bpass_plotfile,overwrite=True, width=1920, height=1080,
         )
     
     bpass_flagging_summary = flagdata(vis=vis, mode='summary')
