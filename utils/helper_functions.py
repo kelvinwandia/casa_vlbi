@@ -19,7 +19,7 @@ def time_execution(func):
             time_unit = "hours"
             formatted_time = execution_time / 3600
             
-        print(f"Execution time for {func.__name__}: {formatted_time:.2f} {time_unit}")
+        print(f"======>>>Execution time for {func.__name__}: {formatted_time:.2f} {time_unit}")
         return result
     return wrapper
 
