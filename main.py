@@ -8,9 +8,17 @@ import matplotlib
 # matplotlib.use('Agg')  
 import time
 
+msmd = casatools.msmetadata()
+tb = casatools.table()
+
 import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
+
+exec(open("./calibration/calibrate.py").read())
+exec(open("./selfcal/selfcal.py").read())
+exec(open("./utils/helper_functions.py").read())
+
 
 print("Creating log dir")
 log_dir = os.path.join(os.getcwd(), 'logs')
@@ -101,17 +109,12 @@ imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
 # niter = [int(part) for part in config.get('selfcal', 'niter').split(',')]
 niter = config.get('selfcal','niter')
 niter_final = config.getint('selfcal','niter_final')
-threshold_final = config.get('selfcal','threshold_final')
+threshold_final = config.getint('selfcal','threshold_final')
 solint_selfcal = config.get('selfcal','solint_selfcal').split(',')
 apply_to_target = config.getboolean('selfcal','apply_to_target')
 
 # pb corrections
 do_pbcor = config.getboolean('pbcor','do_pbcor')
-
-exec(open("./calibration/calibrate.py").read())
-exec(open("./selfcal/selfcal.py").read())
-# exec(open("./calibration/pbcor.py").read())
-
 
 
 
@@ -200,7 +203,7 @@ if apply_bpass == True:
 if make_dirty_map == True:
     try:
         logging.info("Imaging")
-        mytclean(phase_calibrator,niter=0)
+        dirty_map(phase_calibrator)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 

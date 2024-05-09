@@ -1,12 +1,5 @@
-def time_execution(func):
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        execution_time = (end_time - start_time) / 60  # Divide by 60 to convert seconds to minutes
-        print(f"Execution time for {func.__name__}: {execution_time:.2f} minutes")
-        return result
-    return wrapper
+
+from utils.helper_functions import *
 
 def set_working_dir():
 
@@ -29,10 +22,7 @@ def set_working_dir():
         os.makedirs(plot_dir)
 
 
- 
-
-
-
+@time_execution
 def makems(vis,splitvis=None):
 
     if not os.path.exists(vis):
@@ -88,7 +78,7 @@ def report_flag(summary, axis):
     
 
 
-
+@time_execution
 def flagging():
 
 
@@ -133,6 +123,7 @@ def flagging():
     logging.info("======>>>REPORTING FLAGGING STATS after manual flagging")
     report_flag(manual_flagging_summary, 'field')
 
+@time_execution
 def execute_aoflagger_strategy():
 
     """
@@ -243,7 +234,7 @@ def get_msinfo():
 
     return nspw,nchan
 
-
+@time_execution
 def flag_edge_channels():
 
     _,  nchan = get_msinfo()
@@ -256,7 +247,7 @@ def flag_edge_channels():
     logging.info("======>>>REPORTING FLAGGING STATS after flagging the edge channels")
     report_flag(edge_channel_flagging_summary, 'field')
 
-
+@time_execution
 def sbd_fringefit():
 
     plot_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
@@ -296,6 +287,7 @@ def sbd_fringefit():
     cal_tables_dict[sbd_table] = "nearest"
     logging.info(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
 
+@time_execution
 def applycal_sbd_fringe():
 
     """
@@ -321,6 +313,7 @@ def applycal_sbd_fringe():
     logging.info("======>>>REPORTING FLAGGING STATS after applying sbd corrections")
     report_flag(sbd_flagging_summary, 'field')
 
+@time_execution
 def mbd_fringefit():
     """
     Performs a global fringe fit on all the data and plots the delays, phases and rates
@@ -354,7 +347,7 @@ def mbd_fringefit():
     cal_tables_dict[mbd_table] = "linear"
 
 
-
+@time_execution
 def applycal_mbd_fringe():
     """
     Applying all the global fringe fit solutions to the data and plotting the data 
@@ -379,6 +372,7 @@ def applycal_mbd_fringe():
     logging.info("======>>>REPORTING FLAGGING STATS after applying mbd corrections")
     report_flag(mbd_flagging_summary, 'field')
 
+@time_execution
 def bpass():
     
     """
@@ -409,6 +403,7 @@ def bpass():
     
     cal_tables_dict[bpass_table] = "nearest,nearest"
 
+@time_execution
 def applycal_bpass():
 
     """
@@ -459,20 +454,30 @@ def applycal_bpass():
 
     # return cell_size
 
-def mytclean(source,niter):
 
-    if niter == 0:
-        # cell_size = getimaging_params()
-        logging.info(f"Making dirty map for {source}")
+"""
+Yu need to remove this function and use wsclean here
+"""
+
+@time_execution
+def dirty_map(source):
+
+    imagename = source+'_dirty_map'
+    
+    msmd.open(vis)
+    field_id = msmd.fieldsforname(source)[0]
+    msmd.close()
+
+    if not os.path.exists(imagename+'-image.fits'):
+        logging.info(f"Making {imagename}")
+        wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
+                            '-mgain', '0.8', '-niter', '0' , '-field',f'{field_id}',f'{vis}']
         
-    imagename = source+f"_num_{niter}_iterations"
-    logging.info(f"Making {imagename}")
-    
-    os.system(f"rm -r {imagename}.*")
-    
-    logging.info("Running tclean")
-    casatasks.tclean(vis=vis,imsize=imsize,imagename=imagename,cell=cell,
-        niter=niter, deconvolver='clark',interactive=False, gridder='standard',field=source,
-        )  
+        run_wsclean(wsclean_cmd)
+
+    wsclean_fitsfile = imagename+'-image.fits'
+    get_im_stats(wsclean_fitsfile)
+    plot_fits(wsclean_fitsfile)
+
 
 
