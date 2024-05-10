@@ -122,7 +122,7 @@ do_pbcor = config.getboolean('pbcor','do_pbcor')
 if not os.path.exists(working_directory):
     logging.info(f"{working_directory} does not exist, making one")
     try:
-        set_working_dir(working_directory)
+        set_working_dir()
     except Exception as e:
         logging.error(f"An error occured while creating the working directory: {e}")
 else:
