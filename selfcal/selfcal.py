@@ -197,7 +197,7 @@ def selfcal_part2():
         
         # ### Get the last imagename from the loop and generate a final mask
         
-    imagename_final = source.replace('.ms','')+f'final_map_loop_{nloops-1}'
+    imagename_final = source.replace('.ms','')+f'_final_map_loop_{nloops-1}'
     ##  tclean here to make the final image
     print("Make final image with all selfcal corrections applied")
     wsclean_cmd_final = ['wsclean', '-log-time', '-auto-threshold',f'{threshold_final}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename_final}', \
