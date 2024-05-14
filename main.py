@@ -151,10 +151,10 @@ if load_data == True:
 if do_flagging == True:
     try:
         logging.info("Flagging data")
-        flagging()
-        flag_edge_channels()
         if use_aoflagger == True:
             execute_aoflagger_strategy()
+        flagging()
+        flag_edge_channels()
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
@@ -210,7 +210,7 @@ if make_dirty_map == True:
 if do_selfcal == True:
     try:
         logging.info("Self calibrating the data")
-        split_selfcal()
+        # split_selfcal()
         selfcal_part1()
         selfcal_part2()
     except Exception as e:
