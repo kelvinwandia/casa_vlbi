@@ -131,6 +131,7 @@ def selfcal_part2():
         caltable = f'caltable_{selfcal_loop}.tb'
         prev_caltables = sorted(glob.glob('*.tb'))
         if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
+            print(f"Applying {prev_caltables}")
             applycal(vis=vis, gaintable = prev_caltables, field=str(field_id), parang=False )
     
         imagename = source.replace('.ms','')+f'_selfcal_loop_{selfcal_loop}'
@@ -170,7 +171,7 @@ def selfcal_part2():
             else:
                 minblperant = 4
 
-            gaincal(vis = vis, caltable = caltable, refant = refant, solint = solint_selfcal[selfcal_loop],
+            gaincal(vis = vis, caltable = caltable, refant = refant, solint = solint_selfcal[selfcal_loop],gainfield=source,
                     gaintype = gaintype[selfcal_loop], gaintable=prev_caltables,  minsnr = minsnr[selfcal_loop],
                     calmode = calmode[selfcal_loop], append=False, parang=False, minblperant=minblperant, field=str(field_id)
                     )
