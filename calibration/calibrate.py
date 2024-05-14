@@ -238,7 +238,8 @@ def get_msinfo():
 def flag_edge_channels():
 
     _,  nchan = get_msinfo()
-    edge_channels = int(nchan[0]/(100*edge_channel_fraction))
+    edge_channels = int(nchan[0]*(edge_channel_fraction))
+    logging.info(f"You are flagging edge channels {edge_channels}")
     start = str(edge_channels-1)
     end = str(nchan[0] - edge_channels)
     flagdata(vis=vis,mode='manual',spw=f"*:0~{start};{end}~{nchan[0]-1}",flagbackup=False)
