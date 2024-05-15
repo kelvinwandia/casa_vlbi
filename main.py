@@ -115,7 +115,7 @@ apply_to_target = config.getboolean('selfcal','apply_to_target')
 
 # pb corrections
 do_pbcor = config.getboolean('pbcor','do_pbcor')
-
+pb_file = config.get('pbcor','pb_file')
 
 
 
@@ -154,7 +154,7 @@ if do_flagging == True:
         if use_aoflagger == True:
             execute_aoflagger_strategy()
         flagging()
-        flag_edge_channels()
+        # flag_edge_channels()
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
@@ -224,4 +224,8 @@ if apply_to_target == True:
         logging.warning(f"Encountered error {e}")
 
 if do_pbcor == True:
-    pass
+    try:
+        logging.info(f"You are about to perform pb corrections")
+        load_primary_beams(pb_file)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
