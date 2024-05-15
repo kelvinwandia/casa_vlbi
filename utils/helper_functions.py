@@ -1,6 +1,15 @@
 
 import time
+
+import os, glob, subprocess
 from casatasks import *
+from casaplotms import *
+import bdsf
+import casalogger
+from astropy.io import fits
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 def time_execution(func):
     def wrapper(*args, **kwargs):
@@ -94,15 +103,14 @@ def pybdsf(input_image):
     return regionfile
 
 
-def run_wsclean(command):
+def run_wsclean(wsclean_sif,command):
 
     """
     Runs wsclean commands 
     """
-
     container = wsclean_sif
     if os.path.exists(container):
-        singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
+        singularity_bind = os.path.join(os.path.dirname(os.path.dirname(container)))
 
     command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
     try:
@@ -120,3 +128,4 @@ def run_wsclean(command):
 
     except Exception as e:
         print(f"An error occurred: {e}")
+

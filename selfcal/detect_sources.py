@@ -1,8 +1,14 @@
-from casatasks import *
-import casatools
-import subprocess, os
 
+import os, glob, subprocess
+from casatasks import *
+from casaplotms import *
+import bdsf
+import casalogger
+from astropy.io import fits
+import numpy as np
+import matplotlib.pyplot as plt
 from utils.helper_functions import *
+
 
 
 # phasecenter=['21h29m58.3500s +12d10m01.500s','21h29m58.3120s +12d10m02.679s','21h30m01.2034s +12d10m38.160s',
@@ -48,9 +54,9 @@ def m15_sources():
         print(f"Making image {imagename}")
 
         wsclean_cmd = ['wsclean', '-log-time', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
-                '-scale', f'{cell}','-mgain', '0.8', '-niter', f'{niter}', f'{transformed_ms}']
+                '-scale', f'{cell}','-mgain', '0.8', '-niter', '0', f'{transformed_ms}']
 
-        run_wsclean(wsclean_cmd)
+        run_wsclean(wsclean_sif,wsclean_cmd)
 
         wsclean_fitsfile = imagename+'-image.fits'
         get_im_stats(wsclean_fitsfile)

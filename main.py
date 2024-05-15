@@ -15,9 +15,10 @@ import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
 
+exec(open("./utils/helper_functions.py").read())
 exec(open("./calibration/calibrate.py").read())
 exec(open("./selfcal/selfcal.py").read())
-exec(open("./utils/helper_functions.py").read())
+exec(open("./selfcal/detect_sources.py").read())
 
 
 print("Creating log dir")
@@ -112,6 +113,7 @@ niter_final = config.getint('selfcal','niter_final')
 threshold_final = config.getint('selfcal','threshold_final')
 solint_selfcal = config.get('selfcal','solint_selfcal').split(',')
 apply_to_target = config.getboolean('selfcal','apply_to_target')
+detect_sources = config.getboolean('selfcal','detect_sources')
 
 # pb corrections
 do_pbcor = config.getboolean('pbcor','do_pbcor')
@@ -210,16 +212,22 @@ if make_dirty_map == True:
 if do_selfcal == True:
     try:
         logging.info("Self calibrating the data")
-        # split_selfcal()
-        selfcal_part1()
-        selfcal_part2()
+        split_selfcal()
+        # selfcal_part1()
+        # selfcal_part2()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
 if apply_to_target == True:
     try:
-        logging.info("Applying calibrations to science targe")
-        pass
+        logging.info("Applying calibrations to science target")
+        applycal_target()
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
+
+if detect_sources == True:
+    try:
+        m15_sources()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
