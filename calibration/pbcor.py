@@ -27,37 +27,8 @@ offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d
 # offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
 
 
-# def convert_uvfits_to_ms():
 
-#     """
-#     Converts AIPS calibrated fits to a measurement set
-
-#     """
-
-#     helper_functions.set_working_dir()
-
-#     params = config_loader.load_config()
-#     pb_json_file = params["pb_json_file"]
-#     fitsfile = params["fitsidifiles"]+"M15.UVFITS"
-#     # msfile_path = params["fitsidifiles"]
-#     msfile_path = params["fitsidifiles"]
-#     msname = msfile_path + params["measurement_set"]+'.ms'
-
-
-#     if not os.path.exists(msname):
-#         casatasks.importuvfits(
-#             vis=msname, fitsfile=fitsfile
-#         )
-#     else:
-#         print(f"Measurement set {msname} exists")
-
-#     casatasks.listobs(
-#         vis=msname,listfile=msname.strip('.ms')+'_listobs.txt',
-#         overwrite=True
-#     )
-
-
-def load_primary_beams():
+def load_primary_beams(pb_file):
 
     """
     Loads the primary beam json file and gets the station names in the measurement set
@@ -67,15 +38,7 @@ def load_primary_beams():
         antenna_parameters: antenna names, primary beam model and diameters
     """
 
-    # Set the working_dir
-    # helper_functions.set_working_dir()
-    # convert_uvfits_to_ms()
-
-    params = config_loader.load_config()
-    pb_json_file = params["pb_json_file"]
-    msfile_path = params["fitsidifiles"]
-    msname = msfile_path + params["measurement_set"]+'.ms'
-
+    pb_json_file = pb_file
     try:
         with open(pb_json_file, 'r') as file:
             primary_beams = json.load(file)
@@ -87,7 +50,7 @@ def load_primary_beams():
 
     # Read the stations from the measurement set
     tb = casatools.table()
-    tb.open(f'{msname}/ANTENNA',nomodify=False)
+    tb.open(f'{vis}/ANTENNA',nomodify=False)
     stations = tb.getcol('STATION')
     tb.close()
 
@@ -151,10 +114,10 @@ def angsep(offset_source):
         
         source_coords_skycoord_obj = SkyCoord(source_coords.split()[0],source_coords.split()[1],unit=(u.hourangle,u.deg),frame='icrs')
         
-        ## This formular needs fixing -- 
-        vector_dot_product =  np.cos(pointing_centre_skycoord_obj.ra.radian)*np.cos(source_coords_skycoord_obj.ra.radian)*\
-            np.cos( pointing_centre_skycoord_obj.dec.radian- source_coords_skycoord_obj.dec.radian) + \
-            np.sin(pointing_centre_skycoord_obj.ra.radian)*np.sin(source_coords_skycoord_obj.ra.radian)
+        ## This formular needs fixing -- has been fixed
+        vector_dot_product =  np.cos(pointing_centre_skycoord_obj.dec.radian)*np.cos(source_coords_skycoord_obj.dec.radian)*\
+            np.cos( pointing_centre_skycoord_obj.ra.radian- source_coords_skycoord_obj.ra.radian) + \
+            np.sin(pointing_centre_skycoord_obj.dec.radian)*np.sin(source_coords_skycoord_obj.dec.radian)
        
         angle = np.arccos(vector_dot_product)
         # print(f"The offset angle is {angle*180*60/np.pi} arcmin")
@@ -252,7 +215,7 @@ def gencal_pb_table():
     
     params = config_loader.load_config()
     msfile_path = params["fitsidifiles"]
-    msname = msfile_path + params["measurement_set"]+'.ms'
+    vis = msfile_path + params["measurement_set"]+'.ms'
 
 
     # stations,_ =  load_primary_beams()
@@ -281,7 +244,7 @@ def gencal_pb_table():
         # Get the station name and attenuation and generate a caltable
         for station, antenna_atten in antennas_atten.items():
             casatasks.gencal(
-                vis = msname, parameter=antenna_atten, antenna=station,caltype='amp',
+                vis = vis, parameter=antenna_atten, antenna=station,caltype='amp',
                 caltable = caltable
             )
         if coord not in caltables:
@@ -302,7 +265,7 @@ def apply_corrections_and_image():
 
     params = config_loader.load_config()
     msfile_path = params["fitsidifiles"]
-    msname = msfile_path + params["measurement_set"]+'.ms'
+    vis = msfile_path + params["measurement_set"]+'.ms'
     imsize = params["imsize"]
     cellsize = params["cellsize"]
 
@@ -329,9 +292,9 @@ def apply_corrections_and_image():
         os.system(f"rm -r {phaseshifted_ms}*")
         # subprocess.run(['rm','-r',phaseshifted_ms])
         phasecenter = 'J2000'+ ' '+ coordinate
-        print(f"Phaseshifting {msname} to {phasecenter}")
+        print(f"Phaseshifting {vis} to {phasecenter}")
         casatasks.phaseshift(
-            vis = msname, outputvis = phaseshifted_ms, 
+            vis = vis, outputvis = phaseshifted_ms, 
             phasecenter = phasecenter
         )
 
