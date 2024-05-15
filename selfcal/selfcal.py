@@ -9,40 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from utils.helper_functions import *
 
-def make_mms():
-
-    # Use mms to speed up casa imaging -- this needs a flag
-    # such that it can be easily disabled
-    ## split for the field -- e
-
-    # msmd = casatasks.msmetadata()
-    # msmd.open(vis)
-    # scans = msmd.scansforfield(field=field)
-    # nscans = len(scans)
-
-    # sources = [phase_calibrator,target]
-    # for source in sources:
-    #     mstransform(
-    #         vis=vis, outputvis=source+'.ms', datacolumn='corrected',field=source, 
-    #         createmms=True, separationaxis = 'scan', numsubms = msmd.nscans()
-    #     )
-    # vis = '/home/kelvin/Desktop/gv020_working_dir/gv020b/J2139+1423.ms'
-    # phase_calibrator = 'J2139+1423'
-    # imagename = f'imagename_{phase_calibrator}'
-    # # logging.info(f"Making {imagename}")
-    
-    # os.system(f"rm -r {imagename}.*")
-    
-    # imsize = [640,640]
-    # cell='1mas'
-    
-    # logging.info("Running tclean")
-    # casatasks.tclean(vis=vis,imsize=imsize,imagename=imagename,cell=cell,
-    #     niter=0, deconvolver='clark',interactive=False, gridder='standard',field=phase_calibrator,
-    #     parallel=True
-    #     )  
-
-    pass
 
 @time_execution
 def split_selfcal():
