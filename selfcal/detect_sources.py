@@ -16,7 +16,8 @@ from utils.helper_functions import *
 #         '21h30m02.4410s +12d09m11.500s']
 
 
-phasecenter = ['J2000 21h39m01.309269s +14d23m35.99221s']
+# phasecenter = ['J2000 21h39m01.309269s +14d23m35.99221s']
+phasecenter = ['J2000 21h39m01.309369s +14d23m35.99321s']
 
 
 
@@ -49,18 +50,20 @@ def m15_sources():
                         timebin='20s',chanbin=16)
         else:
             logging.info(f"{transformed_ms} exists. A new one will not be created")
-            
-        imagename =  transformed_ms.replace('.ms','')
-        print(f"Making image {imagename}")
+        
+        
+        imagename =  transformed_ms.replace(".ms","")
+        if not os.path.exists(imagename):
+            logging.info(f"Making image {imagename}")
 
-        wsclean_cmd = ['wsclean', '-log-time', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
-                '-scale', f'{cell}','-mgain', '0.8', '-niter', '0', f'{transformed_ms}']
+            wsclean_cmd = ['wsclean', '-log-time', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
+                    '-scale', f'{cell}','-mgain', '0.8', '-niter', '0', f'{transformed_ms}']
 
-        run_wsclean(wsclean_sif,wsclean_cmd)
+            run_wsclean(wsclean_sif,wsclean_cmd)
 
-        wsclean_fitsfile = imagename+'-image.fits'
-        get_im_stats(wsclean_fitsfile)
-        plot_fits(wsclean_fitsfile)
+            wsclean_fitsfile = imagename+'-image.fits'
+            get_im_stats(wsclean_fitsfile)
+            plot_fits(wsclean_fitsfile)
 
 
 
