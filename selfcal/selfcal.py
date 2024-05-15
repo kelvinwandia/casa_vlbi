@@ -54,8 +54,7 @@ def split_selfcal():
         if not os.path.exists(outputvis):
             print(f"Splitting {vis} to {outputvis}")
             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-            split(
-                vis = vis, outputvis = outputvis, datacolumn='data') 
+            split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source) 
         else:
             print(f"{outputvis} exists. Will not make a new one")
 
@@ -105,7 +104,7 @@ def selfcal_part1():
         # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{pybdsf_threshold}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
         #                     '-mgain', '0.8', '-niter', f'{pybdsf_niter}', f'{source}']
         wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
-                            '-mgain', '0.8', '-niter', f'{pybdsf_niter}' , '-field',f'{field_id}',f'{vis}']
+                            '-mgain', '0.8', '-niter', f'{pybdsf_niter}' , '-field',f'{field_id}',f'{phasecal_ms}']
         
         run_wsclean(wsclean_cmd)
 
@@ -125,14 +124,14 @@ def selfcal_part2():
     maskfile = pybdsf_imagename+ '-image.maskfile.fits'
 
     print("Deleting model column before selfcal")
-    delmod(vis=vis,otf=True,field=str(field_id))
+    delmod(vis=phasecal_ms,otf=True,field=str(field_id))
 
     for selfcal_loop in range(nloops):
         caltable = f'caltable_{selfcal_loop}.tb'
         prev_caltables = sorted(glob.glob('*.tb'))
         if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
             print(f"Applying {prev_caltables}")
-            applycal(vis=vis, gaintable = prev_caltables, field=str(field_id), parang=False )
+            applycal(vis=phasecal_ms, gaintable = prev_caltables, field=str(field_id), parang=False )
     
         imagename = source.replace('.ms','')+f'_selfcal_loop_{selfcal_loop}'
         if os.path.exists(imagename):
@@ -144,7 +143,7 @@ def selfcal_part2():
 
             wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{threshold[selfcal_loop]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
                         '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
-                        '-mgain', '0.8', '-niter', f'{niter}', '-field',f'{field_id}', f'{vis}']
+                        '-mgain', '0.8', '-niter', f'{niter}', '-field',f'{field_id}', f'{phasecal_ms}']
 
             run_wsclean(wsclean_cmd)
 
@@ -155,14 +154,14 @@ def selfcal_part2():
             model_fits = imagename.replace('-image.fits','-model.fits')
 
             print(f"Adding modelcolumn to data. Using {model_fits} to predict")
-            predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-field',f'{field_id}','-name', f'{imagename}', vis]
+            predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-field',f'{field_id}','-name', f'{imagename}', phasecal_ms]
 
             # Predicting
             run_wsclean(predict_cmd)
 
             # Plot the model column
             plotms(
-                vis=vis, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
+                vis=phasecal_ms, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
                 showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
                 field = str(field_id)
             )
@@ -171,7 +170,7 @@ def selfcal_part2():
             else:
                 minblperant = 4
 
-            gaincal(vis = vis, caltable = caltable, refant = refant, solint = solint_selfcal[selfcal_loop],gainfield=source,
+            gaincal(vis = phasecal_ms, caltable = caltable, refant = refant, solint = solint_selfcal[selfcal_loop],gainfield=source,
                     gaintype = gaintype[selfcal_loop], gaintable=prev_caltables,  minsnr = minsnr[selfcal_loop],
                     calmode = calmode[selfcal_loop], append=False, parang=False, minblperant=minblperant, field=str(field_id)
                     )
@@ -193,7 +192,7 @@ def selfcal_part2():
             if selfcal_loop == nloops-1:
                 prev_caltables = sorted(glob.glob('*.tb'))
                 print("Applying the caltable derived from last gaincal iteration")
-                applycal(vis=vis, gaintable = prev_caltables,field=str(field_id), parang=False )
+                applycal(vis=phasecal_ms, gaintable = prev_caltables,field=str(field_id), parang=False )
         
         # ### Get the last imagename from the loop and generate a final mask
         
@@ -202,7 +201,7 @@ def selfcal_part2():
     print("Make final image with all selfcal corrections applied")
     wsclean_cmd_final = ['wsclean', '-log-time', '-auto-threshold',f'{threshold_final}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename_final}', \
             '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
-            '-mgain', '0.8', '-niter', f'{niter_final}','-field',f'{field_id}', f'{vis}']
+            '-mgain', '0.8', '-niter', f'{niter_final}','-field',f'{field_id}', f'{phasecal_ms}']
 
     run_wsclean(wsclean_cmd_final)
 
@@ -218,10 +217,13 @@ def applycal_target():
     Applies cal to the target field
     """
     prev_caltables = sorted(glob.glob('*.tb'))
+    target_ms = target+'.ms'
+
     print(f"Applying calibration tables {prev_caltables} to {target_ms}")
     applycal(
         vis = target_ms, gaintable = prev_caltables, parang=False
     )
+
 
 
 
