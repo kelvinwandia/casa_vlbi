@@ -11,13 +11,10 @@ from utils.helper_functions import *
 
 
 
-# phasecenter=['21h29m58.3500s +12d10m01.500s','21h29m58.3120s +12d10m02.679s','21h30m01.2034s +12d10m38.160s',
-#         '21h29m51.9025s +12d10m17.132s','21h29m56.3050s +12d11m01.500s','21h29m56.3050s +12d09m11.500s',
-#         '21h30m02.4410s +12d09m11.500s']
 
 
+phasecenter = ['21h30m01.203493s +12d10m38.1592s']
 # phasecenter = ['J2000 21h39m01.309269s +14d23m35.99221s']
-phasecenter = ['J2000 21h39m01.309369s +14d23m35.99321s']
 
 
 
@@ -27,11 +24,11 @@ def m15_sources():
     """
     Image sources detected in Kirsten et.al 2015
     """
-    target_ms = phase_calibrator+'.ms'
+    target_ms = target+'.ms'
 
     msmd = casatools.msmetadata()
     msmd.open(target_ms)
-    scans = msmd.scansforfield(field='J2139+1423')
+    scans = msmd.scansforfield(field=target)
     nscans = len(scans)
 
 
@@ -39,7 +36,7 @@ def m15_sources():
         phaseshifted_ms = phasecenter[coord].replace(" ","").replace("+","_").replace("J2000","")+'_phaseshifted.ms'
 
         if not os.path.exists(phaseshifted_ms):
-            phaseshift(vis=target_ms,outputvis=phaseshifted_ms,datacolumn='corrected',phasecenter=phasecenter[coord])
+            phaseshift(vis=target_ms,outputvis=phaseshifted_ms,datacolumn='corrected',phasecenter="J2000"+" "+phasecenter[coord])
         else:
             logging.info(f"{phaseshifted_ms} exists. A new one will not be created")
 
@@ -51,7 +48,8 @@ def m15_sources():
         else:
             logging.info(f"{transformed_ms} exists. A new one will not be created")
         
-        
+        os.system(f"rm -r {phaseshifted_ms}")
+
         imagename =  transformed_ms.replace(".ms","")
         if not os.path.exists(imagename):
             logging.info(f"Making image {imagename}")

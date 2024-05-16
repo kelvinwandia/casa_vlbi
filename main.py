@@ -156,7 +156,7 @@ if do_flagging == True:
         if use_aoflagger == True:
             execute_aoflagger_strategy()
         flagging()
-        # flag_edge_channels()
+        flag_edge_channels()
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
@@ -213,8 +213,8 @@ if do_selfcal == True:
     try:
         logging.info("Self calibrating the data")
         split_selfcal()
-        # selfcal_part1()
-        # selfcal_part2()
+        selfcal_part1()
+        selfcal_part2()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 

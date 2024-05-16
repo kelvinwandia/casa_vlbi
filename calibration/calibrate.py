@@ -390,7 +390,9 @@ def bpass():
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     casatasks.bandpass(
-        vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, field = phase_calibrator + ',' + fringe_finder, 
+        vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
+        # field = phase_calibrator + ',' + fringe_finder, 
+        field = phase_calibrator,
         refant=refant, caltable = bpass_table,gaintable = table, 
         interp = interp,spwmap = [[], 8*[0]], parang=True 
         )
@@ -474,7 +476,7 @@ def dirty_map(source):
         wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
                             '-mgain', '0.8', '-niter', '0' , '-field',f'{field_id}',f'{vis}']
         
-        run_wsclean(wsclean_cmd)
+        run_wsclean(wsclean_sif,wsclean_cmd)
 
     wsclean_fitsfile = imagename+'-image.fits'
     get_im_stats(wsclean_fitsfile)
