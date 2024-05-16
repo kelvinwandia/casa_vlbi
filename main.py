@@ -73,6 +73,9 @@ edge_channel_fraction = config.getfloat('flagging','edge_channel_fraction')
 use_aoflagger = config.getboolean('flagging','use_aoflagger')
 flagging_strategy = config.get('flagging','flagging_strategy')
 
+flag_antenna = config.getboolean('flagging','flag_antenna')
+antenna_to_flag = config.get('flagging','antenna_to_flag')
+
 
 # calibrate
 do_sbd_fringe = config.getboolean('calibrate','do_sbd_fringe')
@@ -158,6 +161,8 @@ if do_flagging == True:
             execute_aoflagger_strategy()
         # flagging()
         # flag_edge_channels()
+        if flag_antenna == True:
+            antenna_flag(antenna_to_flag)
         plot_check_baddata(save_as="_after_flagging")
     except Exception as e:
         logging.critical(f"Exception {e} occurred")

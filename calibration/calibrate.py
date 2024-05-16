@@ -25,7 +25,7 @@ def set_working_dir():
 def makems(vis,splitvis=None):
 
     if not os.path.exists(vis):
-        logging.info(f"Making {vis}")
+        logging.info(f"======>>>Making {vis}")
         casatasks.importuvfits(
             vis=vis, fitsfile=uvfits_file
         )
@@ -162,6 +162,17 @@ def flagging():
     else:
         logging.info("Manual flagging file not supplied")
 
+def antenna_flag(antenna):
+    """
+    Use this if you wish to flag some antennas
+    """
+    logging.info(f"You are flagging antennas {antenna}")
+    flagdata(vis=vis,mode='manual',antenna=antenna)
+
+    antenna_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info(f"======>>>REPORTING FLAGGING STATS after flagging {antenna}")
+    report_flag(antenna_flagging_summary, 'field')
+
    
 @time_execution
 def execute_aoflagger_strategy():
@@ -278,8 +289,14 @@ def flag_edge_channels():
 @time_execution
 def sbd_fringefit():
 
-    plot_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    sbd_plotfile_before = "before_sbd_fringefit.png"
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
+
+    if not os.path.exists(calibration_dir):
+        os.makedirs(calibration_dir)
+
+
+    sbd_plotfile_before = f"{calibration_dir}/before_sbd_fringefit.png"
 
     sbd_table = vis.replace('.ms', '_sbd.gcal')
     try:
@@ -322,8 +339,13 @@ def applycal_sbd_fringe():
     Applying the sbd calibration table to the data and plots the cor rected scan
 
     """
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
 
-    sbd_plotfile_after = "after_sbd_fringefit.png"
+    if not os.path.exists(calibration_dir):
+        os.makedirs(calibration_dir)
+
+    sbd_plotfile_after =f"{calibration_dir}/after_sbd_fringefit.png"
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
@@ -348,6 +370,13 @@ def mbd_fringefit():
 
     """
 
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
+
+    if not os.path.exists(calibration_dir):
+        os.makedirs(calibration_dir)
+
+
     mbd_table = vis.replace('.ms', '_mbd.gcal')
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
@@ -363,7 +392,7 @@ def mbd_fringefit():
     )
 
     for m in ['delay', 'phase', 'rate']:
-        plotfile = '{}_mbd_{}'.format(vis.replace(".ms", ""), m) + ".png"
+        plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_mbd_{m}.png"
         casaplotms.plotms(
             vis=mbd_table, yaxis=m, xaxis='time', gridcols=3, gridrows=3,
             coloraxis='corr', iteraxis='antenna', highres=True, showgui=False,  width=1920, height=1080,
@@ -380,7 +409,14 @@ def applycal_mbd_fringe():
     """
     Applying all the global fringe fit solutions to the data and plotting the data 
     """
-    mbd_plotfile = 'applied_mbd.png'
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
+
+    if not os.path.exists(calibration_dir):
+        os.makedirs(calibration_dir)
+
+
+    mbd_plotfile = f'{calibration_dir}/applied_mbd.png'
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")    
@@ -424,11 +460,18 @@ def bpass():
         interp = interp,spwmap = [[], 8*[0]], parang=True 
         )
     
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
+
+    if not os.path.exists(calibration_dir):
+        os.makedirs(calibration_dir)
+
     for m in ['amp','phase']:
+        plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_bpass_{m}.png"
         casaplotms.plotms(
                 vis=bpass_table, yaxis=m, xaxis='frequency', gridcols=3, gridrows=3, 
                 coloraxis='spw',iteraxis='antenna', highres=True, showgui=False, width=1920, height=1080,
-                overwrite=True, plotfile='{}_{}'.format(vis.replace(".ms",".bpass"),m)+'.png',
+                overwrite=True, plotfile=plotfile,
             )  
     
     cal_tables_dict[bpass_table] = "nearest,nearest"
@@ -441,7 +484,13 @@ def applycal_bpass():
     """
     logging.info("Applying bandpass solutions")
 
-    bpass_plotfile = vis.replace(".ms","_bpass_gcal.png")
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
+
+    if not os.path.exists(calibration_dir):
+        os.makedirs(calibration_dir)
+
+    bpass_plotfile = f'{calibration_dir}/applied_bpass.png'
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
