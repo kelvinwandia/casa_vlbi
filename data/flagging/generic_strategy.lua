@@ -14,12 +14,12 @@ function execute(input)
   -- Generic settings
   --
 
-  local base_threshold = 0.75-- lower means more sensitive detection
+  local base_threshold = 0.9-- lower means more sensitive detection
   -- How to flag complex values, options are: phase, amplitude, real, imaginary, complex
   local representation = "amplitude"
-  local iteration_count = 5 -- how many iterations to perform?
+  local iteration_count = 3 -- how many iterations to perform?
   local threshold_factor_step = 2.5 -- How much to increase the sensitivity each iteration?
-  local transient_threshold_factor = 0.75 -- decreasing this value makes detection of transient RFI more aggressive
+  local transient_threshold_factor = 0.9 -- decreasing this value makes detection of transient RFI more aggressive
 
   --
   -- End of generic settings
