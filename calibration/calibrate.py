@@ -17,11 +17,10 @@ def set_working_dir():
     
     logging.info(f"Setting logfile in working dir")
 
-    plot_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    if not os.path.exists(plot_dir):
-        os.makedirs(plot_dir)
-
-
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    if not os.path.exists(plots_dir):
+        os.makedirs(plots_dir)
+    
 @time_execution
 def makems(vis,splitvis=None):
 
@@ -76,20 +75,63 @@ def report_flag(summary, axis):
     except Exception as e:
         logging.info(f"Exception {e} while reporting flags")
     
+def get_msinfo():
+
+    nchan = []
+    msmd = casatools.msmetadata()
+    msmd.open(vis)
+    bandwidth = msmd.bandwidths()
+    nspw = len(bandwidth)
+    for spw in range(nspw):
+        nchan.append(msmd.nchan(spw))
+    msmd.close()
+
+    return nspw,nchan
+
+
+import logging
+
+def plot_check_baddata(save_as=None):
+    """
+    Plots the vis over each spectral window to check the effect before and after flagging
+
+    Parameters:
+        save_as (str): Name to save the plot file as. If None, default naming will be used.
+    """
+    nspw, _ = get_msinfo()
+
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    flags_dir = os.path.join(plots_dir,'vis_before_after_flagging')
+
+    if not os.path.exists(flags_dir):
+        os.makedirs(flags_dir)
+
+
+    logging.info("======>>> Plot visibilities to check bad data")
+
+    for spw in range(0,nspw):
+        plotfile = f"{flags_dir}/spw_{spw}.png" if save_as is None else f"{flags_dir}/{save_as}_spw_{spw}.png"
+        plotms(vis=vis, xaxis='channel', yaxis='amp', field=phase_calibrator, iteraxis='antenna', gridcols=3, 
+            spw=str(spw),gridrows=3, plotfile=plotfile, width=1500, height=750, dpi=300, showgui=False,
+            overwrite=True)
+
+    logging.info("======>>> Finished plotting the visibilities")
 
 
 @time_execution
 def flagging():
 
+     
+    if not use_aoflagger:
+        logging.info("Flagging the auto-correlations")
+        casatasks.flagdata(
+                vis = vis, autocorr=True )
+        logging.info("Auto-correlations flagged successfully")
 
-    logging.info("Flagging the auto-correlations")
-    casatasks.flagdata(
-            vis = vis, autocorr=True )
-    logging.info("Auto-correlations flagged successfully")
+        autocorr_flagging_summary = flagdata(vis=vis, mode='summary')
+        logging.info("======>>>REPORTING FLAGGING STATS after flagging autocorr")
+        report_flag(autocorr_flagging_summary, 'field')
 
-    autocorr_flagging_summary = flagdata(vis=vis, mode='summary')
-    logging.info("======>>>REPORTING FLAGGING STATS after flagging autocorr")
-    report_flag(autocorr_flagging_summary, 'field')
 
     logging.info(f"Quacking every {integration_time}s from each scan")
     casatasks.flagdata(
@@ -104,25 +146,23 @@ def flagging():
 
     flagmanager(vis=vis, mode='save', versionname="after_quacking")
 
-    quacking_flagging_summary = flagdata(vis=vis, mode='summary')
-    logging.info("======>>>REPORTING FLAGGING STATS after quacking")
-    report_flag(quacking_flagging_summary, 'field')
+    # quacking_flagging_summary = flagdata(vis=vis, mode='summary')
+    # logging.info("======>>>REPORTING FLAGGING STATS after quacking")
+    # report_flag(quacking_flagging_summary, 'field')
 
     if os.path.exists(manual_file):
         logging.info(f"Flagging file {manual_file} exists")
         logging.info(f"Flagging using {manual_file}")
-        casatasks.flagdata(
-            vis = vis, mode='list',inpfile=manual_file
-        )
+        casatasks.flagdata(vis = vis, mode='list',inpfile=manual_file)
+        flagmanager(vis=vis, mode='save', versionname="after_manual_flagging")
+        manual_flagging_summary = flagdata(vis=vis, mode='summary')
+        logging.info("======>>>REPORTING FLAGGING STATS after manual flagging")
+        report_flag(manual_flagging_summary, 'field')
+
     else:
-        print("Manual flagging file not supplied")
+        logging.info("Manual flagging file not supplied")
 
-    flagmanager(vis=vis, mode='save', versionname="after_manual_flagging")
-
-    manual_flagging_summary = flagdata(vis=vis, mode='summary')
-    logging.info("======>>>REPORTING FLAGGING STATS after manual flagging")
-    report_flag(manual_flagging_summary, 'field')
-
+   
 @time_execution
 def execute_aoflagger_strategy():
 
@@ -220,19 +260,6 @@ def calc_flagged_data(field):
         pass
 
 
-
-def get_msinfo():
-
-    nchan = []
-    msmd = casatools.msmetadata()
-    msmd.open(vis)
-    bandwidth = msmd.bandwidths()
-    nspw = len(bandwidth)
-    for spw in range(nspw):
-        nchan.append(msmd.nchan(spw))
-    msmd.close()
-
-    return nspw,nchan
 
 @time_execution
 def flag_edge_channels():
@@ -363,11 +390,11 @@ def applycal_mbd_fringe():
             interp = interp, spwmap = [[], 8*[0]], parang = True,
         )
 
-    casaplotms.plotms(
-            vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
-            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw',
-            plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
-        ) 
+    # casaplotms.plotms(
+    #         vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
+    #         correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw',
+    #         plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
+    #     ) 
     
     mbd_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying mbd corrections")

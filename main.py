@@ -153,10 +153,12 @@ if load_data == True:
 if do_flagging == True:
     try:
         logging.info("Flagging data")
+        plot_check_baddata(save_as="_before_flagging")
         if use_aoflagger == True:
             execute_aoflagger_strategy()
-        flagging()
-        flag_edge_channels()
+        # flagging()
+        # flag_edge_channels()
+        plot_check_baddata(save_as="_after_flagging")
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
