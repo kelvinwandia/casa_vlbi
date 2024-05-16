@@ -81,6 +81,12 @@ def selfcal_part1():
 @time_execution
 def selfcal_part2():
 
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    selfcal_dir = os.path.join(plots_dir,'calibration_dir')
+
+    if not os.path.exists(selfcal_dir):
+        os.makedirs(selfcal_dir)
+
     msmd.open(vis)
     source = phase_calibrator
     # field_id = msmd.fieldsforname(source)[0]
@@ -132,9 +138,10 @@ def selfcal_part2():
             run_wsclean(wsclean_sif,predict_cmd)
 
             # Plot the model column
+            plotfile = f"{selfcal_dir}/imagename+'_modelcolumn.png'"
             plotms(
                 vis=phasecal_ms, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
-                showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
+                showgui=False, plotfile=plotfile, overwrite=True, width=1500, height=750,
                 # field = str(field_id)
             )
             if calmode[selfcal_loop] == 'p':
@@ -149,6 +156,7 @@ def selfcal_part2():
                     )
             coloraxis = ['corr','spw']
             for color in coloraxis:
+                plotfile = f"{selfcal_dir}/{caltable.replace('.tb', f',f_{color}.png')}"
                 if calmode[selfcal_loop] =='p':
                     plotms(
                         vis = caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
