@@ -10,23 +10,30 @@ import matplotlib.pyplot as plt
 from utils.helper_functions import *
 
 
+
+
+
 @time_execution
 def split_selfcal():
+
     
+
+
     sources = [phase_calibrator,target]
 
-    for source in sources:
-        outputvis = source+'.ms'
-        if not os.path.exists(outputvis):
-            print(f"Splitting {vis} to {outputvis}")
-            #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-            split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source) 
-        else:
-            print(f"{outputvis} exists. Will not make a new one")
+    # for source in sources:
+    #     outputvis = source+'.ms'
+    #     if not os.path.exists(outputvis):
+    #         print(f"Splitting {vis} to {outputvis}")
+    #         #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
+    #         split(vis = vis, outputvis = outputvis, datacolumn='data',field=source) 
+    #     else:
+    #         print(f"{outputvis} exists. Will not make a new one")
 
     global phasecal_ms, target_ms
     phasecal_ms = phase_calibrator+'.ms'
     target_ms = target+'.ms'
+    
 
 
 def run_pybdsf(input_image):
@@ -82,7 +89,7 @@ def selfcal_part1():
 def selfcal_part2():
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    selfcal_dir = os.path.join(plots_dir,'calibration_dir')
+    selfcal_dir = os.path.join(plots_dir,'selfcal_dir')
 
     if not os.path.exists(selfcal_dir):
         os.makedirs(selfcal_dir)
@@ -138,7 +145,7 @@ def selfcal_part2():
             run_wsclean(wsclean_sif,predict_cmd)
 
             # Plot the model column
-            plotfile = f"{selfcal_dir}/imagename+'_modelcolumn.png'"
+            plotfile = f"{selfcal_dir}/{imagename}+_modelcolumn.png"
             plotms(
                 vis=phasecal_ms, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
                 showgui=False, plotfile=plotfile, overwrite=True, width=1500, height=750,
