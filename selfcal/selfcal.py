@@ -21,14 +21,14 @@ def split_selfcal():
 
     sources = [phase_calibrator,target]
 
-    # for source in sources:
-    #     outputvis = source+'.ms'
-    #     if not os.path.exists(outputvis):
-    #         print(f"Splitting {vis} to {outputvis}")
-    #         #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-    #         split(vis = vis, outputvis = outputvis, datacolumn='data',field=source) 
-    #     else:
-    #         print(f"{outputvis} exists. Will not make a new one")
+    for source in sources:
+        outputvis = source+'.ms'
+        if not os.path.exists(outputvis):
+            print(f"Splitting {vis} to {outputvis}")
+            #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
+            split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source,timebin='2s',width=8) 
+        else:
+            print(f"{outputvis} exists. Will not make a new one")
 
     global phasecal_ms, target_ms
     phasecal_ms = phase_calibrator+'.ms'
@@ -74,14 +74,35 @@ def selfcal_part1():
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
     if not os.path.exists(pybdsf_imagename+'-image.fits'):
         print(f"Making {pybdsf_imagename}")
-        # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{pybdsf_threshold}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
-        #                     '-mgain', '0.8', '-niter', f'{pybdsf_niter}', f'{source}']
-        wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
-                            '-mgain', '0.8', '-niter', f'{pybdsf_niter}' ,f'{phasecal_ms}']
-        
-        run_wsclean(wsclean_sif,wsclean_cmd)
 
-    regionfile = run_pybdsf(input_image=pybdsf_imagename+'-image.fits')
+        
+        if use_tclean == True:
+
+            # tclean(vis= phasecal_ms, imagename=pybdsf_imagename,imsize=imsize, cell=cell,
+            #     gridder='standard',weighting='briggs',robust=robust,niter=pybdsf_niter)
+            fitsname = pybdsf_imagename+'.fits'
+            exportfits(imagename=pybdsf_imagename+'.image',fitsimage=fitsname,overwrite=True)
+            get_im_stats(fitsname)
+            plot_fits(fitsname)
+
+            regionfile = run_pybdsf(input_image=fitsname)
+
+        elif use_wsclean == True:
+
+            # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{pybdsf_threshold}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
+            #                     '-mgain', '0.8', '-niter', f'{pybdsf_niter}', f'{source}']
+            wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
+                                '-mgain', '0.8', '-niter', f'{pybdsf_niter}' ,f'{phasecal_ms}']
+            
+            run_wsclean(wsclean_sif,wsclean_cmd)
+
+            regionfile = run_pybdsf(input_image=pybdsf_imagename+'-image.fits')
+        
+        elif use_tclean and use_wsclean == True:
+            logging.critical("You cannot use both imagers at once, check the config file")
+
+        else:
+            logging.info(f"Imager not selected")
 
 
 
@@ -100,7 +121,9 @@ def selfcal_part2():
     msmd.close()
 
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
+    regionfile = pybdsf_imagename+'.casabox'
     maskfile = pybdsf_imagename+ '-image.maskfile.fits'
+
 
     print("Deleting model column before selfcal")
     # delmod(vis=phasecal_ms,otf=True,field=str(field_id))
@@ -122,27 +145,53 @@ def selfcal_part2():
             imagename =  source.replace('.ms','')+f'_selfcal_loop_{selfcal_loop}'
             print(f"Making image {imagename}")
 
-            # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{threshold[selfcal_loop]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
-            #             '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
-            #             '-mgain', '0.8', '-niter', f'{niter}', '-field',f'{field_id}', f'{phasecal_ms}']
+            if use_tclean == True:
+                tclean(
+                    vis= phasecal_ms, imagename=imagename,imsize=imsize, cell=cell,
+                    gridder='standard',weighting='briggs',robust=robust,niter=niter,
+                    threshold = threshold[selfcal_loop],usemask='user',mask=regionfile
+                    )
+                
+                fitsname = imagename+'.fits'
+                exportfits(imagename=imagename+'.image',fitsname=fitsname,overwrite=True)
+                get_im_stats(fitsname)
+                plot_fits(fitsname)
+
+                print("Adding modelcolumn to data")
+                ft(vis = vis, model=imagename+'.image',usescratch=True)
+
+            elif use_wsclean == True:
+
+                # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{threshold[selfcal_loop]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
+                #             '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
+                #             '-mgain', '0.8', '-niter', f'{niter}', '-field',f'{field_id}', f'{phasecal_ms}']
+                
+                wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{tclean_threshold[selfcal_loop]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
+                            '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
+                            '-mgain', '0.8', '-niter', f'{niter}', f'{phasecal_ms}']
+
+                run_wsclean(wsclean_sif,wsclean_cmd)
+
+                wsclean_fitsfile = imagename+'-image.fits'
+                get_im_stats(wsclean_fitsfile)
+                plot_fits(wsclean_fitsfile)
             
-            wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{threshold[selfcal_loop]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
-                        '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
-                        '-mgain', '0.8', '-niter', f'{niter}', f'{phasecal_ms}']
+                model_fits = imagename.replace('-image.fits','-model.fits')
 
-            run_wsclean(wsclean_sif,wsclean_cmd)
+                print(f"Adding modelcolumn to data. Using {model_fits} to predict")
+                # predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-field',f'{field_id}','-name', f'{imagename}', phasecal_ms]
+                predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-name', f'{imagename}', phasecal_ms]
+                # Predicting
+                run_wsclean(wsclean_sif,predict_cmd)
 
-            wsclean_fitsfile = imagename+'-image.fits'
-            get_im_stats(wsclean_fitsfile)
-            plot_fits(wsclean_fitsfile)
-          
-            model_fits = imagename.replace('-image.fits','-model.fits')
+            elif use_tclean and use_wsclean == True:
+                logging.critical("You cannot use both imagers at once, check the config file")
 
-            print(f"Adding modelcolumn to data. Using {model_fits} to predict")
-            # predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-field',f'{field_id}','-name', f'{imagename}', phasecal_ms]
-            predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-name', f'{imagename}', phasecal_ms]
-            # Predicting
-            run_wsclean(wsclean_sif,predict_cmd)
+            else:
+                logging.info(f"Imager not selected")
+
+
+
 
             # Plot the model column
             plotfile = f"{selfcal_dir}/{imagename}+_modelcolumn.png"
@@ -189,15 +238,32 @@ def selfcal_part2():
     imagename_final = source.replace('.ms','')+f'_final_map_loop_{nloops-1}'
     ##  tclean here to make the final image
     print("Make final image with all selfcal corrections applied")
-    wsclean_cmd_final = ['wsclean', '-log-time', '-auto-threshold',f'{threshold_final}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename_final}', \
-            '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
-            '-mgain', '0.8', '-niter', f'{niter_final}', f'{phasecal_ms}']
 
-    run_wsclean(wsclean_sif,wsclean_cmd_final)
+    if use_tclean == True:
+        tclean(
+                vis= phasecal_ms, imagename=imagename_final,imsize=imsize, cell=cell,
+                gridder='standard',weighting='briggs',robust=robust,niter=niter,
+                threshold = '1mJy',usemask='user',mask=regionfile
+                )
+        fitsname = imagename_final+'.fits'
+        exportfits(imagename=imagename_final+'.image',fitsname=fitsname,overwrite=True)
+        get_im_stats(fitsname)
+        plot_fits(fitsname)
 
-    wsclean_fitsfile = imagename_final+'-image.fits'
-    get_im_stats(wsclean_fitsfile)
-    plot_fits(wsclean_fitsfile)
+        print("Adding modelcolumn to data")
+        ft(vis = vis, model=imagename_final+'.image',usescratch=True)
+
+
+    if use_wsclean == True:
+        wsclean_cmd_final = ['wsclean', '-log-time', '-auto-threshold',f'{threshold_final}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename_final}', \
+                '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
+                '-mgain', '0.8', '-niter', f'{niter_final}', f'{phasecal_ms}']
+
+        run_wsclean(wsclean_sif,wsclean_cmd_final)
+
+        wsclean_fitsfile = imagename_final+'-image.fits'
+        get_im_stats(wsclean_fitsfile)
+        plot_fits(wsclean_fitsfile)
 
 
 @time_execution

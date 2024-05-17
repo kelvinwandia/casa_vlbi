@@ -91,11 +91,13 @@ do_bpass = config.getboolean('calibrate','do_bpass')
 apply_bpass = config.getboolean('calibrate','apply_bpass')
 
 make_dirty_map = config.getboolean('calibrate','make_dirty_map')
-imsize = config.get('calibrate','imsize')
+imsize= [int(part) for part in config.get('calibrate', 'imsize').split(',')]
 detection_threshold = config.getfloat('selfcal','detection_threshold')
 
 # selfcal
 do_selfcal = config.getboolean('selfcal','do_selfcal')
+use_tclean = config.getboolean('selfcal','use_tclean')
+use_wsclean = config.getboolean('selfcal','use_wsclean')
 
 pybdsf_threshold = config.get('selfcal','pybdsf_threshold')
 pybdsf_niter = config.getint('selfcal','pybdsf_niter')
@@ -109,11 +111,14 @@ gaintype = config.get('selfcal','gaintype').split(',')
 cell =  config.get('selfcal', 'cell')
 threshold = config.get('selfcal','threshold').split(',')
 minsnr = [float(part) for part in config.get('selfcal', 'minsnr').split(',')]
-imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
+# imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
 # niter = [int(part) for part in config.get('selfcal', 'niter').split(',')]
 niter = config.get('selfcal','niter')
 niter_final = config.getint('selfcal','niter_final')
 threshold_final = config.getint('selfcal','threshold_final')
+robust = config.getfloat('selfcal','robust')
+
+tclean_threshold = config.get('selfcal','tclean_threshold')
 solint_selfcal = config.get('selfcal','solint_selfcal').split(',')
 apply_to_target = config.getboolean('selfcal','apply_to_target')
 detect_sources = config.getboolean('selfcal','detect_sources')
@@ -159,8 +164,8 @@ if do_flagging == True:
         plot_check_baddata(save_as="_before_flagging")
         if use_aoflagger == True:
             execute_aoflagger_strategy()
-        # flagging()
-        # flag_edge_channels()
+        flagging()
+        flag_edge_channels()
         if flag_antenna == True:
             antenna_flag(antenna_to_flag)
         plot_check_baddata(save_as="_after_flagging")
