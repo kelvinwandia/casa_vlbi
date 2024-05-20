@@ -518,7 +518,7 @@ def after_cal_plots():
     for source in sources:
         for y_value in yaxis:
             plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_{source}_{y_value}.png"
-            plotms(vis=vis, xaxis='frequency', yaxis=y_value, antenna='EF&*', ydatacolumn='data',
+            plotms(vis=vis, xaxis='frequency', yaxis=y_value, antenna='EF&*', ydatacolumn='corrected',
                 correlation='LL', showgui=False, coloraxis='spw', avgtime='9999', field=source,
                 gridcols=3, gridrows=3, iteraxis='baseline', plotfile=plotfile, overwrite=True, width=1920, height=1080)
 
