@@ -484,14 +484,6 @@ def applycal_bpass():
     """
     logging.info("Applying bandpass solutions")
 
-    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
-
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
-
-    bpass_plotfile = f'{calibration_dir}/applied_bpass.png'
-
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")   
@@ -499,14 +491,37 @@ def applycal_bpass():
     casatasks.applycal(vis = vis, field = '', gaintable = table,interp = interp,
             spwmap = [[], 8*[0],[]],parang = True,
         )
-    casaplotms.plotms(vis=vis, xaxis='frequency', yaxis='amp', antenna='EF&*', ydatacolumn='corrected',
-        timerange=timerange, correlation='LL',showgui=False, coloraxis='spw',avgtime='1200',
-        gridcols=3, gridrows=3, iteraxis='baseline',plotfile=bpass_plotfile,overwrite=True, width=1920, height=1080,
-        )
     
     bpass_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying bpass corrections")
     report_flag(bpass_flagging_summary, 'field')
+
+
+@time_execution
+def after_cal_plots():
+
+    """
+    Make plots to check the calibration
+
+    """
+
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
+
+    if not os.path.exists(calibration_dir):
+        os.makedirs(calibration_dir)
+
+
+    sources = [phase_calibrator, target]
+    yaxis = ['amp', 'phase']
+
+    for source in sources:
+        for y_value in yaxis:
+            plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_{source}_{y_value}.png"
+            plotms(vis=vis, xaxis='frequency', yaxis=y_value, antenna='EF&*', ydatacolumn='data',
+                correlation='LL', showgui=False, coloraxis='spw', avgtime='9999', field=source,
+                gridcols=3, gridrows=3, iteraxis='baseline', plotfile=plotfile, overwrite=True, width=1920, height=1080)
+
 
 # def getimaging_params():
 
