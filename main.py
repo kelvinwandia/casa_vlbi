@@ -8,6 +8,13 @@ import matplotlib
 # matplotlib.use('Agg')  
 import time
 
+
+"""
+RUNNING THE SINGULARITY CONTAINER
+singularity exec ../singularity/casa6_wsclean2_aoflagger3.sif env XDG_RUNTIME_DIR=$(dirname "$0") xvfb-run --auto-servernum python main.py
+
+"""
+
 msmd = casatools.msmetadata()
 tb = casatools.table()
 
@@ -15,10 +22,17 @@ import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
 
+
 exec(open("./utils/helper_functions.py").read())
 exec(open("./calibration/calibrate.py").read())
 exec(open("./selfcal/selfcal.py").read())
 exec(open("./selfcal/detect_sources.py").read())
+
+### This is important for running the sif container
+### it allows the logfiles to be placed in the same dir as main.py
+### do not touch !!
+script_dir = os.path.dirname(os.path.abspath(__file__))
+os.environ['XDG_RUNTIME_DIR'] = script_dir
 
 
 print("Creating log dir")
@@ -53,6 +67,7 @@ aoflagger_path = config.get('globals','aoflagger_path')
 use_singularity = config.getboolean('globals','use_singularity')
 # singularity_bind = config.get('globals','singularity_bind')
 wsclean_sif = config.get('globals','wsclean_sif')
+singularity_container = config.get('globals','singularity_container')
 
 target = config.get('basic','target')
 phase_calibrator = config.get('basic','phase_calibrator')
@@ -210,7 +225,8 @@ if do_bpass == True:
 if apply_bpass == True:
     try:
         logging.info("Applying bandpass corrections")
-        applycal_bpass()
+        # applycal_bpass()
+        after_cal_plots()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
