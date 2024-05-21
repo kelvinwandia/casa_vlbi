@@ -238,9 +238,50 @@ for caltable in caltables:
 
 
 
-max_percentage = 0
+# max_percentage = 0
+# best_caltable = None
+# percentiles = {}
+
+# for tablename in caltables:
+#     tb.open(tablename + '/ANTENNA')
+#     antenna_names = tb.getcol('NAME')
+#     tb.close()
+#     tb.open(tablename)
+#     antenna_ids = tb.getcol('ANTENNA1')
+#     # times  = tb.getcol('TIME')
+#     flags = tb.getcol('FLAG')
+#     delays = tb.getcol('FPARAM')
+#     snrs = tb.getcol('SNR')
+#     tb.close()
+#     # Analyse number of good solutions:
+#     good_frac = []
+#     good_snrs = []
+#     for i, ant_id in enumerate(np.unique(antenna_ids)):
+#         cond = antenna_ids == ant_id
+#         # t = times[cond]
+#         f = flags[0, 0, :][cond]
+#         p = delays[0, 0, :][cond]
+#         snr = snrs[0, 0, :][cond]
+#         frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
+#         snr_mean = np.nanmean(snr[~f])
+#         good_frac.append(frac)
+#         good_snrs.append(snr_mean)
+#     sort_idx = np.argsort(good_frac)[::-1]
+#     print('Antennas sorted by % of good solutions:')
+#     for i in sort_idx:
+#         print('{0:3}: {1:4.1f}, <SNR> = {2:4.1f}'.format(antenna_names[i],
+#                                                             good_frac[i],
+#                                                             good_snrs[i]))
+#     if good_frac[sort_idx[0]] < 90:
+#         print('Small fraction of good solutions with selected refant!')
+#         print('Please inspect antennas to select optimal refant')
+#         print('You may want to use refantmode= flex" in default_params')
+
+
+max_good_antennas = 0
+least_flagged_percentage = 100
 best_caltable = None
-percentiles = {}
+best_antenna_flags = None
 
 for tablename in caltables:
     tb.open(tablename + '/ANTENNA')
@@ -248,49 +289,38 @@ for tablename in caltables:
     tb.close()
     tb.open(tablename)
     antenna_ids = tb.getcol('ANTENNA1')
-    # times  = tb.getcol('TIME')
     flags = tb.getcol('FLAG')
     delays = tb.getcol('FPARAM')
     snrs = tb.getcol('SNR')
     tb.close()
-    # Analyse number of good solutions:
-    good_frac = []
-    good_snrs = []
+    
+    # Analyze number of good solutions for each antenna
+    good_antennas = 0
+    total_flagged_percentage = 0
+    antenna_flags = {}
+
     for i, ant_id in enumerate(np.unique(antenna_ids)):
         cond = antenna_ids == ant_id
-        # t = times[cond]
         f = flags[0, 0, :][cond]
-        p = delays[0, 0, :][cond]
         snr = snrs[0, 0, :][cond]
         frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
-        snr_mean = np.nanmean(snr[~f])
-        good_frac.append(frac)
-        good_snrs.append(snr_mean)
-    sort_idx = np.argsort(good_frac)[::-1]
-    print('Antennas sorted by % of good solutions:')
-    for i in sort_idx:
-        print('{0:3}: {1:4.1f}, <SNR> = {2:4.1f}'.format(antenna_names[i],
-                                                            good_frac[i],
-                                                            good_snrs[i]))
-    if good_frac[sort_idx[0]] < 90:
-        print('Small fraction of good solutions with selected refant!')
-        print('Please inspect antennas to select optimal refant')
-        print('You may want to use refantmode= flex" in default_params')
+        if frac == 100:
+            good_antennas += 1
+        total_flagged_percentage += frac
+        antenna_flags[antenna_names[i]] = frac
+    
+    # Calculate the average flagged percentage across all antennas
+    avg_flagged_percentage = total_flagged_percentage / len(np.unique(antenna_ids))
+    
+    # Update best_caltable if necessary
+    if good_antennas > max_good_antennas or (good_antennas == max_good_antennas and avg_flagged_percentage < least_flagged_percentage):
+        max_good_antennas = good_antennas
+        least_flagged_percentage = avg_flagged_percentage
+        best_caltable = tablename
+        best_antenna_flags = antenna_flags
 
-    snr = snr[~np.isnan(snr)]
-
-    # Calculate percentage of meaningful (non-zero) data
-    total_data_points = len(snr)
-    meaningful_data_points = np.sum(snr != 0)
-    meaningful_percentage = (meaningful_data_points / total_data_points) * 100
-
-    if meaningful_percentage > max_percentage:
-        max_percentage = meaningful_percentage
-        best_caltable = caltable
-
-    # Calculate the percentage of scores greater than 7
-    percentile = 100 - stats.percentileofscore(snr, 7)
-    percentiles[caltable] = percentile
-
-    print(f'{caltable} - P(>7) = {percentile}, Meaningful Data Percentage = {meaningful_percentage:.2f}%')
+# Print the antennas on source and the percentage of flagged data
+print(f"The calibration table with the most antennas on source and the least flagged data is '{best_caltable}':")
+for antenna, flagged_percentage in best_antenna_flags.items():
+    print(f"- Antenna {antenna}: {flagged_percentage:.2f}% flagged data")
 
