@@ -278,14 +278,62 @@ for caltable in caltables:
 #         print('You may want to use refantmode= flex" in default_params')
 
 
+# max_good_antennas = 0
+# least_flagged_percentage = 100
+# best_caltable = None
+# best_antenna_flags = None
+
+# for tablename in caltables:
+#     tb.open(tablename + '/ANTENNA')
+#     antenna_names = tb.getcol('STATION')
+#     tb.close()
+#     tb.open(tablename)
+#     antenna_ids = tb.getcol('ANTENNA1')
+#     flags = tb.getcol('FLAG')
+#     delays = tb.getcol('FPARAM')
+#     snrs = tb.getcol('SNR')
+#     tb.close()
+    
+#     # Analyze number of good solutions for each antenna
+#     good_antennas = 0
+#     total_unflagged_percentage = 0
+#     antenna_flags = {}
+
+#     for i, ant_id in enumerate(np.unique(antenna_ids)):
+#         cond = antenna_ids == ant_id
+#         f = flags[0, 0, :][cond]
+#         snr = snrs[0, 0, :][cond]
+#         unflagged_frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
+#         if unflagged_frac == 100:
+#             good_antennas += 1
+#         total_unflagged_percentage += unflagged_frac
+#         antenna_flags[antenna_names[i]] = unflagged_frac
+    
+#     # Calculate the average unflagged percentage across all antennas
+#     avg_unflagged_percentage = total_unflagged_percentage / len(np.unique(antenna_ids))
+    
+#     # Update best_caltable if necessary
+#     if good_antennas > max_good_antennas or (good_antennas == max_good_antennas and avg_unflagged_percentage < least_flagged_percentage):
+#         max_good_antennas = good_antennas
+#         least_flagged_percentage = avg_unflagged_percentage
+#         best_caltable = tablename
+#         best_antenna_flags = antenna_flags
+
+# # Print the antennas on source and the percentage of unflagged data
+# print(f"The calibration table with the most antennas on source and the least flagged data is '{best_caltable}':")
+# for antenna, unflagged_percentage in best_antenna_flags.items():
+#     print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
+
+
 max_good_antennas = 0
 least_flagged_percentage = 100
+smallest_zero_snr_percentage = 100
 best_caltable = None
 best_antenna_flags = None
 
 for tablename in caltables:
     tb.open(tablename + '/ANTENNA')
-    antenna_names = tb.getcol('NAME')
+    antenna_names = tb.getcol('STATION')
     tb.close()
     tb.open(tablename)
     antenna_ids = tb.getcol('ANTENNA1')
@@ -312,14 +360,26 @@ for tablename in caltables:
     # Calculate the average unflagged percentage across all antennas
     avg_unflagged_percentage = total_unflagged_percentage / len(np.unique(antenna_ids))
     
-    # Update best_caltable if necessary
-    if good_antennas > max_good_antennas or (good_antennas == max_good_antennas and avg_unflagged_percentage < least_flagged_percentage):
+    # Calculate the percentage of zero SNR values
+    total_snrs = np.prod(snrs.shape)
+    zero_snrs_count = np.count_nonzero(snrs == 0)
+    zero_snr_percentage = (zero_snrs_count / total_snrs) * 100
+    
+    # Update best_caltable based on the criteria
+    if good_antennas > max_good_antennas \
+        or (good_antennas == max_good_antennas and avg_unflagged_percentage < least_flagged_percentage) \
+        or (good_antennas == max_good_antennas and avg_unflagged_percentage == least_flagged_percentage and zero_snr_percentage < smallest_zero_snr_percentage):
         max_good_antennas = good_antennas
         least_flagged_percentage = avg_unflagged_percentage
+        smallest_zero_snr_percentage = zero_snr_percentage
         best_caltable = tablename
         best_antenna_flags = antenna_flags
 
-# Print the antennas on source and the percentage of unflagged data
-print(f"The calibration table with the most antennas on source and the least flagged data is '{best_caltable}':")
-for antenna, unflagged_percentage in best_antenna_flags.items():
-    print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
+# Print the best calibration table with all criteria
+if best_caltable:
+    print(f"The calibration table with the most antennas on source, the least flagged data, and the smallest percentage of zero SNR values is '{best_caltable}':")
+    for antenna, unflagged_percentage in best_antenna_flags.items():
+        print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
+    print(f"Smallest percentage of zero SNR values: {smallest_zero_snr_percentage:.2f}%")
+else:
+    print("No calibration table found meeting all criteria.")
