@@ -296,31 +296,30 @@ for tablename in caltables:
     
     # Analyze number of good solutions for each antenna
     good_antennas = 0
-    total_flagged_percentage = 0
+    total_unflagged_percentage = 0
     antenna_flags = {}
 
     for i, ant_id in enumerate(np.unique(antenna_ids)):
         cond = antenna_ids == ant_id
         f = flags[0, 0, :][cond]
         snr = snrs[0, 0, :][cond]
-        frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
-        if frac == 100:
+        unflagged_frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
+        if unflagged_frac == 100:
             good_antennas += 1
-        total_flagged_percentage += frac
-        antenna_flags[antenna_names[i]] = frac
+        total_unflagged_percentage += unflagged_frac
+        antenna_flags[antenna_names[i]] = unflagged_frac
     
-    # Calculate the average flagged percentage across all antennas
-    avg_flagged_percentage = total_flagged_percentage / len(np.unique(antenna_ids))
+    # Calculate the average unflagged percentage across all antennas
+    avg_unflagged_percentage = total_unflagged_percentage / len(np.unique(antenna_ids))
     
     # Update best_caltable if necessary
-    if good_antennas > max_good_antennas or (good_antennas == max_good_antennas and avg_flagged_percentage < least_flagged_percentage):
+    if good_antennas > max_good_antennas or (good_antennas == max_good_antennas and avg_unflagged_percentage < least_flagged_percentage):
         max_good_antennas = good_antennas
-        least_flagged_percentage = avg_flagged_percentage
+        least_flagged_percentage = avg_unflagged_percentage
         best_caltable = tablename
         best_antenna_flags = antenna_flags
 
-# Print the antennas on source and the percentage of flagged data
+# Print the antennas on source and the percentage of unflagged data
 print(f"The calibration table with the most antennas on source and the least flagged data is '{best_caltable}':")
-for antenna, flagged_percentage in best_antenna_flags.items():
-    print(f"- Antenna {antenna}: {flagged_percentage:.2f}% flagged data")
-
+for antenna, unflagged_percentage in best_antenna_flags.items():
+    print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
