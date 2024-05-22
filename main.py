@@ -225,7 +225,7 @@ if do_bpass == True:
 if apply_bpass == True:
     try:
         logging.info("Applying bandpass corrections")
-        # applycal_bpass()
+        applycal_bpass()
         after_cal_plots()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
