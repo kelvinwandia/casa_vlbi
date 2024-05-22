@@ -131,8 +131,8 @@ Different bit of code
 # import glob
 # from scipy import stats
 # import numpy as np
-
-# msmd.open('gv020b.ms/')
+# msname = '/home/kelvin/Desktop/gv020_working_dir/gv020d/gv020d.ms'
+# msmd.open(msname)
 # scans = msmd.scansforfield(field='J2139+1423')
 # nscans = len(scans)
 # scans = scans.astype(int).tolist()
@@ -141,7 +141,7 @@ Different bit of code
 #     print(f"Using scan {str(i)}")
 #     caltable_name = f'trial_{str(i)}.sbd'
 #     if not os.path.exists(caltable_name):
-#         fringefit(vis='gv020b.ms',caltable=caltable_name,zerorates=True,refant='EF,JB,WB',parang=True,minsnr=7,scan=str(i),field='J2139+1423')
+#         fringefit(vis=msname,caltable=caltable_name,zerorates=True,refant='EF,JB,WB',parang=True,minsnr=7,scan=str(i),field='J2139+1423')
 
 
 
@@ -206,34 +206,34 @@ Different bit of code
 #     print(f'The percentage of scores greater than 7 for the best caltable {best_caltable} is {percentiles[best_caltable]}')
 
 
-caltables = glob.glob('*.sbd')
+# caltables = glob.glob('*.sbd')
 
-for caltable in caltables:
-    tb = casatools.table()
-    tb.open(caltable)
-    snr = tb.getcol('SNR')  # Get SNR array
-    snr_shape = tb.getcol('SNR').shape 
-    antennas = tb.getcol('ANTENNA1') # Get antenna array
-    antennas_shape = tb.getcol('ANTENNA1').shape  
-    tb.close()
+# for caltable in caltables:
+#     tb = casatools.table()
+#     tb.open(caltable)
+#     snr = tb.getcol('SNR')  # Get SNR array
+#     snr_shape = tb.getcol('SNR').shape 
+#     antennas = tb.getcol('ANTENNA1') # Get antenna array
+#     antennas_shape = tb.getcol('ANTENNA1').shape  
+#     tb.close()
 
-    unique_antennas = np.unique(antennas)  # Get unique antennas
-    print(len(unique_antennas))
-    print(snr_shape)
-    print(antennas_shape)
+#     unique_antennas = np.unique(antennas)  # Get unique antennas
+#     print(len(unique_antennas))
+#     print(snr_shape)
+#     print(antennas_shape)
 
-    for antenna in unique_antennas:
-        # Filter SNR values for the current antenna
+#     for antenna in unique_antennas:
+#         # Filter SNR values for the current antenna
 
-        snr_antenna = snr[antennas == antenna]
-        print(snr_antenna)
+#         snr_antenna = snr[antennas == antenna]
+#         print(snr_antenna)
 
-        # Calculate the percentage of SNR for the current antenna
-        total_points = len(snr_antenna)
-        non_zero_points = np.count_nonzero(snr_antenna)
-        percentage = (non_zero_points / total_points) * 100
+#         # Calculate the percentage of SNR for the current antenna
+#         total_points = len(snr_antenna)
+#         non_zero_points = np.count_nonzero(snr_antenna)
+#         percentage = (non_zero_points / total_points) * 100
 
-        print(f"Caltable: {caltable}, Antenna: {antenna}, Percentage of SNR: {percentage:.2f}%")
+#         print(f"Caltable: {caltable}, Antenna: {antenna}, Percentage of SNR: {percentage:.2f}%")
 
 
 
@@ -325,61 +325,203 @@ for caltable in caltables:
 #     print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
 
 
-max_good_antennas = 0
-least_flagged_percentage = 100
-smallest_zero_snr_percentage = 100
-best_caltable = None
-best_antenna_flags = None
 
-for tablename in caltables:
+
+# import glob
+# from scipy import stats
+# import numpy as np
+# msname = '/home/kelvin/Desktop/gv020_working_dir/gv020d/gv020d.ms'
+# msmd.open(msname)
+# scans = msmd.scansforfield(field='J2139+1423')
+# nscans = len(scans)
+# scans = scans.astype(int).tolist()
+
+# max_good_antennas = 0
+# least_flagged_percentage = 100
+# smallest_zero_snr_percentage = 100
+# best_caltable = None
+# best_antenna_flags = None
+
+
+# for i in scans[0:2]:
+#     print(f"Using scan {str(i)}")
+#     tablename = f'trial_{str(i)}.sbd'
+#     if not os.path.exists(tablename):
+#         fringefit(vis=msname,caltable=tablename,zerorates=True,refant='EF,JB,WB',parang=True,minsnr=20,scan=str(i),field='J2139+1423')
+
+#     tb.open(tablename + '/ANTENNA')
+#     antenna_names = tb.getcol('STATION')
+#     tb.close()
+#     tb.open(tablename)
+#     antenna_ids = tb.getcol('ANTENNA1')
+#     flags = tb.getcol('FLAG')
+#     delays = tb.getcol('FPARAM')
+#     snrs = tb.getcol('SNR')
+#     tb.close()
+    
+#     # Analyze number of good solutions for each antenna
+#     good_antennas = 0
+#     total_unflagged_percentage = 0
+#     antenna_flags = {}
+
+#     for i, ant_id in enumerate(np.unique(antenna_ids)):
+#         cond = antenna_ids == ant_id
+#         f = flags[0, 0, :][cond]
+#         snr = snrs[0, 0, :][cond]
+#         unflagged_frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
+#         if unflagged_frac == 100:
+#             good_antennas += 1
+#         total_unflagged_percentage += unflagged_frac
+#         antenna_flags[antenna_names[i]] = unflagged_frac
+    
+#     # Calculate the average unflagged percentage across all antennas
+#     avg_unflagged_percentage = total_unflagged_percentage / len(np.unique(antenna_ids))
+    
+#     # Calculate the percentage of zero SNR values
+#     total_snrs = np.prod(snrs.shape)
+#     zero_snrs_count = np.count_nonzero(snrs == 0)
+#     zero_snr_percentage = (zero_snrs_count / total_snrs) * 100
+    
+#     # Update best_caltable based on the criteria
+#     if good_antennas > max_good_antennas \
+#         or (good_antennas == max_good_antennas and avg_unflagged_percentage < least_flagged_percentage) \
+#         or (good_antennas == max_good_antennas and avg_unflagged_percentage == least_flagged_percentage and zero_snr_percentage < smallest_zero_snr_percentage):
+#         max_good_antennas = good_antennas
+#         least_flagged_percentage = avg_unflagged_percentage
+#         smallest_zero_snr_percentage = zero_snr_percentage
+#         best_caltable = tablename
+#         best_antenna_flags = antenna_flags
+
+# # Print the best calibration table with all criteria
+# if best_caltable:
+#     print(f"The calibration table with the most antennas on source, the least flagged data, and the smallest percentage of zero SNR values is '{best_caltable}':")
+#     for antenna, unflagged_percentage in best_antenna_flags.items():
+#         print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
+#     print(f"Smallest percentage of zero SNR values: {smallest_zero_snr_percentage:.2f}%")
+# else:
+#     print("No calibration table found meeting all criteria.")
+
+
+
+
+# max_good_antennas = 0
+# least_flagged_percentage = 100
+# smallest_zero_snr_percentage = 100
+# best_caltable = None
+# best_antenna_flags = None
+
+# for tablename in caltables:
+#     tb.open(tablename + '/ANTENNA')
+#     antenna_names = tb.getcol('STATION')
+#     tb.close()
+#     tb.open(tablename)
+#     antenna_ids = tb.getcol('ANTENNA1')
+#     flags = tb.getcol('FLAG')
+#     delays = tb.getcol('FPARAM')
+#     snrs = tb.getcol('SNR')
+#     tb.close()
+    
+#     # Analyze number of good solutions for each antenna
+#     good_antennas = 0
+#     total_unflagged_percentage = 0
+#     antenna_flags = {}
+
+#     for i, ant_id in enumerate(np.unique(antenna_ids)):
+#         cond = antenna_ids == ant_id
+#         f = flags[0, 0, :][cond]
+#         snr = snrs[0, 0, :][cond]
+#         unflagged_frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
+#         if unflagged_frac == 100:
+#             good_antennas += 1
+#         total_unflagged_percentage += unflagged_frac
+#         antenna_flags[antenna_names[i]] = unflagged_frac
+    
+#     # Calculate the average unflagged percentage across all antennas
+#     avg_unflagged_percentage = total_unflagged_percentage / len(np.unique(antenna_ids))
+    
+#     # Calculate the percentage of zero SNR values
+#     total_snrs = np.prod(snrs.shape)
+#     zero_snrs_count = np.count_nonzero(snrs == 0)
+#     zero_snr_percentage = (zero_snrs_count / total_snrs) * 100
+    
+#     # Update best_caltable based on the criteria
+#     if good_antennas > max_good_antennas \
+#         or (good_antennas == max_good_antennas and avg_unflagged_percentage < least_flagged_percentage) \
+#         or (good_antennas == max_good_antennas and avg_unflagged_percentage == least_flagged_percentage and zero_snr_percentage < smallest_zero_snr_percentage):
+#         max_good_antennas = good_antennas
+#         least_flagged_percentage = avg_unflagged_percentage
+#         smallest_zero_snr_percentage = zero_snr_percentage
+#         best_caltable = tablename
+#         best_antenna_flags = antenna_flags
+
+# # Print the best calibration table with all criteria
+# if best_caltable:
+#     print(f"The calibration table with the most antennas on source, the least flagged data, and the smallest percentage of zero SNR values is '{best_caltable}':")
+#     for antenna, unflagged_percentage in best_antenna_flags.items():
+#         print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
+#     print(f"Smallest percentage of zero SNR values: {smallest_zero_snr_percentage:.2f}%")
+# else:
+#     print("No calibration table found meeting all criteria.")
+
+
+
+import glob
+from scipy import stats
+import numpy as np
+msname = '/home/kelvin/Desktop/gv020_working_dir/gv020d/gv020d.ms'
+msmd.open(msname)
+scans = msmd.scansforfield(field='J2139+1423')
+nscans = len(scans)
+scans = scans.astype(int).tolist()
+
+best_scan = None
+least_flagged_percentage = 100
+
+for scan in scans:
+    print(f"Calculating single band delay solutions for {str(scan)}")
+    tablename = f'trial_{str(scan)}.sbd'
+    if not os.path.exists(tablename):
+        fringefit(vis=msname,caltable=tablename,zerorates=True,refant='EF,JB,WB',parang=True,minsnr=20,scan=str(scan),field='J2139+1423')
+
     tb.open(tablename + '/ANTENNA')
     antenna_names = tb.getcol('STATION')
     tb.close()
     tb.open(tablename)
     antenna_ids = tb.getcol('ANTENNA1')
     flags = tb.getcol('FLAG')
-    delays = tb.getcol('FPARAM')
     snrs = tb.getcol('SNR')
     tb.close()
     
-    # Analyze number of good solutions for each antenna
-    good_antennas = 0
-    total_unflagged_percentage = 0
-    antenna_flags = {}
+    good_frac = []
+    good_snrs = []
+
+    total_flagged_percentage = 0
 
     for i, ant_id in enumerate(np.unique(antenna_ids)):
         cond = antenna_ids == ant_id
+        # t = times[cond]
         f = flags[0, 0, :][cond]
         snr = snrs[0, 0, :][cond]
-        unflagged_frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
-        if unflagged_frac == 100:
-            good_antennas += 1
-        total_unflagged_percentage += unflagged_frac
-        antenna_flags[antenna_names[i]] = unflagged_frac
+        frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
+        flagged_frac = 100 - frac
+        snr_mean = np.nanmean(snr[~f])
+        good_frac.append(frac)
+        good_snrs.append(snr_mean)
+        total_flagged_percentage += flagged_frac
     
-    # Calculate the average unflagged percentage across all antennas
-    avg_unflagged_percentage = total_unflagged_percentage / len(np.unique(antenna_ids))
-    
-    # Calculate the percentage of zero SNR values
-    total_snrs = np.prod(snrs.shape)
-    zero_snrs_count = np.count_nonzero(snrs == 0)
-    zero_snr_percentage = (zero_snrs_count / total_snrs) * 100
-    
-    # Update best_caltable based on the criteria
-    if good_antennas > max_good_antennas \
-        or (good_antennas == max_good_antennas and avg_unflagged_percentage < least_flagged_percentage) \
-        or (good_antennas == max_good_antennas and avg_unflagged_percentage == least_flagged_percentage and zero_snr_percentage < smallest_zero_snr_percentage):
-        max_good_antennas = good_antennas
-        least_flagged_percentage = avg_unflagged_percentage
-        smallest_zero_snr_percentage = zero_snr_percentage
-        best_caltable = tablename
-        best_antenna_flags = antenna_flags
+    avg_flagged_percentage = total_flagged_percentage / len(np.unique(antenna_ids))
 
-# Print the best calibration table with all criteria
-if best_caltable:
-    print(f"The calibration table with the most antennas on source, the least flagged data, and the smallest percentage of zero SNR values is '{best_caltable}':")
-    for antenna, unflagged_percentage in best_antenna_flags.items():
-        print(f"- Antenna {antenna}: {unflagged_percentage:.2f}% unflagged data")
-    print(f"Smallest percentage of zero SNR values: {smallest_zero_snr_percentage:.2f}%")
+    if avg_flagged_percentage < least_flagged_percentage:
+        least_flagged_percentage = avg_flagged_percentage
+        best_scan = scan
+
+    sort_idx = np.argsort(good_frac)[::-1]
+    print(f"Antennas sorted by % of good solutions for scan: {scan}")
+
+    for i in sort_idx:
+        print(f"{antenna_names[i]:<3}: {good_frac[i]:4.1f}, <SNR> = {good_snrs[i]:4.1f}")
+
+if best_scan is not None:
+    print(f"The best scan is {best_scan} with the least flagged data percentage of {least_flagged_percentage:.2f}%")
 else:
-    print("No calibration table found meeting all criteria.")
+    print("No scans found.")
