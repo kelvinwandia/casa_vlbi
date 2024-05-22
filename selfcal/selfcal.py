@@ -11,22 +11,19 @@ from utils.helper_functions import *
 
 
 
-
-
 @time_execution
 def split_selfcal():
 
-    
-
-
     sources = [phase_calibrator,target]
+
+    vis_to_split = os.path.join(working_directory,vis)
 
     for source in sources:
         outputvis = source+'.ms'
         if not os.path.exists(outputvis):
             print(f"Splitting {vis} to {outputvis}")
             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-            split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source,timebin='2s',width=8) 
+            split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,timebin='2s',width=8) 
         else:
             print(f"{outputvis} exists. Will not make a new one")
 
@@ -109,11 +106,6 @@ def selfcal_part1():
 @time_execution
 def selfcal_part2():
 
-    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    selfcal_dir = os.path.join(plots_dir,'selfcal_dir')
-
-    if not os.path.exists(selfcal_dir):
-        os.makedirs(selfcal_dir)
 
     msmd.open(vis)
     source = phase_calibrator
@@ -194,7 +186,7 @@ def selfcal_part2():
 
 
             # Plot the model column
-            plotfile = f"{selfcal_dir}/{imagename}+_modelcolumn.png"
+            plotfile = f"{imagename}_modelcolumn.png"
             plotms(
                 vis=phasecal_ms, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
                 showgui=False, plotfile=plotfile, overwrite=True, width=1500, height=750,
@@ -212,7 +204,7 @@ def selfcal_part2():
                     )
             coloraxis = ['corr','spw']
             for color in coloraxis:
-                plotfile = f"{selfcal_dir}/{caltable.replace('.tb', f',f_{color}.png')}"
+                plotfile = f"{caltable.replace('.tb', f',f_{color}.png')}"
                 if calmode[selfcal_loop] =='p':
                     plotms(
                         vis = caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,

@@ -232,7 +232,7 @@ if apply_bpass == True:
 
 if make_dirty_map == True:
     try:
-        logging.info("Imaging")
+        logging.info("Making dirty map")
         dirty_map(phase_calibrator)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
@@ -240,9 +240,16 @@ if make_dirty_map == True:
 if do_selfcal == True:
     try:
         logging.info("Self calibrating the data")
+        
+        selfcal_dir = os.path.join(working_directory,'selfcal_dir')
+        logging.info(f"Making and switching to {selfcal_dir}")
+        if not os.path.exists(selfcal_dir):
+            os.makedirs(selfcal_dir)
+        os.chdir(script_dir)
         split_selfcal()
         selfcal_part1()
         selfcal_part2()
+        os.chdir(working_directory)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 

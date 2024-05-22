@@ -563,9 +563,8 @@ def dirty_map(source):
     msmd.close()
 
 
-    plots_dir = os.path.join(working_directory).rstrip('/')
-    dirty_maps_dir = os.path.join(plots_dir,'dirty_maps')
-
+    
+    dirty_maps_dir = os.path.join(working_directory,'dirty_maps')
     if not os.path.exists(dirty_maps_dir):
         os.makedirs(dirty_maps_dir)
 
