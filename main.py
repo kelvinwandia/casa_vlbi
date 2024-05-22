@@ -245,7 +245,7 @@ if do_selfcal == True:
         logging.info(f"Making and switching to {selfcal_dir}")
         if not os.path.exists(selfcal_dir):
             os.makedirs(selfcal_dir)
-        os.chdir(script_dir)
+        os.chdir(selfcal_dir)
         split_selfcal()
         selfcal_part1()
         selfcal_part2()
