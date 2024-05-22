@@ -454,8 +454,8 @@ def bpass():
     interp = list(cal_tables_dict.values())
     casatasks.bandpass(
         vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
-        field = phase_calibrator + ',' + fringe_finder, 
-        # field = phase_calibrator,
+        # field = phase_calibrator + ',' + fringe_finder, 
+        field = fringe_finder,
         refant=refant, caltable = bpass_table,gaintable = table, 
         interp = interp,spwmap = [[], 8*[0]], parang=True 
         )
@@ -556,12 +556,20 @@ Yu need to remove this function and use wsclean here
 @time_execution
 def dirty_map(source):
 
-    imagename = source+'_dirty_map'
+    
     
     msmd.open(vis)
     field_id = msmd.fieldsforname(source)[0]
     msmd.close()
 
+
+    plots_dir = os.path.join(working_directory).rstrip('/')
+    dirty_maps_dir = os.path.join(plots_dir,'dirty_maps')
+
+    if not os.path.exists(dirty_maps_dir):
+        os.makedirs(dirty_maps_dir)
+
+    imagename = f"{dirty_maps_dir}/{source}+_dirty_map"
 
     if use_tclean == True:
         if not os.path.exists(imagename):
