@@ -63,10 +63,10 @@ def selfcal_part1():
     Creates an (a large) an image that is used to create a casa region file using pybdsf 
     for masking
     """
-    msmd.open(vis)
+    # msmd.open(vis)
     source = phase_calibrator
     # field_id = msmd.fieldsforname(source)[0]
-    msmd.close()
+    # msmd.close()
     # global first_part_imagename
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
     if not os.path.exists(pybdsf_imagename+'-image.fits'):
@@ -107,10 +107,10 @@ def selfcal_part1():
 def selfcal_part2():
 
 
-    msmd.open(vis)
+    # msmd.open(vis)
     source = phase_calibrator
     # field_id = msmd.fieldsforname(source)[0]
-    msmd.close()
+    # msmd.close()
 
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
     regionfile = pybdsf_imagename+'.casabox'
