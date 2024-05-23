@@ -811,7 +811,7 @@ def runsplat_final(target,phase_calibrator,fringe_finder):
     splat.source[1:] = sources
     splat.docal = docal 
     splat.gainuse = get_table(indata,'CL')
-    splat.doband = doband 
+    splat.doband = -1 ## Dont do band explicitly
     # splat.bpver =get_table(indata,'BP')
     splat.bpver = 1 # use table from the TASAV file
     splat.flagv = get_table(indata,'FG')

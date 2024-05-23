@@ -198,58 +198,6 @@ if load_data==True:
     except Exception as e:
         logging.error(f"An error occurred while loading fitsfiles: {e}")
 
-if do_flagging == True:
-
-    """
-    Check the data sorting here, splat then, export to UVFITS, convert to ms, flag and then load the data again to AIPS for cal
-    """
-    unflagged_fitsfile = experiment+'.'+file_extension_for_flagging
-    output_unflagged_file_ext = 'FITS'
-    flagged_fitfile = f"{experiment}_{pointing}_1.{file_extension_for_cal}"
-    vis= experiment+'.ms'
-
-    # try:
-    #     if do_splat == True:
-    #         try:
-    #             sources = target+phase_calibrator+fringe_finder
-    #             logging.info(f"Running SPLAT for {sources}")
-    #             runsplat_init(target,phase_calibrator,fringe_finder)
-    #         except Exception as e:
-    #             logging.info(f"An error occurred: {e}")    
-
-    #     if not os.path.exists(unflagged_fitsfile):
-    #         runfittp(output_unflagged_file_ext) 
-    #     else:
-    #         logging.info(f"UVFITS file {unflagged_fitsfile} exists. New one will not be written")
-    # except Exception as e:
-    #     logging.info(f"An error occurred: {e}")
-    
-    # try:    
-    #     logging.info(f"Making measurement {vis} for flagging")
-    #     makems(vis,unflagged_fitsfile)
-    # except Exception as e:
-    #     logging.info(f"An error {e} occured")
-    try:
-        logging.info("Flagging data")
-        phase_calibrator = phase_calibrator[0]
-        plot_check_baddata(phase_calibrator,save_as="_before_flagging")
-        execute_aoflagger_strategy()
-        plot_check_baddata(phase_calibrator,save_as="_after_flagging")
-    except Exception as e:
-        logging.critical(f"Exception {e} occurred")
-
-    # try:
-    #     logging.info(f"Exporting flagged {vis} to {flagged_fitfile} ")
-    #     if not os.path.exists(flagged_fitfile):
-    #         makeuvfits(vis,flagged_fitfile)
-    # except Exception as e:
-    #     logging.critical(f"Exception {e} occurred")
-
-    # try:
-    #     logging.info(f"Loading the flagged data")
-    #     load_fitsfiles(file_extension_for_cal)
-    # except Exception as e:
-    #     logging.critical(f"Exception {e} occurred")
 
 if do_amp_parang_correction == True:
     try:  
@@ -267,6 +215,59 @@ if do_tec_correction == True:
         runtecor()
     except Exception as e:
         logging.error(f"An error occurred: {e}")
+
+if do_flagging == True:
+
+    """
+    Check the data sorting here, splat then, export to UVFITS, convert to ms, flag and then load the data again to AIPS for cal
+    """
+    unflagged_fitsfile = experiment+'.'+file_extension_for_flagging
+    output_unflagged_file_ext = 'FITS'
+    flagged_fitfile = f"{experiment}_{pointing}_1.{file_extension_for_cal}"
+    vis= experiment+'.ms'
+
+    try:
+        if do_splat == True:
+            try:
+                sources = target+phase_calibrator+fringe_finder
+                logging.info(f"Running SPLAT for {sources}")
+                runsplat_init(target,phase_calibrator,fringe_finder)
+            except Exception as e:
+                logging.info(f"An error occurred: {e}")    
+
+        if not os.path.exists(unflagged_fitsfile):
+            runfittp(output_unflagged_file_ext) 
+        else:
+            logging.info(f"UVFITS file {unflagged_fitsfile} exists. New one will not be written")
+    except Exception as e:
+        logging.info(f"An error occurred: {e}")
+    
+    try:    
+        logging.info(f"Making measurement {vis} for flagging")
+        makems(vis,unflagged_fitsfile)
+    except Exception as e:
+        logging.info(f"An error {e} occured")
+    try:
+        logging.info("Flagging data")
+        phase_calibrator = phase_calibrator[0]
+        plot_check_baddata(phase_calibrator,save_as="_before_flagging")
+        execute_aoflagger_strategy()
+        plot_check_baddata(phase_calibrator,save_as="_after_flagging")
+    except Exception as e:
+        logging.critical(f"Exception {e} occurred")
+
+    try:
+        logging.info(f"Exporting flagged {vis} to {flagged_fitfile} ")
+        if not os.path.exists(flagged_fitfile):
+            makeuvfits(vis,flagged_fitfile)
+    except Exception as e:
+        logging.critical(f"Exception {e} occurred")
+
+    try:
+        logging.info(f"Loading the flagged data")
+        load_fitsfiles(file_extension_for_cal)
+    except Exception as e:
+        logging.critical(f"Exception {e} occurred")
 
 if do_singleband_fring == True:
     try:
