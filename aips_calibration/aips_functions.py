@@ -163,116 +163,6 @@ def cleanup():
 
 
 
-# def load_fitsfiles(file_extension):
-
-#     """
-#     This function loads either idi/fits files or the pipeline calibration in form of TASAV
-
-#     Args:
-#         zap_old_data (bool): deletes old uvdata/tasav data
-#     """
-#     pattern = f"{experiment.strip()}_{pointing.strip()}_1.{file_extension.strip()}*"
-#     logging.info(f"Searching for fitsfiles with extension {pattern}")
-
-#     try:
-#         fitsfiles = glob.glob(fitsfiles_dir.rstrip('/')+'/'+pattern)
-#         # logging.info(f"Found fitsfiles in fitsfiles_dir: {fitsfiles}")
-
-#         if not fitsfiles:
-#             fitsfiles = glob.glob(working_dir.rstrip('/')+'/'+pattern)
-#             logging.info(f"Found fitsfiles in working_dir: {fitsfiles}")
-
-#         if not fitsfiles:
-#             raise FileNotFoundError("No fitsfiles were found")
-
-#         if len(fitsfiles)>1:
-#             # fitsfiles = sorted(fitsfiles,key=lambda x: int(re.findall(r'\d+$', x)[0]))
-#             fitsfiles = natsorted(fitsfiles)
-#             if len(fitsfiles)>11:
-#                 for i in range(0,len(fitsfiles),10):
-#                     chunk = fitsfiles[i:i+10]
-#                     logging.info("Chunk %d: %s", (i // 10) + 1, ", ".join(chunk))
-#         else:
-#             logging.info(f"Found fitsfiles: {fitsfiles[0]}")
-
-#     except Exception as e:
-#         logging.error(f"An error occurred while getting the fitsfiles: {e}")
-#         logging.error(traceback.format_exc())  
-        
-
-#     indata = AIPSUVData(experiment,inclass,inseq,indisk)
-
-#     """
-#     Check if the file extension is for cal -- and zap the original unflagged data
-#     """
-
-#     if file_extension in file_extension_for_cal:
-#             logging.info(f"Zapping original unflagged data {indata} and clearing state")
-#             indata.clrstat()
-#             indata.zap(force=True)
-
-#     try:
-#         logging.info("Executing task FITLD")
-#         print(f"Fitsfile to load is {fitsfiles[0]}")
-#         fitld = AIPSTask('FITLD')
-#         fitld.digicor = -1
-#         fitld.douvcomp = -1 
-#         fitld.ncount = len(fitsfiles) 
-#         fitld.outname, fitld.outclass, fitld.outseq,fitld.outdisk = \
-#             indata.name,indata.klass,indata.seq,indata.disk
-#         fitld.doconcat = 1
-#         fitld.clint = 0.25 # set aips CL interval to 15 seconds
-#         fitld.datain = fitsfiles[0]
-#         if not os.path.exists(indata):
-#             fitld.go()
-#     except Exception as e:
-#         logging.error(f"Exception {e} occured while executing FITLD")
-
-#     """
-#     This ensure that tasav will not be loaded twice -- since it has already been loaded
-#     before the data is flagged
-#     """
-
-#     tasav_indata = AIPSUVData(experiment,'TASAV',inseq,indisk)
-
-#     if file_extension not in file_extension_for_cal:
-
-#         if tasav_file:
-#             tasav_file_pattern = tasav_file
-#             tasav_files = glob.glob(os.path.join(fitsfiles_dir,tasav_file_pattern))
-#             if tasav_files:
-#                 tasav_file= tasav_files[0]
-#                 logging.info(f"Found tasav file in fitsfiles_dir: {tasav_file}")
-#             else:
-#                 tasav_files = glob.glob(os.path.join(working_dir,tasav_file_pattern))
-#                 tasav_file= tasav_files[0]
-#                 logging.info(f"Found tasav file in working_dir: {tasav_file}")
-                
-#         else:
-#             raise FileNotFoundError("No tasav file found")
-        
-
-
-#         try:
-#             logging.info(f"Loading {tasav_file}")
-#             fitld = AIPSTask('FITLD')
-#             fitld.digicor = -1
-#             fitld.douvcomp = -1 
-#             fitld.ncount = 1
-#             fitld.outname, fitld.outclass, fitld.outseq,fitld.outdisk = \
-#                     tasav_indata.name,tasav_indata.klass,tasav_indata.seq,tasav_indata.disk    
-#             fitld.doconcat = 1
-#             fitld.clint = 0.25
-#             fitld.datain = tasav_file
-#             if not os.path.exists(tasav_file):
-#                 fitld.go()
-#             else:
-#                 logging.info(f"{tasav_file} found. Will not be overwritten")
-
-#         except Exception as e:
-#             logging.error(f"Exception {e} occured while attempting to load {tasav_file}")
-
-
 def load_fitsfiles(file_extension):
 
     """
@@ -281,6 +171,7 @@ def load_fitsfiles(file_extension):
     Args:
         zap_old_data (bool): deletes old uvdata/tasav data
     """
+
 
     pattern = f"{experiment.strip()}_{pointing.strip()}_1.{file_extension.strip()}*"
     logging.info(f"Searching for fitsfiles with extension {pattern}")
@@ -311,7 +202,6 @@ def load_fitsfiles(file_extension):
         logging.error(traceback.format_exc())  
 
     indata = AIPSUVData(experiment,inclass,inseq,indisk)
-    print(indata)
     # indata =set_indata.indata
 
     if file_extension in file_extension_for_cal:
@@ -330,6 +220,16 @@ def load_fitsfiles(file_extension):
         fitld.doconcat = 1
         fitld.clint = 0.25 # set aips CL interval to 15 seconds
         fitld.datain = fitsfiles[0]
+
+        if zap_data==True:
+            try:
+                logging.info(f"Zapping requested")
+                indata.clrstat()
+                indata.zap(force=True)
+            except Exception as e:
+                logging.error(f"{e}")
+
+
         if indata.exists():
             logging.info("UVDATA exists, will not write a new one")
             
@@ -342,19 +242,12 @@ def load_fitsfiles(file_extension):
 
 def load_tasav():
 
+
     tasav_file_path = os.path.join(fitsfiles_dir, tasav_file)
     if os.path.exists(tasav_file_path):
         logging.info(f"Found tasav file in fitsfiles_dir: {tasav_file_path}")
-        return tasav_file_path
     else:
-        # Check in working_dir if not found in fitsfiles_dir
-        tasav_file_path = os.path.join(working_dir, tasav_file)
-        if os.path.exists(tasav_file_path):
-            logging.info(f"Found tasav file in working_dir: {tasav_file_path}")
-            return tasav_file_path
-        else:
-            raise FileNotFoundError("No tasav file found in either fitsfiles_dir or working_dir")
-
+        raise FileNotFoundError("No tasav file found in either fitsfiles_dir or working_dir")
     # indata = AIPSUVData(experiment,inclass,inseq,indisk)
     tasav_indata = AIPSUVData(experiment,'TASAV',inseq,indisk)
     # tasav_indata = set_indata.tasav_indata
@@ -369,9 +262,18 @@ def load_tasav():
                 tasav_indata.name,tasav_indata.klass,tasav_indata.seq,tasav_indata.disk    
         fitld.doconcat = 1
         fitld.clint = 0.25
-        fitld.datain = tasav_file
+        fitld.datain = tasav_file_path
+
+        if zap_data==True:
+            try:
+                logging.info(f"Zapping requested")
+                tasav_indata.clrstat()
+                tasav_indata.zap(force=True)
+            except Exception as e:
+                logging.error(f"{e}")
+
         if tasav_indata.exists():
-            logging.info(f"TASAV file {tasav} exists. Will not write a new one")
+            logging.info(f"TASAV file already exits. Will not write a new one")
         else:
             fitld.go()
 
@@ -691,7 +593,7 @@ def fring_instr(calsour):
     _,_,_,refant_index,refant_indices = get_obs_params()
 
     timerange_str = fring_timerange
-    timerange = [float(value) for value in timerange_str.split(',')]
+    timerange = [int(value) for value in timerange_str.split(',')]
 
     fring = AIPSTask('FRING')
     fring.indata = indata
@@ -718,8 +620,8 @@ def fring_instr(calsour):
         logging.critical("Please supply a valid timerange")
 
     else:
-        logging.info(f"Running FRING using {timerange} and {refant_index}")
-        logging.info(f"FRING corrections will be derived using timerange {timerange}")
+        logging.info(f"Running FRING using timerange: {timerange} and  refant indexed as: {refant_index}")
+        logging.info(f"FRING corrections will be derived using timerange: {timerange}")
 
         fring.go()
 
@@ -914,8 +816,15 @@ def runfittp(file_extension):
 
     inseq=indisk = 1
     indata = AIPSUVData(experiment,'SPLAT',inseq,indisk)
+    fittp_output =  working_dir +'/'+experiment+'.'+file_extension
+
+    # os.system(f"rm -r {fittp_output}")
 
     fittp = AIPSTask('FITTP')
     fittp.indata = indata
-    fittp.dataout = working_dir +'/'+experiment+'.'+file_extension
-    fittp.go()
+    fittp.dataout = fittp_output
+    if not os.path.exists(fittp_output):
+        logging.info(f"Writing {fittp_output} to disk")
+        fittp.go()
+    else:
+        logging.info(f"{fittp_output} exists, will not write a new one")

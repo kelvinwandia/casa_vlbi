@@ -16,6 +16,7 @@ config.read('aips_config.ini')
 exec(open("./aips_functions.py").read())
 exec(open("../utils/helper_functions.py").read())
 exec(open("./casa_functions.py").read())
+exec(open("./selfcal.py").read())
 
 print("Creating log dir")
 log_dir = os.path.join(os.getcwd(), 'logs')
@@ -96,9 +97,9 @@ pointing = config.get('load_data','pointing')
 integration_time=config.getfloat('load_data','integration_time')
 
 # sources
-phase_calibrator = config.get('sources','phase_calibrator')
-fringe_finder = config.get('sources','fringe_finder')
-target = config.get('sources','target')
+phase_calibrator = config.get('sources','phase_calibrator').split(',')
+fringe_finder = config.get('sources','fringe_finder').split(',')
+target = config.get('sources','target').split(',')
 
 # flagging
 
@@ -130,6 +131,36 @@ apply_all_calibrations = config.getboolean('calibrate','apply_all_calibrations')
 do_splat = config.getboolean('split','do_splat')
 write_fits = config.getboolean('split','write_fits')
 
+# selfcal
+make_dirty_map = config.getboolean('selfcal','make_dirty_map')
+do_selfcal = config.getboolean('selfcal','do_selfcal')
+use_tclean = config.getboolean('selfcal','use_tclean')
+use_wsclean = config.getboolean('selfcal','use_wsclean')
+wsclean_sif = config.get('selfcal','wsclean_sif')
+
+pybdsf_threshold = config.get('selfcal','pybdsf_threshold')
+pybdsf_niter = config.getint('selfcal','pybdsf_niter')
+imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
+weighting = config.get('selfcal','weighting')
+robust = config.getfloat('selfcal','robust')
+
+nloops = config.getint('selfcal','nloops')
+calmode = config.get('selfcal','calmode').split(',')
+gaintype = config.get('selfcal','gaintype').split(',')
+cell =  config.get('selfcal', 'cell')
+threshold = config.get('selfcal','threshold').split(',')
+minsnr = [float(part) for part in config.get('selfcal', 'minsnr').split(',')]
+# imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
+# niter = [int(part) for part in config.get('selfcal', 'niter').split(',')]
+niter = config.get('selfcal','niter')
+niter_final = config.getint('selfcal','niter_final')
+threshold_final = config.getint('selfcal','threshold_final')
+robust = config.getfloat('selfcal','robust')
+detection_threshold = config.getfloat('selfcal','detection_threshold')
+tclean_threshold = config.get('selfcal','tclean_threshold')
+solint_selfcal = config.get('selfcal','solint_selfcal').split(',')
+apply_to_target = config.getboolean('selfcal','apply_to_target')
+detect_sources = config.getboolean('selfcal','detect_sources')
 
 
 logging.info(f"AIPS user no.:{userno}")
@@ -158,12 +189,6 @@ if start_tv==True:
     except Exception as e:
         logging.error(f"An error occurred while controlling TV: {e}")
 
-if zap_data==True:
-    try:
-        cleanup()
-    except Exception as e:
-        logging.error(f"{e}")
-
 if load_data==True:
     try:
         logging.info("Loading fitsfiles")
@@ -181,6 +206,7 @@ if do_flagging == True:
     output_unflagged_file_ext = 'FITS'
     flagged_fitfile = f"{experiment}_{pointing}_1.{file_extension_for_cal}"
     vis= experiment+'.ms'
+
     try:
         if not os.path.exists(unflagged_fitsfile):
             runfittp(output_unflagged_file_ext) 
@@ -196,9 +222,9 @@ if do_flagging == True:
         logging.info(f"An error {e} occured")
     try:
         logging.info("Flagging data")
-        # plot_check_baddata(save_as="_before_flagging")
-        # execute_aoflagger_strategy()
-        # plot_check_baddata(save_as="_after_flagging")
+        plot_check_baddata(save_as="_before_flagging")
+        execute_aoflagger_strategy()
+        plot_check_baddata(save_as="_after_flagging")
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
@@ -279,6 +305,41 @@ if do_splat == True:
     
 if write_fits == True:
     try:
-        runfittp()
+        cal_output_ext = 'UVFITS'
+        runfittp(cal_output_ext)
     except Exception as e:
         logging.info(f"An error occurred: {e}")
+
+
+
+if do_selfcal == True:
+    cal_output_ext = 'UVFITS'
+    fitsfile = experiment+'.'+cal_output_ext
+    makems_split(fitsfile,cal_output_ext)
+
+    if make_dirty_map == True:
+        try:
+            logging.info("Making dirty map")
+            dirty_map()
+        except Exception as e:
+            logging.warning(f"Encountered error {e}")
+
+    try:
+        logging.info("Self calibrating the data")
+        selfcal_dir = os.path.join(working_dir,'selfcal_dir')
+        logging.info(f"Making and switching to {selfcal_dir}")
+        if not os.path.exists(selfcal_dir):
+            os.makedirs(selfcal_dir)
+        os.chdir(selfcal_dir)
+        # selfcal_part1()
+        # selfcal_part2()
+        os.chdir(working_dir)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
+
+if apply_to_target == True:
+    try:
+        logging.info("Applying calibrations to science target")
+        applycal_target()
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")

@@ -146,3 +146,6 @@ def makeuvfits(vis,fitsfile):
  
     logging.info(f"======>>>Making {fitsfile}")
     exportuvfits(vis=vis, fitsfile=fitsfile)
+
+
+
