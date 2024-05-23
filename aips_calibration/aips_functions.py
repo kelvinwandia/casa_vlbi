@@ -273,7 +273,7 @@ def load_tasav():
                 logging.error(f"{e}")
 
         if tasav_indata.exists():
-            logging.info(f"TASAV file already exits. Will not write a new one")
+            logging.info(f"TASAV file already exists. Will not write a new one")
         else:
             fitld.go()
 
@@ -744,7 +744,37 @@ def runbpass(calsour):
     logging.info(f"Deriving solutions from {calsour}")
     bpass.go()
 
-def runsplat(target,phase_calibrator,fringe_finder):
+
+def runsplat_init(target,phase_calibrator,fringe_finder):
+
+    sources = target+phase_calibrator+fringe_finder
+
+    # sources = [phase_calibrator,target,fringe_finder]
+
+
+    set_indata()
+    indata = set_indata.indata
+
+    splat_file = AIPSUVData(experiment,'SPLAT',1,1)
+    if splat_file.exists():
+        try:
+            logging.info(f"SPLAT file {splat_file} exists. Zapping {splat_file}")
+            splat_file.clrstat()
+            splat_file.zap(force=True)
+        except Exception as e:
+            logging.error(f"Unable to zap {splat_file}") 
+
+    splat = AIPSTask('SPLAT')
+    splat.indata = indata
+    splat.source[1:] = sources
+    splat.docal = -1
+    splat.gainuse = get_table(indata,'CL')
+    splat.doband = -1
+    splat.bpver = -1 
+    splat.flagv = -1
+    splat.go()
+
+def runsplat_final(target,phase_calibrator,fringe_finder):
 
     sources = target+phase_calibrator+fringe_finder
 
@@ -818,7 +848,7 @@ def runfittp(file_extension):
     indata = AIPSUVData(experiment,'SPLAT',inseq,indisk)
     fittp_output =  working_dir +'/'+experiment+'.'+file_extension
 
-    # os.system(f"rm -r {fittp_output}")
+    os.system(f"rm -r {fittp_output}")
 
     fittp = AIPSTask('FITTP')
     fittp.indata = indata

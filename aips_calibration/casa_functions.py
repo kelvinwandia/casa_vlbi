@@ -115,7 +115,7 @@ def get_msinfo():
 
     return nspw,nchan
 
-def plot_check_baddata(save_as=None):
+def plot_check_baddata(source,save_as=None):
     """
     Plots the vis over each spectral window to check the effect before and after flagging
 
@@ -134,7 +134,7 @@ def plot_check_baddata(save_as=None):
 
     for spw in range(0,nspw):
         plotfile = f"{flags_dir}/spw_{spw}.png" if save_as is None else f"{flags_dir}/{save_as}_spw_{spw}.png"
-        plotms(vis=vis, xaxis='channel', yaxis='amp', field=phase_calibrator, iteraxis='antenna', gridcols=3, 
+        plotms(vis=vis, xaxis='channel', yaxis='amp', field=source, iteraxis='antenna', gridcols=3, 
             spw=str(spw),gridrows=3, plotfile=plotfile, width=1500, height=750, dpi=300, showgui=False,
             overwrite=True)
 
