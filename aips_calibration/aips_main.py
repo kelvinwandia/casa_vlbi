@@ -271,6 +271,8 @@ if do_flagging == True:
 
 if do_singleband_fring == True:
     try:
+        logging.info("Running INDXR to make new lost after conversion to measurement set")
+        runindxr() 
         logging.info("Running single band fring using")
         fring_instr(phase_calibrator)
     except Exception as e:
