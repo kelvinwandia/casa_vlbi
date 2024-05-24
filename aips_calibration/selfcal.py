@@ -1,5 +1,4 @@
-
-import os, glob, subprocess
+import os, glob, subprocess,logging
 from casatasks import *
 from casaplotms import *
 import bdsf
@@ -213,7 +212,7 @@ def selfcal_part2():
                 run_wsclean(wsclean_sif,wsclean_cmd)
 
                 wsclean_fitsfile = imagename+'-image.fits'
-                # get_im_stats(wsclean_fitsfile)
+                get_im_stats(wsclean_fitsfile)
                 plot_fits(wsclean_fitsfile)
             
                 model_fits = imagename.replace('-image.fits','-model.fits')
@@ -302,7 +301,7 @@ def selfcal_part2():
         run_wsclean(wsclean_sif,wsclean_cmd_final)
 
         wsclean_fitsfile = imagename_final+'-image.fits'
-        # get_im_stats(wsclean_fitsfile)
+        get_im_stats(wsclean_fitsfile)
         plot_fits(wsclean_fitsfile)
 
 

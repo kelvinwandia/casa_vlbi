@@ -1,6 +1,6 @@
 
 import time
-
+import logging
 import os, glob, subprocess
 from casatasks import *
 from casaplotms import *
