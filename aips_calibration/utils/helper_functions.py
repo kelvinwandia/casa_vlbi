@@ -28,7 +28,7 @@ def time_execution(func):
             time_unit = "hours"
             formatted_time = execution_time / 3600
             
-        print(f"======>>>EXECUTION TIME for {func.__name__}: {formatted_time:.2f} {time_unit}")
+        logging.info(f"======>>>EXECUTION TIME for {func.__name__}: {formatted_time:.2f} {time_unit}")
         return result
     return wrapper
 
@@ -65,7 +65,7 @@ def get_im_stats(imagename):
 
     rms=imstat(imagename=imagename,box='60,60,580,240')['rms'][0]  # for 640x640 px
     peak=imstat(imagename=imagename,box='300,300,340,340')['max'][0]
-    print('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+    logging.info('======>>>For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
                 (imagename, peak*1e3, rms*1e3, peak/rms))
     
     logfile = 'imstat.txt'
@@ -114,18 +114,18 @@ def run_wsclean(wsclean_sif,command):
 
     command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
     try:
-        print("Executing: %s", ' '.join(command_to_execute))
+        logging.info("======>>>Executing: %s", ' '.join(command_to_execute))
         process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout, stderr = process.communicate()
-        print("stdout: %s", stdout)
-        print("stderr: %s", stderr)
+        logging.info("stdout: %s", stdout)
+        logging.info("stderr: %s", stderr)
 
         return_code = process.returncode
         if return_code == 0:
-            print(f"Strategy executed successfully. Output:\n{stdout}")
+            logging.info(f"======>>>Strategy executed successfully. Output:\n{stdout}")
         else:
-            print(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")  
+            logging.critical(f"======>>>Error executing strategy. Return code: {return_code}\nError message: {stderr}")  
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.critical(f"======>>>An error occurred: {e}")
 
