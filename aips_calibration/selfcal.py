@@ -55,7 +55,7 @@ def dirty_map():
     if not os.path.exists(dirty_maps_dir):
         os.makedirs(dirty_maps_dir)
     
-    imagename = f"{dirty_maps_dir}/{phasecal_ms.replace('.ms','')}+_dirty_map"
+    imagename = f"{dirty_maps_dir}/{phasecal_ms.replace('.ms','')}_dirty_map"
 
     if use_tclean == True:
         if not os.path.exists(imagename):
@@ -76,9 +76,9 @@ def dirty_map():
             
             run_wsclean(wsclean_sif,wsclean_cmd)
 
-        # wsclean_fitsfile = imagename+'-image.fits'
-        # get_im_stats(wsclean_fitsfile)
-        # plot_fits(wsclean_fitsfile)
+            wsclean_fitsfile = imagename+'-image.fits'
+            get_im_stats(wsclean_fitsfile)
+            plot_fits(wsclean_fitsfile)
 
 def run_pybdsf(input_image):
 
