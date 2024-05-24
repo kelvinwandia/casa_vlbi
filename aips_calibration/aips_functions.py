@@ -598,6 +598,9 @@ def fring_instr(calsour):
     
     _,_,_,refant_index,refant_indices = get_obs_params()
 
+    if isinstance(calsour, str):
+        calsour = [calsour]
+
     timerange_str = fring_timerange
     timerange = [int(value) for value in timerange_str.split(',')]
 
@@ -653,6 +656,12 @@ def apply_solutions(calsour):
     #     calsour = phase_calibrator
     # else:
     #         calsour = ""
+
+    # print(f"The calsour is : {calsour} and is of type {type(calsour)}")
+
+    if isinstance(calsour, str):
+        calsour = [calsour]
+
     if not target or not calsour:
         logging.error("Target or phase calibrator is empty")
     
@@ -693,6 +702,9 @@ def global_fring(calsour):
     indata = set_indata.indata
     
     _,_,_,refant_index,refant_indices = get_obs_params()
+
+    if isinstance(calsour, str):
+        calsour = [calsour]
 
     fring = AIPSTask('FRING')
     fring.indata = indata

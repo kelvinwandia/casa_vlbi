@@ -328,7 +328,7 @@ if write_fits == True:
 if do_selfcal == True:
     cal_output_ext = 'UVFITS'
     fitsfile = experiment+'.'+cal_output_ext
-    makems_split(fitsfile,cal_output_ext)
+    makems_split(fitsfile,cal_output_ext,phase_calibrator,target)
 
     if make_dirty_map == True:
         try:
@@ -343,9 +343,9 @@ if do_selfcal == True:
         logging.info(f"Making and switching to {selfcal_dir}")
         if not os.path.exists(selfcal_dir):
             os.makedirs(selfcal_dir)
-        os.chdir(selfcal_dir)
-        # selfcal_part1()
-        # selfcal_part2()
+        # os.chdir(selfcal_dir)
+        selfcal_part1()
+        selfcal_part2()
         os.chdir(working_dir)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
