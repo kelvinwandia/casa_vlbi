@@ -43,9 +43,6 @@ def makems_split(fitsfile,cal_output_ext,phase_calibrator,target):
         else:
             print(f"{outputvis} exists. Will not make a new one")
 
-    global phasecal_ms, target_ms
-    phasecal_ms = ','.join(phase_calibrator) + '.ms'
-    target_ms = ','.join(target) + '.ms'
 
     
 def dirty_map():
@@ -55,6 +52,8 @@ def dirty_map():
     if not os.path.exists(dirty_maps_dir):
         os.makedirs(dirty_maps_dir)
     
+    phasecal_ms = os.path.join(working_dir,','.join(phase_calibrator)+'.ms')
+
     imagename = f"{dirty_maps_dir}/{phasecal_ms.replace('.ms','')}_dirty_map"
 
     if use_tclean == True:
@@ -112,18 +111,14 @@ def selfcal_part1():
     """
     # msmd.open(vis)
     source = ','.join(phase_calibrator)
+    phasecal_ms = os.path.join(working_dir,','.join(phase_calibrator)+'.ms')
     # field_id = msmd.fieldsforname(source)[0]
     # msmd.close()
     # global first_part_imagename
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
     if not os.path.exists(pybdsf_imagename+'-image.fits'):
         print(f"Making {pybdsf_imagename}")
-
-        
         if use_tclean == True:
-
-            # tclean(vis= phasecal_ms, imagename=pybdsf_imagename,imsize=imsize, cell=cell,
-            #     gridder='standard',weighting='briggs',robust=robust,niter=pybdsf_niter)
             fitsname = pybdsf_imagename+'.fits'
             exportfits(imagename=pybdsf_imagename+'.image',fitsimage=fitsname,overwrite=True)
             get_im_stats(fitsname)
@@ -132,9 +127,6 @@ def selfcal_part1():
             regionfile = run_pybdsf(input_image=fitsname)
 
         elif use_wsclean == True:
-
-            # wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{pybdsf_threshold}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
-            #                     '-mgain', '0.8', '-niter', f'{pybdsf_niter}', f'{source}']
             wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{pybdsf_imagename}','-scale', f'{cell}',\
                                 '-mgain', '0.8', '-niter', f'{pybdsf_niter}' ,f'{phasecal_ms}']
             
@@ -158,6 +150,8 @@ def selfcal_part2():
     source =','.join(phase_calibrator)
     # field_id = msmd.fieldsforname(source)[0]
     # msmd.close()
+    
+    phasecal_ms = os.path.join(working_dir,','.join(phase_calibrator)+'.ms')
 
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
     regionfile = pybdsf_imagename+'.casabox'
@@ -312,7 +306,8 @@ def applycal_target():
     Applies cal to the target field
     """
     prev_caltables = sorted(glob.glob('*.tb'))
-  
+    target_ms = os.path.join(working_dir,','.join(target)+'.ms')
+
     print(f"Applying calibration tables {prev_caltables} to {target_ms}")
     applycal(
         vis = target_ms, gaintable = prev_caltables, parang=False

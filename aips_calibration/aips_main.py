@@ -132,6 +132,7 @@ do_splat = config.getboolean('split','do_splat')
 write_fits = config.getboolean('split','write_fits')
 
 # selfcal
+split_selfcal = config.getboolean('selfcal','split_selfcal')
 make_dirty_map = config.getboolean('selfcal','make_dirty_map')
 do_selfcal = config.getboolean('selfcal','do_selfcal')
 use_tclean = config.getboolean('selfcal','use_tclean')
@@ -322,6 +323,22 @@ if write_fits == True:
 
 
 
+if split_selfcal == True:
+    try:
+        logging.info("Splitting measurement set for selfcal")
+        cal_output_ext = 'UVFITS'
+        fitsfile = experiment+'.'+cal_output_ext
+        makems_split(fitsfile,cal_output_ext,phase_calibrator,target)
+    except Exception as e:
+        logging.critical(f"Exception: {e} occured during splitting")
+
+    if make_dirty_map == True:
+        try:
+            logging.info("Making dirty map")
+            dirty_map()
+        except Exception as e:
+            logging.warning(f"Encountered error {e}")
+
 if do_selfcal == True:
 
     try:
@@ -331,17 +348,6 @@ if do_selfcal == True:
         if not os.path.exists(selfcal_dir):
             os.makedirs(selfcal_dir)
         os.chdir(selfcal_dir)
-
-        cal_output_ext = 'UVFITS'
-        fitsfile = experiment+'.'+cal_output_ext
-        makems_split(fitsfile,cal_output_ext,phase_calibrator,target)
-
-        if make_dirty_map == True:
-            try:
-                logging.info("Making dirty map")
-                dirty_map()
-            except Exception as e:
-                logging.warning(f"Encountered error {e}")
         try:
             logging.info("Self calibrating the data")
             selfcal_part1()
