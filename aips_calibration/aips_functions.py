@@ -768,7 +768,16 @@ def runbpass(calsour):
 
 def runsplat_init(target,phase_calibrator,fringe_finder):
 
+    if isinstance(target, str):
+        target = [target]
+    if isinstance(phase_calibrator, str):
+        phase_calibrator = [phase_calibrator]
+    if isinstance(fringe_finder, str):
+        fringe_finder = [fringe_finder]
+
     sources = target+phase_calibrator+fringe_finder
+
+    logging.info(f"Sources: {sources} will be SPLAT")
 
     set_indata()
     indata = set_indata.indata
@@ -799,10 +808,16 @@ def runsplat_init(target,phase_calibrator,fringe_finder):
 
 def runsplat_final(target,phase_calibrator,fringe_finder):
 
+    if isinstance(target, str):
+        target = [target]
+    if isinstance(phase_calibrator, str):
+        phase_calibrator = [phase_calibrator]
+    if isinstance(fringe_finder, str):
+        fringe_finder = [fringe_finder]
+
     sources = target+phase_calibrator+fringe_finder
 
-    # sources = [phase_calibrator,target,fringe_finder]
-
+    logging.info(f"Sources: {sources} will be SPLAT")
 
     set_indata()
     indata = set_indata.indata

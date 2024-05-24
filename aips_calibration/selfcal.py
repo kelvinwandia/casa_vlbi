@@ -7,6 +7,7 @@ import casalogger
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
+from utils.helper_functions import *
 
 
 
@@ -27,6 +28,12 @@ def makems_split(fitsfile,cal_output_ext,phase_calibrator,target):
 
     vis_to_split = os.path.join(working_dir,vis)
 
+    if isinstance(target, str):
+        target = [target]
+    if isinstance(phase_calibrator, str):
+        phase_calibrator = [phase_calibrator]
+
+
     sources = phase_calibrator+target
     for source in sources:
         outputvis = source+'.ms'
@@ -44,14 +51,7 @@ def makems_split(fitsfile,cal_output_ext,phase_calibrator,target):
     
 def dirty_map():
 
-    # source = phase_calibrator[0]
-    # msmd = casatools.msmetadata()
-    # msmd.open(vis)
-    # field_id = msmd.fieldsforname(source)[0]
-    # msmd.close()
 
-
-    
     dirty_maps_dir = os.path.join(working_dir,'dirty_maps')
     if not os.path.exists(dirty_maps_dir):
         os.makedirs(dirty_maps_dir)

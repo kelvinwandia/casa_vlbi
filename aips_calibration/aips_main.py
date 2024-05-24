@@ -228,8 +228,7 @@ if do_flagging == True:
     try:
         if do_splat == True:
             try:
-                sources = target+phase_calibrator+fringe_finder
-                logging.info(f"Running SPLAT for {sources}")
+                logging.info(f"Running SPLAT")
                 runsplat_init(target,phase_calibrator,fringe_finder)
             except Exception as e:
                 logging.info(f"An error occurred: {e}")    
@@ -308,8 +307,7 @@ if do_bandpass == True:
 
 if do_splat == True:
     try:
-        sources = target+phase_calibrator+fringe_finder
-        logging.info(f"Running SPLAT for {sources}")
+        logging.info(f"Running SPLAT")
         runsplat_final(target,phase_calibrator,fringe_finder)
     except Exception as e:
         logging.info(f"An error occurred: {e}")    
@@ -325,16 +323,6 @@ if write_fits == True:
 
 
 if do_selfcal == True:
-    cal_output_ext = 'UVFITS'
-    fitsfile = experiment+'.'+cal_output_ext
-    makems_split(fitsfile,cal_output_ext,phase_calibrator,target)
-
-    if make_dirty_map == True:
-        try:
-            logging.info("Making dirty map")
-            dirty_map()
-        except Exception as e:
-            logging.warning(f"Encountered error {e}")
 
     try:
         logging.info("Self calibrating the data")
@@ -342,9 +330,24 @@ if do_selfcal == True:
         logging.info(f"Making and switching to {selfcal_dir}")
         if not os.path.exists(selfcal_dir):
             os.makedirs(selfcal_dir)
-        # os.chdir(selfcal_dir)
-        selfcal_part1()
-        selfcal_part2()
+        os.chdir(selfcal_dir)
+
+        cal_output_ext = 'UVFITS'
+        fitsfile = experiment+'.'+cal_output_ext
+        makems_split(fitsfile,cal_output_ext,phase_calibrator,target)
+
+        if make_dirty_map == True:
+            try:
+                logging.info("Making dirty map")
+                dirty_map()
+            except Exception as e:
+                logging.warning(f"Encountered error {e}")
+        try:
+            logging.info("Self calibrating the data")
+            selfcal_part1()
+            selfcal_part2()
+        except Exception as e:
+            logging.critical("Error: {e} occured whilst self calibrating the data")
         os.chdir(working_dir)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
