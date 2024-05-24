@@ -207,12 +207,12 @@ def load_fitsfiles(file_extension):
     indata = AIPSUVData(experiment,inclass,inseq,indisk)
 
     if zap_data==True:
-        try:
+        if indata.exists():
             logging.info(f"Zapping requested")
             indata.clrstat()
             indata.zap(force=True)
-        except Exception as e:
-            logging.error(f"{e}")
+        else:
+            logging.info("No existing UVDATA found to zap")
 
 
     if file_extension == file_extension_for_cal:
@@ -747,6 +747,9 @@ def runbpass(calsour):
 
     _,_,_,refant_index,_ = get_obs_params()
 
+    if isinstance(calsour, str):
+        calsour = [calsour]
+
     bpass = AIPSTask('BPASS')
     bpass.indata = indata
     bpass.calsour[1:] = calsour
@@ -767,9 +770,6 @@ def runsplat_init(target,phase_calibrator,fringe_finder):
 
     sources = target+phase_calibrator+fringe_finder
 
-    # sources = [phase_calibrator,target,fringe_finder]
-
-
     set_indata()
     indata = set_indata.indata
 
@@ -782,14 +782,19 @@ def runsplat_init(target,phase_calibrator,fringe_finder):
         except Exception as e:
             logging.error(f"Unable to zap {splat_file}") 
 
+    doband = -1; docal =1; doflag = 1; flg_table = get_table(indata,'FG'); cal_table = get_table(indata,'CL')
+    logging.info("You are applying apriori flags and calibration tables")
+    logging.info(f"Applying caltable: {cal_table}, apriori flags: {flg_table}")
+    logging.info(f"Bandpass calibration is disabled: doband={doband}")
+
     splat = AIPSTask('SPLAT')
     splat.indata = indata
     splat.source[1:] = sources
-    splat.docal = -1
-    splat.gainuse = get_table(indata,'CL')
-    splat.doband = -1
+    splat.docal = docal
+    splat.gainuse = cal_table
+    splat.doband = doband
     splat.bpver = -1 
-    splat.flagv = -1
+    splat.flagv = flg_table
     splat.go()
 
 def runsplat_final(target,phase_calibrator,fringe_finder):
@@ -810,41 +815,23 @@ def runsplat_final(target,phase_calibrator,fringe_finder):
             splat_file.zap(force=True)
         except Exception as e:
             logging.error(f"Unable to zap {splat_file}") 
-    else:
-        pass
 
-    if apply_all_calibrations  == True:
-        doband = 1; docal = 1 # if doband=1 -- AIPS will say : Calibrating  gains  bandpass
-        if doband == 1:
-            logging.info(f"Applying final CL table {get_table(indata,'CL')}, BP table {get_table(indata,'BP')} and flagging table {get_table(indata,'FG')}")
-        else:
-            logging.info(f"Applying final CL table {get_table(indata,'CL')} and flagging table {get_table(indata,'FG')}")
+    
+    doband = 1; docal = 1; cal_table = get_table(indata,'CL'); bpver=get_table(indata,'BP');  doflg = -1
         
-    else: 
-        doband = -1; docal = -1
-        logging.info(f"Final cal tables not applied")
+    logging.info("You are applying calibration and bandpass tables")
+    logging.info("Note the table numbering has changed as previous tables were destroyed during conversion to ms")
+    logging.info(f"Applying  final caltable: {cal_table} and bandpass table: {bpver}")
+    logging.info(f"Bandpass calibration is disabled: doband={doband}")
 
     splat = AIPSTask('SPLAT')
     splat.indata = indata
     splat.source[1:] = sources
     splat.docal = docal 
-    splat.gainuse = get_table(indata,'CL')
-    splat.doband = -1 ## Dont do band explicitly
-    # splat.bpver =get_table(indata,'BP')
-    splat.bpver = 1 # use table from the TASAV file
-    splat.flagv = get_table(indata,'FG')
-
-    # if (average_chan==1):
-    #     splat.aparm[1:] = [1]
-    #     print(f"Averaging every {nchan} channels")
-    #     splat.chinc = nchan
-    # else:
-    #     print("Not averaging channels")
-
-    # if (average_time==1):
-    #     print(f"Averaging to {time} seconds")
-    #     splat.aparm[2:] = [time]
-
+    splat.gainuse = cal_table
+    splat.doband = doband
+    splat.bpver = bpver
+    splat.flagv = doflg
     splat.go()
 
 

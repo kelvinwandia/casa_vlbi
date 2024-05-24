@@ -125,7 +125,6 @@ apply_global_fring_corrections = config.getboolean('calibrate','apply_global_fri
 do_bandpass = config.getboolean('calibrate','do_bandpass')
 apply_bpass_corrections = config.getboolean('calibrate','apply_bpass_corrections')
 
-apply_all_calibrations = config.getboolean('calibrate','apply_all_calibrations')
 
 
 # split

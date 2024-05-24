@@ -11,37 +11,7 @@ import matplotlib.pyplot as plt
 
 
 
-def run_wsclean(wsclean_sif,command):
-
-    """
-    Runs wsclean commands 
-    """
-    container = wsclean_sif
-    if os.path.exists(container):
-        singularity_bind = os.path.join(os.path.dirname(os.path.dirname(container)))
-
-    command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
-    try:
-        print("Executing: %s", ' '.join(command_to_execute))
-        process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        stdout, stderr = process.communicate()
-        print("stdout: %s", stdout)
-        print("stderr: %s", stderr)
-
-        return_code = process.returncode
-        if return_code == 0:
-            print(f"Strategy executed successfully. Output:\n{stdout}")
-        else:
-            print(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")  
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-
-
-
-
-def makems_split(fitsfile,cal_output_ext):
+def makems_split(fitsfile,cal_output_ext,phase_calibrator,target):
 
     fitsfile =  os.path.join(working_dir,fitsfile)
     vis = fitsfile.replace(cal_output_ext,'calibrated.ms')
