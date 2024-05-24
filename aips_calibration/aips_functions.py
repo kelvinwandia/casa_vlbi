@@ -165,6 +165,7 @@ def cleanup():
 
 def load_fitsfiles(file_extension):
 
+    logging.info(f"The file extension is: {file_extension}")
     """
     This function loads either idi/fits files or the pipeline calibration in form of TASAV
 
@@ -201,13 +202,27 @@ def load_fitsfiles(file_extension):
         logging.error(f"An error occurred while getting the fitsfiles: {e}")
         logging.error(traceback.format_exc())  
 
-    indata = AIPSUVData(experiment,inclass,inseq,indisk)
-    # indata =set_indata.indata
 
-    if file_extension in file_extension_for_cal:
-        logging.info(f"Zapping original unflagged data {indata} and clearing state")
-        indata.clrstat()
-        indata.zap(force=True)
+
+    indata = AIPSUVData(experiment,inclass,inseq,indisk)
+
+    if zap_data==True:
+        try:
+            logging.info(f"Zapping requested")
+            indata.clrstat()
+            indata.zap(force=True)
+        except Exception as e:
+            logging.error(f"{e}")
+
+
+    if file_extension == file_extension_for_cal:
+        if indata.exists():
+            logging.info("Zapping existing UVDATA")
+            indata.clrstat()
+            indata.zap(force=True)
+        else:
+            logging.info("No existing UVDATA found to zap")
+
 
     try:
         logging.info("Executing task FITLD")
@@ -220,15 +235,6 @@ def load_fitsfiles(file_extension):
         fitld.doconcat = 1
         fitld.clint = 0.25 # set aips CL interval to 15 seconds
         fitld.datain = fitsfiles[0]
-
-        if zap_data==True:
-            try:
-                logging.info(f"Zapping requested")
-                indata.clrstat()
-                indata.zap(force=True)
-            except Exception as e:
-                logging.error(f"{e}")
-
 
         if indata.exists():
             logging.info("UVDATA exists, will not write a new one")
@@ -252,6 +258,15 @@ def load_tasav():
     tasav_indata = AIPSUVData(experiment,'TASAV',inseq,indisk)
     # tasav_indata = set_indata.tasav_indata
 
+    # if zap_data==True:
+    #     try:
+    #         logging.info(f"Zapping requested")
+    #         tasav_indata.clrstat()
+    #         tasav_indata.zap(force=True)
+    #     except Exception as e:
+    #         logging.error(f"{e}")
+
+
     try:
         logging.info(f"Loading {tasav_file}")
         fitld = AIPSTask('FITLD')
@@ -263,15 +278,6 @@ def load_tasav():
         fitld.doconcat = 1
         fitld.clint = 0.25
         fitld.datain = tasav_file_path
-
-        if zap_data==True:
-            try:
-                logging.info(f"Zapping requested")
-                tasav_indata.clrstat()
-                tasav_indata.zap(force=True)
-            except Exception as e:
-                logging.error(f"{e}")
-
         if tasav_indata.exists():
             logging.info(f"TASAV file already exists. Will not write a new one")
         else:
@@ -837,12 +843,6 @@ def runfittp(file_extension):
     """
 
     set_indata()
-    
- 
-    """
-    This will break for UVSRT file
-    TODO: Fix that
-    """
 
     inseq=indisk = 1
     indata = AIPSUVData(experiment,'SPLAT',inseq,indisk)

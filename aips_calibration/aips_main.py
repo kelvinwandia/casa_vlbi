@@ -266,13 +266,13 @@ if do_flagging == True:
     try:
         logging.info(f"Loading the flagged data")
         load_fitsfiles(file_extension_for_cal)
+        logging.info("Running INDXR to make new lost after conversion to measurement set")
+        runindxr() 
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
 if do_singleband_fring == True:
     try:
-        logging.info("Running INDXR to make new lost after conversion to measurement set")
-        runindxr() 
         logging.info("Running single band fring using")
         fring_instr(phase_calibrator)
     except Exception as e:
