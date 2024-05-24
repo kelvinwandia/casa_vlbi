@@ -32,7 +32,6 @@ def makems_split(fitsfile,cal_output_ext,phase_calibrator,target):
     if isinstance(phase_calibrator, str):
         phase_calibrator = [phase_calibrator]
 
-
     sources = phase_calibrator+target
     for source in sources:
         outputvis = source+'.ms'
@@ -47,14 +46,14 @@ def makems_split(fitsfile,cal_output_ext,phase_calibrator,target):
     
 def dirty_map():
 
-
+    
     dirty_maps_dir = os.path.join(working_dir,'dirty_maps')
     if not os.path.exists(dirty_maps_dir):
         os.makedirs(dirty_maps_dir)
     
-    phasecal_ms = os.path.join(working_dir,','.join(phase_calibrator)+'.ms')
+    phasecal_ms = os.path.join(working_dir,phase_calibrator+'.ms')
 
-    imagename = f"{dirty_maps_dir}/{phasecal_ms.replace('.ms','')}_dirty_map"
+    imagename = f"{dirty_maps_dir}/{phase_calibrator}_dirty_map"
 
     if use_tclean == True:
         if not os.path.exists(imagename):
@@ -110,8 +109,8 @@ def selfcal_part1():
     for masking
     """
     # msmd.open(vis)
-    source = ','.join(phase_calibrator)
-    phasecal_ms = os.path.join(working_dir,','.join(phase_calibrator)+'.ms')
+    source = phase_calibrator
+    phasecal_ms = os.path.join(working_dir,phase_calibrator+'.ms')
     # field_id = msmd.fieldsforname(source)[0]
     # msmd.close()
     # global first_part_imagename
@@ -147,11 +146,11 @@ def selfcal_part2():
 
 
     # msmd.open(vis)
-    source =','.join(phase_calibrator)
+    source = phase_calibrator
     # field_id = msmd.fieldsforname(source)[0]
     # msmd.close()
     
-    phasecal_ms = os.path.join(working_dir,','.join(phase_calibrator)+'.ms')
+    phasecal_ms = os.path.join(working_dir,phase_calibrator+'.ms')
 
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
     regionfile = pybdsf_imagename+'.casabox'
@@ -306,7 +305,7 @@ def applycal_target():
     Applies cal to the target field
     """
     prev_caltables = sorted(glob.glob('*.tb'))
-    target_ms = os.path.join(working_dir,','.join(target)+'.ms')
+    target_ms = os.path.join(working_dir,target+'.ms')
 
     print(f"Applying calibration tables {prev_caltables} to {target_ms}")
     applycal(
