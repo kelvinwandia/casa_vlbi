@@ -248,9 +248,9 @@ if do_flagging == True:
     try:
         logging.info("Flagging data")
         phase_calibrator = phase_calibrator[0]
-        plot_check_baddata(phase_calibrator,save_as="_before_flagging")
+        # plot_check_baddata(phase_calibrator,save_as="_before_flagging")
         execute_aoflagger_strategy()
-        plot_check_baddata(phase_calibrator,save_as="_after_flagging")
+        # plot_check_baddata(phase_calibrator,save_as="_after_flagging")
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
 
@@ -347,7 +347,7 @@ if do_selfcal == True:
             selfcal_part1()
             selfcal_part2()
         except Exception as e:
-            logging.critical("Error: {e} occured whilst self calibrating the data")
+            logging.critical(f"Error: {e} occured whilst self calibrating the data")
         os.chdir(working_dir)
     except Exception as e:
         logging.warning(f"Encountered error {e}")

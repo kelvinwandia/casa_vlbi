@@ -44,10 +44,10 @@ def makems_split(fitsfile,cal_output_ext,phase_calibrator,target):
         else:
             print(f"{outputvis} exists. Will not make a new one")
 
-
     global phasecal_ms, target_ms
-    phasecal_ms = phase_calibrator[0]+'.ms'
-    target_ms = target[0]+'.ms'
+    phasecal_ms = ','.join(phase_calibrator) + '.ms'
+    target_ms = ','.join(target) + '.ms'
+
     
 def dirty_map():
 
@@ -55,7 +55,7 @@ def dirty_map():
     dirty_maps_dir = os.path.join(working_dir,'dirty_maps')
     if not os.path.exists(dirty_maps_dir):
         os.makedirs(dirty_maps_dir)
-
+    
     imagename = f"{dirty_maps_dir}/{phasecal_ms.replace('.ms','')}+_dirty_map"
 
     if use_tclean == True:
@@ -112,7 +112,7 @@ def selfcal_part1():
     for masking
     """
     # msmd.open(vis)
-    source = phase_calibrator[0]
+    source = ','.join(phase_calibrator)
     # field_id = msmd.fieldsforname(source)[0]
     # msmd.close()
     # global first_part_imagename
@@ -156,7 +156,7 @@ def selfcal_part2():
 
 
     # msmd.open(vis)
-    source = phase_calibrator
+    source =','.join(phase_calibrator)
     # field_id = msmd.fieldsforname(source)[0]
     # msmd.close()
 
@@ -213,7 +213,7 @@ def selfcal_part2():
                 run_wsclean(wsclean_sif,wsclean_cmd)
 
                 wsclean_fitsfile = imagename+'-image.fits'
-                get_im_stats(wsclean_fitsfile)
+                # get_im_stats(wsclean_fitsfile)
                 plot_fits(wsclean_fitsfile)
             
                 model_fits = imagename.replace('-image.fits','-model.fits')
@@ -302,7 +302,7 @@ def selfcal_part2():
         run_wsclean(wsclean_sif,wsclean_cmd_final)
 
         wsclean_fitsfile = imagename_final+'-image.fits'
-        get_im_stats(wsclean_fitsfile)
+        # get_im_stats(wsclean_fitsfile)
         plot_fits(wsclean_fitsfile)
 
 
@@ -313,8 +313,7 @@ def applycal_target():
     Applies cal to the target field
     """
     prev_caltables = sorted(glob.glob('*.tb'))
-    target_ms = target+'.ms'
-
+  
     print(f"Applying calibration tables {prev_caltables} to {target_ms}")
     applycal(
         vis = target_ms, gaintable = prev_caltables, parang=False
