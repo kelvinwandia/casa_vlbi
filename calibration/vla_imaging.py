@@ -10,6 +10,9 @@ working_directory = '/raid1/scratch/kelvinw/gcs/m15/measurement_sets/working_dir
 path_to_vis = '/raid1/scratch/kelvinw/gcs/m15/measurement_sets'
 vis = glob.glob(os.path.join(path_to_vis, '*.ms'))
 
+
+
+
 # vis = '/raid1/scratch/kelvinw/gcs/m15/working_directory_observation.55707.477620949074/11A-269_sb4158083_1.55707.47758597222_hs.ms'
 target = 'M 15 X-2' 
 
@@ -31,7 +34,7 @@ def split_target():
         if not os.path.exists(outputvis):
             split(vis=msname,outputvis=outputvis,field=target,datacolumn='corrected')
         
-        listobs(vis=outputvis,listfile=outputvis.replace('.ms','.txt'),overwrite=True)
+            listobs(vis=outputvis,listfile=outputvis.replace('.ms','.txt'),overwrite=True)
 
 
 def plotuv_cov():
@@ -67,10 +70,25 @@ def getimaging_params():
         imaging_params[msname] = cell_size
         print(imaging_params)
 
+        return imaging_params
+
+def imaging():
+
+    imaging_params = getimaging_params()
+    for msname,cell_size in imaging_params.items():
+        print(f"Imaging {msname} using a cell size {cell_size}")
+        imagename = msname.replace('.ms','_image')
+        if not os.path.exists(imagename):
+            tclean(
+                vis = msname, imagename=imagename, imsize=10240, cell=str(cell_size)+'mas',
+                gridder = 'widefield', wprojplanes = 18, deconvolver = 'mtmfs',
+                weighting = 'briggs', robust = 0, niter=0,nterms = 2, pblimit = -1,interactive=False
+            )
+
+
 
 set_working_dir()
-split_target()
-plotuv_cov()
-getimaging_params()
-
+# split_target()
+# plotuv_cov()
+imaging()
 
