@@ -465,10 +465,30 @@ Different bit of code
 
 
 
-import glob
+import glob, os, re
 from scipy import stats
 import numpy as np
-msname = '/home/kelvin/Desktop/gv020_working_dir/gv020d/gv020d.ms'
+
+from casatasks import *
+import casatools
+
+msmd = casatools.msmetadata()
+tb = casatools.table()
+
+msname = '/raid1/scratch/kelvinw/gv020_working_dir/gv020e/gv020e.ms'
+
+# Determine the directory containing the .ms file
+ms_dir = os.path.dirname(msname)
+
+new_working_dir = os.path.join(ms_dir, 'sbd_files')
+os.makedirs(new_working_dir, exist_ok=True)
+os.chdir(new_working_dir)
+
+# Print the new current working directory to verify
+print(f"Current working directory: {os.getcwd()}")
+
+
+
 msmd.open(msname)
 scans = msmd.scansforfield(field='J2139+1423')
 nscans = len(scans)
