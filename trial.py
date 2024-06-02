@@ -465,6 +465,93 @@ Different bit of code
 
 
 
+# import glob, os, re
+# from scipy import stats
+# import numpy as np
+
+# from casatasks import *
+# import casatools
+
+# msmd = casatools.msmetadata()
+# tb = casatools.table()
+
+# msname = '/raid1/scratch/kelvinw/gv020_working_dir/gv020b/gv020b.ms'
+
+# # Determine the directory containing the .ms file
+# ms_dir = os.path.dirname(msname)
+
+# new_working_dir = os.path.join(ms_dir, 'sbd_files')
+# os.makedirs(new_working_dir, exist_ok=True)
+# os.chdir(new_working_dir)
+
+# # Print the new current working directory to verify
+# print(f"Current working directory: {os.getcwd()}")
+
+
+# msmd.open(msname)
+# scans = msmd.scansforfield(field='J2139+1423')
+# nscans = len(scans)
+# scans = scans.astype(int).tolist()
+
+# best_scan = None
+# least_flagged_percentage = 100
+# refant = "EF,JB,WB,GB,MC"
+# for scan in scans:
+#     print(f"Calculating single band delay solutions for {str(scan)}")
+#     tablename = f'trial_{str(scan)}.sbd'
+#     if not os.path.exists(tablename):
+#         fringefit(vis=msname,caltable=tablename,zerorates=True,refant=refant,parang=True,minsnr=20,scan=str(scan),field='J2139+1423')
+
+#     tb.open(tablename + '/ANTENNA')
+#     antenna_names = tb.getcol('STATION')
+#     tb.close()
+#     tb.open(tablename)
+#     antenna_ids = tb.getcol('ANTENNA1')
+#     flags = tb.getcol('FLAG')
+#     snrs = tb.getcol('SNR')
+#     tb.close()
+    
+#     good_frac = []
+#     good_snrs = []
+
+#     total_flagged_percentage = 0
+
+#     for i, ant_id in enumerate(np.unique(antenna_ids)):
+#         cond = antenna_ids == ant_id
+#         # t = times[cond]
+#         f = flags[0, 0, :][cond]
+#         snr = snrs[0, 0, :][cond]
+#         frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
+#         flagged_frac = 100 - frac
+#         snr_mean = np.nanmean(snr[~f])
+#         good_frac.append(frac)
+#         good_snrs.append(snr_mean)
+#         total_flagged_percentage += flagged_frac
+    
+#     avg_flagged_percentage = total_flagged_percentage / len(np.unique(antenna_ids))
+
+#     if avg_flagged_percentage < least_flagged_percentage:
+#         least_flagged_percentage = avg_flagged_percentage
+#         best_scan = scan
+
+#     sort_idx = np.argsort(good_frac)[::-1]
+#     print(f"Antennas sorted by % of good solutions for scan: {scan}")
+
+#     for i in sort_idx:
+#         print(f"{antenna_names[i]:<3}: {good_frac[i]:4.1f}, <SNR> = {good_snrs[i]:4.1f}")
+
+# if best_scan is not None:
+#     print(f"The best scan is {best_scan} with the least flagged data percentage of {least_flagged_percentage:.2f}%")
+# else:
+#     print("No scans found.")
+
+
+
+"""
+This code will sort the scans and write them to a txt file
+"""
+
+
 import glob, os, re
 from scipy import stats
 import numpy as np
@@ -475,7 +562,7 @@ import casatools
 msmd = casatools.msmetadata()
 tb = casatools.table()
 
-msname = '/raid1/scratch/kelvinw/gv020_working_dir/gv020e/gv020e.ms'
+msname = '/raid1/scratch/kelvinw/gv020_working_dir/gv020b/gv020b.ms'
 
 # Determine the directory containing the .ms file
 ms_dir = os.path.dirname(msname)
@@ -488,20 +575,20 @@ os.chdir(new_working_dir)
 print(f"Current working directory: {os.getcwd()}")
 
 
-
 msmd.open(msname)
 scans = msmd.scansforfield(field='J2139+1423')
 nscans = len(scans)
 scans = scans.astype(int).tolist()
 
-best_scan = None
-least_flagged_percentage = 100
+
+results = []
+refant = "EF,JB,WB,GB,MC"
 
 for scan in scans:
     print(f"Calculating single band delay solutions for {str(scan)}")
     tablename = f'trial_{str(scan)}.sbd'
     if not os.path.exists(tablename):
-        fringefit(vis=msname,caltable=tablename,zerorates=True,refant='EF,JB,WB',parang=True,minsnr=20,scan=str(scan),field='J2139+1423')
+        fringefit(vis=msname, caltable=tablename, zerorates=True, refant=refant, parang=True, minsnr=20, scan=str(scan), field='J2139+1423')
 
     tb.open(tablename + '/ANTENNA')
     antenna_names = tb.getcol('STATION')
@@ -519,7 +606,6 @@ for scan in scans:
 
     for i, ant_id in enumerate(np.unique(antenna_ids)):
         cond = antenna_ids == ant_id
-        # t = times[cond]
         f = flags[0, 0, :][cond]
         snr = snrs[0, 0, :][cond]
         frac = 1.0 * np.count_nonzero(~f) / len(f) * 100.
@@ -531,13 +617,38 @@ for scan in scans:
     
     avg_flagged_percentage = total_flagged_percentage / len(np.unique(antenna_ids))
 
-    if avg_flagged_percentage < least_flagged_percentage:
-        least_flagged_percentage = avg_flagged_percentage
-        best_scan = scan
+    results.append((scan, avg_flagged_percentage, good_frac, good_snrs, antenna_names))
 
-    sort_idx = np.argsort(good_frac)[::-1]
+# Sort results based on the least flagged data percentage
+results.sort(key=lambda x: x[1])
+
+best_scan = results[0][0]
+least_flagged_percentage = results[0][1]
+
+
+output_file = "sorted_scans_info.txt"
+os.system(f"rm -r {output_file}")
+with open(output_file, 'w') as f:
+    for result in results:
+        scan, avg_flagged_percentage, good_frac, good_snrs, antenna_names = result
+        f.write(f"Antennas sorted by % of good solutions for scan: {scan}\n")
+
+        sort_idx = np.argsort(good_frac)[::-1]
+        for i in sort_idx:
+            f.write(f"    {antenna_names[i]:<3}: {good_frac[i]:4.1f}%, <SNR> = {good_snrs[i]:4.1f}\n")
+
+    if results:
+        best_scan = results[0][0]
+        least_flagged_percentage = results[0][1]
+        f.write(f"\nThe best scan is {best_scan} with the least flagged data percentage of {least_flagged_percentage:.2f}%\n")
+    else:
+        f.write("No scans found.\n")
+
+for result in results:
+    scan, avg_flagged_percentage, good_frac, good_snrs, antenna_names = result
     print(f"Antennas sorted by % of good solutions for scan: {scan}")
 
+    sort_idx = np.argsort(good_frac)[::-1]
     for i in sort_idx:
         print(f"{antenna_names[i]:<3}: {good_frac[i]:4.1f}, <SNR> = {good_snrs[i]:4.1f}")
 
