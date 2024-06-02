@@ -23,14 +23,21 @@ def split_selfcal():
         if not os.path.exists(outputvis):
             print(f"Splitting {vis} to {outputvis}")
             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-            split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,timebin='2s',width=8) 
+            # split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,timebin='2s',width=8) 
+            split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source) 
         else:
             print(f"{outputvis} exists. Will not make a new one")
+
+        # flagdata(vis=outputvis,spw='0~7:0~5;123~127',mode='manual')
+        # flagdata(vis=outputvis, mode='list',inpfile='/raid1/scratch/kelvinw/casa_vlbi/data/flagging/gv020b.flag')
+        # flagdata(vis=outputvis,antenna='GB')
+        
+        
 
     global phasecal_ms, target_ms
     phasecal_ms = phase_calibrator+'.ms'
     target_ms = target+'.ms'
-    
+
 
 
 def run_pybdsf(input_image):
@@ -158,7 +165,7 @@ def selfcal_part2():
                 #             '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
                 #             '-mgain', '0.8', '-niter', f'{niter}', '-field',f'{field_id}', f'{phasecal_ms}']
                 
-                wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{tclean_threshold[selfcal_loop]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
+                wsclean_cmd = ['wsclean', '-log-time', '-auto-threshold',f'{threshold[selfcal_loop]}', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
                             '-scale', f'{cell}', '-fits-mask', f'{maskfile}',\
                             '-mgain', '0.8', '-niter', f'{niter}', f'{phasecal_ms}']
 
