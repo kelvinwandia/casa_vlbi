@@ -271,13 +271,13 @@ def applycal_target():
     """
     Applies cal to the target field
     """
+    target_ms = target + '.ms'
     prev_caltables = sorted(glob.glob('*.tb'))
-    target_ms = target+'.ms'
 
     print(f"Applying calibration tables {prev_caltables} to {target_ms}")
+
     applycal(
-        vis = target_ms, gaintable = prev_caltables, parang=False
-    )
+        vis = target_ms, gaintable = prev_caltables, parang=False)
 
     imagename = target_ms.replace('.ms','_target_dirty')
     logging.info(f"Imaging target")
@@ -287,6 +287,7 @@ def applycal_target():
                 '-scale', f'{cell}','-mgain', '0.8', '-niter', '0', f'{target_ms}']
         
         run_wsclean(wsclean_sif,wsclean_target_dirty)
+
         wsclean_fitsfile = imagename+'-image.fits'
         get_im_stats(wsclean_fitsfile)
         plot_fits(wsclean_fitsfile)

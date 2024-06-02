@@ -79,7 +79,6 @@ width = config.getint('basic','width')
 
 # flag
 do_flagging = config.getboolean('flagging','do_flagging')
-aoflagger_sif = config.get('flagging','aoflagger_sif')
 # aoflagger_strategies = config.get('flagging','aoflagger_strategies')
 # faint_source_strategy = config.get('flagging','faint_source_strategy')
 # bright_source_strategy = config.get('flagging','bright_source_strategy')
@@ -254,9 +253,13 @@ if do_selfcal == True:
         logging.warning(f"Encountered error {e}")
 
 if apply_to_target == True:
+    selfcal_dir = os.path.join(working_directory,'selfcal_dir')
     try:
+        logging.info(f"Switching to {selfcal_dir}")
+        os.chdir(selfcal_dir)
         logging.info("Applying calibrations to science target")
         applycal_target()
+        os.chdir(working_directory)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
