@@ -279,6 +279,19 @@ def applycal_target():
         vis = target_ms, gaintable = prev_caltables, parang=False
     )
 
+    imagename = target_ms.replace('.ms','_target_dirty')
+    logging.info(f"Imaging target")
+
+    if use_wsclean == True:
+        wsclean_target_dirty= ['wsclean', '-log-time', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
+                '-scale', f'{cell}','-mgain', '0.8', '-niter', '0', f'{target_ms}']
+        
+        run_wsclean(wsclean_sif,wsclean_target_dirty)
+        wsclean_fitsfile = imagename+'-image.fits'
+        get_im_stats(wsclean_fitsfile)
+        plot_fits(wsclean_fitsfile)
+
+
 
 
 
