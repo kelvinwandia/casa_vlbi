@@ -21,12 +21,12 @@ def split_selfcal():
     for source in sources:
         outputvis = source+'.ms'
         if not os.path.exists(outputvis):
-            print(f"Splitting {vis} to {outputvis}")
+            logging.info(f"======>>>Splitting {vis} to {outputvis}")
             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
             # split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,timebin='2s',width=8) 
             split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source) 
         else:
-            print(f"{outputvis} exists. Will not make a new one")
+            logging.info(f"======>>>{outputvis} exists. Will not make a new one")
 
         # flagdata(vis=outputvis,spw='0~7:0~5;123~127',mode='manual')
         # flagdata(vis=outputvis, mode='list',inpfile='/raid1/scratch/kelvinw/casa_vlbi/data/flagging/gv020b.flag')
@@ -77,7 +77,7 @@ def selfcal_part1():
     # global first_part_imagename
     pybdsf_imagename = source.replace('.ms','')+'_pybdsf'
     if not os.path.exists(pybdsf_imagename+'-image.fits'):
-        print(f"Making {pybdsf_imagename}")
+        logging.info(f"======>>>Making {pybdsf_imagename}")
 
         
         if use_tclean == True:
@@ -124,7 +124,7 @@ def selfcal_part2():
     maskfile = pybdsf_imagename+ '-image.maskfile.fits'
 
 
-    print("Deleting model column before selfcal")
+    logging.info("======>>>Deleting model column before selfcal")
     # delmod(vis=phasecal_ms,otf=True,field=str(field_id))
     delmod(vis=phasecal_ms,otf=True)
 
@@ -132,17 +132,17 @@ def selfcal_part2():
         caltable = f'caltable_{selfcal_loop}.tb'
         prev_caltables = sorted(glob.glob('*.tb'))
         if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
-            print(f"Applying {prev_caltables}")
+            logging.info(f"======>>>Applying {prev_caltables}")
             # applycal(vis=phasecal_ms, gaintable = prev_caltables, field=str(field_id), parang=False )
             applycal(vis=phasecal_ms, gaintable = prev_caltables, parang=False )
     
         imagename = source.replace('.ms','')+f'_selfcal_loop_{selfcal_loop}'
         if os.path.exists(imagename):
-            print("Continuing to the next image")
+            logging.info("Continuing to the next image")
         
         else:
             imagename =  source.replace('.ms','')+f'_selfcal_loop_{selfcal_loop}'
-            print(f"Making image {imagename}")
+            logging.info(f"======>>>Making image {imagename}")
 
             if use_tclean == True:
                 tclean(
@@ -156,7 +156,7 @@ def selfcal_part2():
                 get_im_stats(fitsname)
                 plot_fits(fitsname)
 
-                print("Adding modelcolumn to data")
+                logging.info("======>>>Adding modelcolumn to data")
                 ft(vis = vis, model=imagename+'.image',usescratch=True)
 
             elif use_wsclean == True:
@@ -177,7 +177,7 @@ def selfcal_part2():
             
                 model_fits = imagename.replace('-image.fits','-model.fits')
 
-                print(f"Adding modelcolumn to data. Using {model_fits} to predict")
+                logging.info(f"======>>>Adding modelcolumn to data. Using {model_fits} to predict")
                 # predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-field',f'{field_id}','-name', f'{imagename}', phasecal_ms]
                 predict_cmd = ['wsclean', '-log-time', '-predict', '-reorder' ,'-name', f'{imagename}', phasecal_ms]
                 # Predicting
@@ -227,7 +227,7 @@ def selfcal_part2():
 
             if selfcal_loop == nloops-1:
                 prev_caltables = sorted(glob.glob('*.tb'))
-                print("Applying the caltable derived from last gaincal iteration")
+                logging.info("======>>>Applying the caltable derived from last gaincal iteration")
                 # applycal(vis=phasecal_ms, gaintable = prev_caltables,field=str(field_id), parang=False )
                 applycal(vis=phasecal_ms, gaintable = prev_caltables, parang=False )
 
@@ -236,7 +236,7 @@ def selfcal_part2():
         
     imagename_final = source.replace('.ms','')+f'_final_map_loop_{nloops-1}'
     ##  tclean here to make the final image
-    print("Make final image with all selfcal corrections applied")
+    logging.info("======>>>Make final image with all selfcal corrections applied")
 
     if use_tclean == True:
         tclean(
@@ -249,7 +249,7 @@ def selfcal_part2():
         get_im_stats(fitsname)
         plot_fits(fitsname)
 
-        print("Adding modelcolumn to data")
+        logging.info("======>>>Adding modelcolumn to data")
         ft(vis = vis, model=imagename_final+'.image',usescratch=True)
 
 
@@ -274,7 +274,7 @@ def applycal_target():
     target_ms = target + '.ms'
     prev_caltables = sorted(glob.glob('*.tb'))
 
-    print(f"Applying calibration tables {prev_caltables} to {target_ms}")
+    logging.info(f"======>>>Applying calibration tables {prev_caltables} to {target_ms}")
 
     applycal(
         vis = target_ms, gaintable = prev_caltables, parang=False)
