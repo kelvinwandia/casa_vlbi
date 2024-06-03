@@ -264,8 +264,15 @@ if apply_to_target == True:
         logging.warning(f"Encountered error {e}")
 
 if detect_sources == True:
+
+    selfcal_dir = os.path.join(working_directory,'selfcal_dir')
     try:
+        logging.info(f"Switching to {selfcal_dir}")
+        os.chdir(selfcal_dir)
+        logging.info("Detecting sources")
         m15_sources()
+        os.chdir(working_directory)
+
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 

@@ -13,8 +13,18 @@ from utils.helper_functions import *
 
 
 
-phasecenter = ['21h30m01.203493s +12d10m38.1592s']
+# phasecenter = ['21h30m01.203493s +12d10m38.1592s']
 # phasecenter = ['J2000 21h39m01.309269s +14d23m35.99221s']
+
+### correlation centres 
+# phasecenter=['21h29m58.3500s +12d10m01.500s','21h29m58.3120s +12d10m02.679s','21h30m01.2034s +12d10m38.160s',
+#         '21h29m51.9025s +12d10m17.132s','21h29m56.3050s +12d11m01.500s','21h29m56.3050s +12d09m11.500s',
+#         '21h30m02.4410s +12d09m11.500s']
+
+### detected sources in order (from Kirsten 2015) -- M15A, M15C, AC211,S1,S2
+
+phasecenter = ['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s','21h29m58.312403s +12d10m02.6740s',
+               '21h29m51.9034555d +12d10m17.13240s','21h30m02.085700s +12d09m04.2203s']
 
 
 
