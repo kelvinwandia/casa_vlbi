@@ -1,10 +1,83 @@
 
+# Flag the autocorrelations
+
+# mode='manual' autocorr=True
+
+# Spectral Window 0
+
+mode='manual' antenna='' spw='0:0~4;123~127'
+mode='manual' antenna='MC&*' correlation='' spw='0:11~13'
+mode='manual' antenna='MC&*' correlation='RR' spw='0:15~16'
+mode='manual' antenna='ON&MC;ON&JB;ON&TR' correlation='RR' spw='0:43~44'
+mode='manual' antenna='ON&*' correlation='LL' spw='0:43~44'
+mode='manual' antenna='TR' correlation='' spw='0:42~45'
+mode='manual' antenna='MC&*' spw='0:95~96'
+
 # Spectral Window 1
 
-mode='manual' antenna='' spw='1'
+mode='manual' antenna='' spw='1:0~4;123~127'
+mode='manual' antenna='JB&WB' correlation='' spw='1:90~91'  
+mode='manual' antenna='MC&*' correlation='' spw='1:116~116'
+mode='manual' antenna='MC&WB' correlation='' spw='1:112~120'
+mode='manual' antenna='MC&ON' correlation='' spw='1:112~119'
+mode='manual' antenna='MC&ON;WB&ON' correlation='' spw='1:76~78'
+mode='manual' antenna='MC&NT' correlation='' spw='1:112~119'
+mode='manual' antenna='ON&MC' correlation='' spw='1:98~98'
+mode='manual' antenna='JB&MC;ON&NT' correlation='' spw='1:76~77'
+mode='manual' antenna='JB&MC' correlation='' spw='1:98~98'
+mode='manual' antenna='MC&JB;WB&ON' correlation='' spw='1:112~113'
+mode='manual' antenna='EF&MC' correlation='' spw='1:76~77'
+mode='manual' antenna='WB&TR' correlation='' spw='1:74~78'
+mode='manual' antenna='ON&TR' correlation='' spw=1:77~77'
+mode='manual' antenna='ON&TR;WB&TR;WB&MC' correlation='' spw=1:64~64'
+mode='manual' antenna='ON&TR;WB&ON' correlation='' spw='1:98~98'
+mode='manual' antenna='ON&TR' correlation='' spw='1:111~112'
+mode='manual' antenna='MC&TR' spw='1:98~99'
+mode='manual' antenna='MC&*' spw='1:98~98'
+mode='manual' antenna='MC&*' spw='1:76~77'
+
+# Spectral Window 2
+
+mode='manual' antenna='' spw='2:0~4;123~127'
+mode='manual' antenna='MC&*' spw='2:11~11;43~43;107~107;87~87'
+mode='manual' antenna='MC&WB' correlation='RR' spw='2:79~79;115~115'
+mode='manual' antenna='JB&*' correlation='' spw='2:91~91'
+mode='manual' antenna='WB&MC;ON&MC' correlation='RR' spw='2:117~117'
+mode='manual' antenna='ON&MC' correlation='RR' spw='2:115~115'
+
+# Spectral Window 3
+
+mode='manual' antenna='' spw='3:0~4;123~127'
+mode='manual' antenna='MC&*' spw='3:26~26;59~62'
+mode='manual' antenna='JB&TR;JB&MC' spw='3:36~36'
+
+# Spectral Window 4
+
+mode='manual' antenna='' spw='4:0~4;123~127'
+mode='manual' antenna='MC&*' correlation='' spw='4:79~79'
+mode='manual' antenna='MC&TR;MC&NT;WB&TR' correlation='' spw='4:81~81'
+
+# Spectral Window 5
+
+mode='manual' antenna='' spw='5:0~4;123~127'
+mode='manual' antenna='MC&WB;ON&MC;NT&MC' spw='5:16~26;98~98;104~104'
+mode='manual' antenna='MC&*' spw='5:16~17;24~24;26~26;104~104'
+mode='manual' antenna='MC&TR;ON&MC' spw='5:44~44;98~98'
+mode='manual' antenna='MC&ON;MC&NT' spw='5:105~105'
+mode='manual' antenna='MC&NT' spw='5:100~100'
+mode='manual' antenna='ON&NT;ON&TR;ON&WB' spw='5:103~105'
+mode='manual' antenna='WB&TR' correlation='RR' spw='5:104~104'
+mode='manual' antenna='TR&NT' correlation='' spw='5:104~105'
+
+# Spectral Window 6
+
+mode='manual' antenna='' spw='6:0~4;123~127'
+mode='manual' antenna='MC&*' spw=6:43~43;75~75'
 
 # Spectral Window 7
 
+mode='manual' antenna='' spw='7:0~4;123~127'
+mode='manual' antenna='MC&WB;MC&ON;MC&TR;MC&NT' spw='7:18~18;24~24;27~28;48~48'
 mode='manual' antenna='' spw='7:100~127'
 
 

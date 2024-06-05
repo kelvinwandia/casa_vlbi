@@ -1,0 +1,125 @@
+
+
+## Arecibo 
+# Flag upto 22:36 - bad data from IBLED
+
+#mode='manual' antenna='AR&*' timerange='21:20:01.5~22:08:00'
+#mode='manual' antenna='AR&*' timerange='22:08:00.5~22:36:00'
+#mode='manual' antenna='AR&*'  timerange='22:46:00~22:52:00'
+#mode='manual' antenna='AR&*'  timerange='22:58:00~23:00:00' field='J2139+1423'
+
+
+
+# Spectral Window 0
+
+mode='manual' antenna='' spw='0:0~9;501~511'
+mode='manual' antenna='ON&*' spw='0:175~175' mode='manual' antenna='ON&JB' spw='0:174~177' mode='manual' antenna='MC&*' spw='0:47~48;63~63;127~127;255~255;319~319;383~383;447~447' mode='manual' antenna='ON&TR;WB&ON;ON&NT;WB&TR;WB&NT;TR&NT' spw='0:270~317' mode='manual' antenna='ON&WB' spw='0:203~203;269~269' mode='manual' antenna='ON&WB' spw='0:200~200;203~203' 
+##  NB if data still bad look at NT - all baselines around 270 to 317 - be careful
+
+# Spectral Window 1
+
+mode='manual' antenna='' spw='1:0~9;501~511' 
+mode='manual' antenna='ON&*' spw='1:307~307' mode='manual' antenna='ON&JB' spw='1:404~410' mode='manual' antenna='ON&TR;WB&ON;EF&TR;WB&TR;MC&TR;TR&NT' spw='1:254~258;287~293;340~343;394~397;468~471' mode='manual' antenna='ON&TR;WB&ON;EF&TR;WB&TR;MC&TR;TR&NT' spw='1:286~286;308~308;311~311;319~319;426~426;429~429' mode='manual' antenna='ON&TR;WB&ON;EF&TR;WB&TR;MC&TR;TR&NT' spw='1:298~298;313~313;285~285;303~303;297~297;447~447;322~322;317~317;301~301;426~426' mode='manual' antenna='ON&NT' spw='1:252~257;362~364;417~417;428~428;439~439' mode='manual' antenna='ON&EF' spw='1:252~257;260~261;285~287;319~319;320~320' mode='manual' antenna='MC&TR' spw='1:304~306;458~464' mode='manual' antenna='MC&*' spw='1:304~304;450~450;463~464' mode='manual' antenna='MC&NT' spw='1:468~468' 
+## NB - MC&TR,MC&ON have very high anomolous gains - check if aoflagger flags it
+
+# Spectral Window 2
+
+mode='manual' antenna='' spw='2:0~9;501~511' 
+mode='manual' antenna='JB&ON' spw='2:367~367;446~446' mode='manual' antenna='MC&*' spw='2:175~175;216~216;350~350;431~431;463~463;471~471' mode='manual' antenna='JB&MC;TR&MC;JB&TR;JB&NT;JB&WB' spw='2:367~367' mode='manual' antenna='MC&GB;MC&NT' spw='2:351~351' 
+
+# Spectral Window 3
+
+mode='manual' antenna='' spw='3:0~9;501~511'
+mode='manual' antenna='MC&*' spw='3:104~104;144~144;237~248;400~400' 
+mode='manual' antenna='TR&*' spw='3:180~181' 
+mode='manual' antenna='JB&TR' spw='3:144~144' 
+mode='manual' antenna='MC&NT;ON&MC;MC&TR;WB&MC' spw='3:229~229;235~236;249~249' 
+
+## NB: Some amplitude values of EF&ON,EF&MC are very high
+
+# Spectral Window 4
+
+mode='manual' antenna='' spw='4:0~9;501~511' 
+mode='manual' antenna='MC&*' spw='4:31~31;47~47;126~127;174~175;319~319' 
+mode='manual' antenna='TR&*' spw='4:327~327' 
+
+# Spectral Window 5
+
+mode='manual' antenna='' spw='5:0~9;501~511' 
+mode='manual' antenna='MC&*' spw='5:15~16;61~97;104~104;176~176;392~392;402~402;415~416' 
+mode='manual' antenna='MC&ON;MC&TR;MC&NT;WB&MC' spw='5:414~419;429~429' 
+mode='manual' antenna='TR&*' spw='5:417~417' 
+mode='manual' antenna='ON&NT' spw='5:419~419' 
+
+# Spectral Window 6
+
+mode='manual' antenna='' spw='6:0~9;501~511' 
+mode='manual' antenna='MC&*' spw='6:175~175;300~307;448~463' 
+mode='manual' antenna='ON&*' spw='6:303~303;333~333' 
+
+# Spectral Window 7
+
+mode='manual' antenna='' spw='7:0~9;501~511' 
+mode='manual' antenna='MC&ON;MC&TR;MC&NT' spw='7:190~191;248~249;488~501' 
+mode='manual' antenna='TR&WB;TR&NT' spw='7:305~305' 
+
+# NB: Check MC carefully especially the baselines to ON,MC,NT
+# Set some threshold - some data have very high values
+
+
+# Further flagging commands
+mode='manual' antenna='MC&ON' scan='83' correlation='RR'
+mode='manual' antenna='MC&TR' scan='83' correlation='RR'
+mode='manual' antenna='EF&*' scan='9' correlation='RR,LL' spw='0:200~400'
+mode='manual' antenna='GB&*' scan='111' correlation='LL' spw='0'
+mode='manual' antenna='GB&*' scan='111' correlation='RR,LL' spw='2~3'
+mode='manual' antenna='GB&*' scan='111' correlation='RR' spw='6~7'
+mode='manual' antenna='GB&*' scan='83 correlation='RR' spw='1' 
+mode='manual' antenna='WB&*' scan='9' correlation='RR' spw='0:250~350'
+mode='manual' antenna='WB&*' scan='67' correlation='LL' spw='0'
+mode='manual' antenna='WB&*' scan='67' correlation='RR,LL' spw='0'
+mode='manual' antenna='WB&*' scan='65' correlation='LL' spw='0'
+mode='manual' antenna='WB&*' scan='65' correlation='RR,LL' spw='1'
+mode='manual' antenna='WB&*' scan='67' correlation='RR,LL' spw='6'
+
+
+## These flagging commands - flagged on the unaveraged data in an antenna based way
+## check to see how they improve the map
+## EF
+
+#spw0
+#mode='manual' antenna='EF&*' spw='0:266~322'
+#mode='manual' antenna='EF&ON;EF&JB' spw='0:175~176'
+#mode='manual' antenna='EF&WB' spw='0:325~334'
+#mode='manual' antenna='EF&ON' spw='0:196~204'
+
+#spw1 --- too many channels to flag - about 256 for all antennas
+
+#spw2
+#mode='manual' antenna='JB&EF' spw='2:21~47;175~175;191~191;367~368'
+#mode='manual' antenna='WB&EF;EF&ON' spw='2:175~176'
+#mode='manual' antenna='EF&ON' spw='2:215~217;347~348;444~448'
+#mode='manual' antenna='EF&ON' spw='2:42~45;184~184' 
+
+
+
+
+
+## MC
+#spw0
+#mode='manual' antenna='MC&*' spw='0:63~63;127~127;191~191;255~255;319~319;310~314;383~383;447~447;64~65;308~309;317~317'
+
+#spw1
+#mode='manual' antenna='MC&*' spw='1:63~64;104~104;35~135;240~240;250~511'
+
+#spw2
+#mode='manual' antenna='MC&*' spw='2:350~351;431~431;303~303;111~111;471~471;319~319;463~463;367~367;191~191;175~175'
+#mode='manual' antenna='MC&*' spw='2:368~369;40~40;47~48;271~271;17~19'
+#mode='manual' antenna='MC&*' spw='2:174~176;470~470;432~432;366~366;462~462;62~62'
+
+#spw3
+#mode='manual' antenna='MC&*' spw='3:230~256;389~392;350~350;80~81;408~408;64~65;362~362'
+#mode='manual' antenna='JB&MC' spw='3:142~143;208~208'
+
+#spw4
+#mode='manual' antenna='MC&*' spw='4:383~383;367~367;320~320;318~318;220~220;486~486;327~327;471~471;207~207;431~431'
