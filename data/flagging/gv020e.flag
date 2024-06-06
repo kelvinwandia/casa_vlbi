@@ -65,6 +65,11 @@ mode='manual' antenna='ON&GB' spw='3:46~46'
 # Spectral Window 4
 
 mode='manual' antenna='' spw='4:0~4;123~127'
+mode='manual' antenna='MC&*' spw='4:31~31;43~43;79~79;117~117;119~119'
+mode='manual' antenna='JB&*' spw=4:91~91'
+
+
+
 
 # Spectral Window 5
 
