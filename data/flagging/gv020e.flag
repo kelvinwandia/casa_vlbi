@@ -10,11 +10,17 @@ mode='manual' antenna='WB&TR;WB&GB;EF&TR;ON&TR;ON&GB' spw='0:42~47;67~75'
 mode='manual' antenna='EF&GB' spw='0:86~87'
 mode='manual' antenna='ON&TR' spw='0:47~49'
 mode='manual' antenna='ON&GB' spw='0:66~66'
+mode='manual' antenna='JB&TR' spw='0:71~73'
+mode='manual' antenna='ON&TR' spw='0:48~49'
+mode='manual' antenna='GB&TR' spw='0:43~45'
+mode='manual' antenna='TR&GB' spw='0:71~75'
+mode='manual' antenna='TR&AR' spw='0:43~44'
 
 # Spectral Window 1
 # Note that half of this spectral window is flagged by what is presumably tsys
 mode='manual' antenna='' spw='1:0~4;60~127'
 mode='manual' antenna='' spw='1:26~26'
+mode='manual' antenna='WB&TR' spw='1:59~127'
 
 # Spectral Window 2
 
