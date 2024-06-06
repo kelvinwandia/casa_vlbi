@@ -87,9 +87,10 @@ mode='manual' antenna='TR&*' spw='6:89~109'
 mode='manual' antenna='EF&TR;ON&*' spw='6:78~78'
 mode='manual' antenna='MC&*' spw='6:74~75;91~91;43~43;95~95;102~102'
 mode='manual' antenna='ON&TR' spw='6:58~59;65~65;67~69;81~85;71~71;87~87;80~86'
-mode='manual' antenna='EF&MC' spw='6:56~61'
-mode='manual' antenna='ON&MC' spw='6:81~81;67~69;84~84;71~72'
-mode='manual' antenna='MC&GB' spw='6:59~59'
+mode='manual' antenna='EF&MC' spw='6:56~61;94~94;96~96'
+mode='manual' antenna='ON&MC' spw='6:81~81;67~69;84~84;71~72;76~76;115~115;85~85;83~83;89~89;70~70;76~76'
+mode='manual' antenna='MC&GB;MC&WB' spw='6:59~59'
+mode='manual' antenna='ON&TR' spw='6:74~77'
 
 # Spectral Window 7
 
