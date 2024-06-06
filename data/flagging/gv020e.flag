@@ -95,3 +95,4 @@ mode='manual' antenna='ON&TR' spw='6:74~77'
 # Spectral Window 7
 
 mode='manual' antenna='' spw='7:0~4;123~127'
+mode='manual' antenna='TR&*' spw='7:7~7;9~9'
