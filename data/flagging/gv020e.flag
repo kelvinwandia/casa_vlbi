@@ -74,9 +74,9 @@ mode='manual' antenna='JB&*' spw=4:91~91'
 # Spectral Window 5
 
 mode='manual' antenna='' spw='5:0~7;123~127'
-mode='manual' antenna='ON&MC' spw='5:16~24'
-mode='manual' antenna='ON&*' spw='5:104~105'
-mode='manual' antenna='MC&ON' spw='5:44~44;98~98;26~26'
+mode='manual' antenna='ON&MC;MC&*' spw='5:16~24'
+mode='manual' antenna='ON&*;MC&*' spw='5:104~105'
+mode='manual' antenna='MC&*' spw='5:44~44;98~98;26~26'
 mode='manual' antenna='ON&WB' spw='5:8~11;15~15'
 
 
