@@ -52,11 +52,15 @@ mode='manual' antenna='WB&ON;EF&ON' spw='3:33~33;41~41'
 mode='manual' antenna='EF&ON' spw='3:54~54'
 mode='manual' antenna='ON&MC' spw='3:57~57'
 mode='manual' antenna='WB&TR;JB&WB' spw='3:33~33;35~35;41~41'
-mode='manual' antenna='EF&TR' spw='3:41~41'
+mode='manual' antenna='EF&TR;WB&GB' spw='3:41~41'
 mode='manual' antenna='TR&GB;TR&WB;WB&TR' spw='3:32~32;35~36'
 mode='manual' antenna='ON&TR;WB&TR' spw='3:32~32'
 mode='manual' antenna='WB&EF' spw='3:32~33;40~41;54~54'
 mode='manual' antenna='WB&GB' spw='3:33~33'
+mode='manual' antenna='WB&EF' spw='3:34~35;42~42'
+mode='manual' antenna='EF&ON' spw='3:32~32'
+mode='manual' antenna='EF&MC' spw='3:42~42'
+mode='manual' antenna='ON&GB' spw='3:46~46'
 
 # Spectral Window 4
 
