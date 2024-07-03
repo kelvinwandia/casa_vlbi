@@ -19,4 +19,15 @@ mode='manual' antenna='EF&MC' spw='1:104~104;196~196' field='M15'
 
 # Spectral Window 2
 
+mode='manual' antenna='' spw='1:0~9;501~511' field='M15'
+mode='manual' antenna='JB&WB' spw='2:366~368;191~191;303~303' field='M15' 
+mode='manual' antenna='JB&EF' spw='2:0~80' field='M15'
+mode='manual' antenna='JB&EF;JB&ON' spw='2:366~368' field='M15'
+mode='manual' antenna='JB&EF' spw='2:325~325' field='M15'
+mode='manual' antenna='JB&ON' spw='2:0~50;213~216;223~223;87~89;445~448;464~467' field='M15'
 
+mode='manual' antenna='JB&MC' spw='2:0~100;164~168;174~176
+
+
+
+# Spectral Window 3
