@@ -5,16 +5,19 @@ from casatasks import *
 
 """
 This function reads the casalogfile and writes the selected points from viewer for flagging
+The assumption here is that the autocorrelations have been flagged
 """
 working_dir = '/raid1/scratch/kelvinw/rsg12_1'
 log = 'casa-20240704-084616.log'
+outputfile = 'rsg12_1.flag'
 log_file = os.path.join(working_dir,log)
-
+flagging_file = os.path.join(working_dir,outputfile)
 def read_logfile():
 
 
     # Initialize a list to store lines containing the keyword 'locate'
     locate_lines = []
+    
 
     # Open and read the log file
     with open(log_file, 'r') as file:
@@ -39,10 +42,16 @@ def read_logfile():
                 modified_line = re.sub(r'Corr=(\S+)', r"correlation='\1'", modified_line)
                 modified_line = re.sub(r'BL=(\S+)', r"antenna='\1'", modified_line)
                 # Add the modified line to the list
+                # remove the word scan -- flagging file doesnt recognise that
+                modified_line = re.sub(r'scan=\S+\s', '', modified_line)
                 locate_lines.append(modified_line)
 
     # Print all the lines with the keyword 'locate'
     for line in locate_lines:
         print(line)
+
+    with open(flagging_file, 'w') as outfile:
+        for line in locate_lines:
+            outfile.write(line + '\n')
 
 read_logfile()
