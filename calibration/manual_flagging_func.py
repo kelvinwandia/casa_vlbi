@@ -6,12 +6,18 @@ from casatasks import *
 """
 This function reads the casalogfile and writes the selected points from viewer for flagging
 The assumption here is that the autocorrelations have been flagged
+
+Seems like the field is not working -- specify field when calling flagdata in CASA
+not the issue ... try and figure out whats happening
+
 """
 working_dir = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir'
 casalog = 'casa-20240704-095322.log'
 outputfile = 'gv020a_fringe_finder.flag'
 log_file = os.path.join(working_dir,casalog)
 flagging_file = os.path.join(working_dir,outputfile)
+
+
 def read_logfile():
 
 
@@ -33,7 +39,9 @@ def read_logfile():
                 modified_line = re.sub(r'Time=\S+\s', '', modified_line)
                 # Remove any remaining square brackets
                 # modified_line = modified_line.replace('[', '').replace(']', '')
-                modified_line = re.sub(r'Spw=(\d+)\sChan=(\d+)', r"spw='\1:\2~\2'", modified_line)
+                # modified_line = re.sub(r'Spw=(\d+)\sChan=(\d+)', r"spw='\1:\2~\2'", modified_line)
+                modified_line = re.sub(r'Spw=(\d+)\sChan=(\d+)', r"spw='\1:\2'", modified_line)
+
                 modified_line = re.sub(r'Freq=\S+\s', '', modified_line)
                 # Change Scan to scan
                 modified_line = modified_line.replace('Scan=', 'scan=')
