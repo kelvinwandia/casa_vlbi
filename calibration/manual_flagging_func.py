@@ -12,8 +12,8 @@ not the issue ... try and figure out whats happening
 
 """
 working_dir = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir'
-casalog = 'casa-20240704-095322.log'
-outputfile = 'gv020a_fringe_finder.flag'
+casalog = 'casa-20240704-173723.log'
+outputfile = 'gv020a_spw3.flag'
 log_file = os.path.join(working_dir,casalog)
 flagging_file = os.path.join(working_dir,outputfile)
 
@@ -39,8 +39,8 @@ def read_logfile():
                 modified_line = re.sub(r'Time=\S+\s', '', modified_line)
                 # Remove any remaining square brackets
                 # modified_line = modified_line.replace('[', '').replace(']', '')
-                # modified_line = re.sub(r'Spw=(\d+)\sChan=(\d+)', r"spw='\1:\2~\2'", modified_line)
-                modified_line = re.sub(r'Spw=(\d+)\sChan=(\d+)', r"spw='\1:\2'", modified_line)
+                modified_line = re.sub(r'Spw=(\d+)\sChan=(\d+)', r"spw='\1:\2~\2'", modified_line)
+                # modified_line = re.sub(r'Spw=(\d+)\sChan=(\d+)', r"spw='\1:\2'", modified_line)
 
                 modified_line = re.sub(r'Freq=\S+\s', '', modified_line)
                 # Change Scan to scan
@@ -69,5 +69,24 @@ def read_logfile():
             print(modified_line)
             outfile.write(modified_line.strip() + '\n')
 
-read_logfile()
+# read_logfile()
+
+def remove_duplicates(input_file, output_file):
+    seen_lines = set()  # To keep track of seen lines
+
+    with open(input_file, 'r') as infile, open(output_file, 'w') as outfile:
+        for line in infile:
+            # Skip empty lines
+            if line.strip() == "":
+                continue
+
+            # Remove duplicates
+            if line not in seen_lines:
+                seen_lines.add(line)
+                outfile.write(line)
+
+# Example usage
+input_file = '/raid1/scratch/kelvinw/casa_vlbi/data/flagging/gv020a.flag'
+output_file = '/raid1/scratch/kelvinw/casa_vlbi/data/flagging/gv020a_final.flag'
+remove_duplicates(input_file, output_file)
 
