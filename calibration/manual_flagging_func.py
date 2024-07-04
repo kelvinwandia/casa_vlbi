@@ -51,15 +51,15 @@ def read_logfile():
                 locate_lines.append(modified_line)
 
 
-
-    # Print all the lines with the keyword 'locate'
-    for line in locate_lines:
-        print(line)
+    os.system(f"rm -r {flagging_file}")
 
     with open(flagging_file, 'w') as outfile:
-        os.system(f"rm -r {flagging_file}")
         for line in locate_lines:
-            outfile.write(line + '\n')
+            if line.strip() == "":
+                continue
+            modified_line = f"mode='manual' {line}"
+            print(modified_line)
+            outfile.write(modified_line.strip() + '\n')
 
 read_logfile()
 
