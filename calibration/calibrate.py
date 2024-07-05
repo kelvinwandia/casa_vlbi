@@ -1,4 +1,5 @@
 
+import logging
 from utils.helper_functions import *
 
 def set_working_dir():
@@ -89,14 +90,15 @@ def get_msinfo():
     return nspw,nchan
 
 
-import logging
 
+@time_execution
 def plot_check_baddata(save_as=None):
     """
     Plots the vis over each spectral window to check the effect before and after flagging
 
     Parameters:
         save_as (str): Name to save the plot file as. If None, default naming will be used.
+        avgtime (int): averaging time
     """
     nspw, _ = get_msinfo()
 
@@ -109,13 +111,29 @@ def plot_check_baddata(save_as=None):
 
     logging.info("======>>> Plot visibilities to check bad data")
 
+    sources = [phase_calibrator,target]
+
     for spw in range(0,nspw):
-        plotfile = f"{flags_dir}/spw_{spw}.png" if save_as is None else f"{flags_dir}/{save_as}_spw_{spw}.png"
-        plotms(vis=vis, xaxis='channel', yaxis='amp', field=phase_calibrator, iteraxis='antenna', gridcols=3, 
-            spw=str(spw),gridrows=3, plotfile=plotfile, width=1500, height=750, dpi=300, showgui=False,
-            overwrite=True)
+        for source in sources:
+            plotfile = f"{flags_dir}/spw_{spw}.png" if save_as is None else f"{flags_dir}/{save_as}_{source}_spw_{spw}.png"
+            plotms(vis=vis, xaxis='channel', yaxis='amp', field=source, iteraxis='antenna', gridcols=3, 
+                spw=str(spw),gridrows=3, plotfile=plotfile, width=1500, height=750, dpi=300, showgui=False, 
+                overwrite=True)
 
     logging.info("======>>> Finished plotting the visibilities")
+
+def get_number_of_threads():
+    try:
+        num_threads = os.cpu_count()
+        if num_threads is None:
+            print("Could not determine the number of threads.")
+        else:
+            print(f"Number of threads (logical processors) available: {num_threads}")
+    except Exception as e:
+        print(f"An error occurred while determining the number of threads: {e}")
+    
+    return num_threads
+
 
 
 @time_execution
@@ -133,18 +151,18 @@ def flagging():
         report_flag(autocorr_flagging_summary, 'field')
 
 
-    logging.info(f"Quacking every {integration_time}s from each scan")
-    casatasks.flagdata(
-        vis = vis, mode='quack', quackinterval=integration_time, quackmode='beg',
-        quackincrement=True,
-        )
-    casatasks.flagdata(
-        vis = vis, mode='quack', quackinterval=integration_time, quackmode='endb',
-        quackincrement=True,
-        )
-    logging.info("Finished quacking")
+    # logging.info(f"Quacking every {integration_time}s from each scan")
+    # casatasks.flagdata(
+    #     vis = vis, mode='quack', quackinterval=integration_time, quackmode='beg',
+    #     quackincrement=True,
+    #     )
+    # casatasks.flagdata(
+    #     vis = vis, mode='quack', quackinterval=integration_time, quackmode='endb',
+    #     quackincrement=True,
+    #     )
+    # logging.info("Finished quacking")
 
-    flagmanager(vis=vis, mode='save', versionname="after_quacking")
+    # flagmanager(vis=vis, mode='save', versionname="after_quacking")
 
     # quacking_flagging_summary = flagdata(vis=vis, mode='summary')
     # logging.info("======>>>REPORTING FLAGGING STATS after quacking")
@@ -153,7 +171,7 @@ def flagging():
     if os.path.exists(manual_file):
         logging.info(f"Flagging file {manual_file} exists")
         logging.info(f"Flagging using {manual_file}")
-        casatasks.flagdata(vis = vis, mode='list',inpfile=manual_file)
+        casatasks.flagdata(vis = vis, mode='list',inpfile=manual_file,field=phase_calibrator)
         flagmanager(vis=vis, mode='save', versionname="after_manual_flagging")
         manual_flagging_summary = flagdata(vis=vis, mode='summary')
         logging.info("======>>>REPORTING FLAGGING STATS after manual flagging")
@@ -182,7 +200,7 @@ def execute_aoflagger_strategy():
     """
 
     try:
-        # container = os.path.join(aoflagger_path.rstrip('/'), aoflagger_sif)
+
         container = aoflagger_path
         print(f"Checking for container at: {container}")
         if os.path.exists(container):
@@ -195,6 +213,8 @@ def execute_aoflagger_strategy():
         logging.critical(f"Singularity container not found")
 
     fields  = getfields()
+    num_threads = get_number_of_threads()
+
 
     # phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
     # fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
@@ -202,7 +222,7 @@ def execute_aoflagger_strategy():
     # bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
     # faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
     # bright_strategy_fringefinder = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, fringe_finder_keys)), '-strategy', bright_source_strategy, vis]
-    aoflagger_cmds = ['aoflagger', '-v', '-indirect-read', '-strategy', flagging_strategy, vis]
+    aoflagger_cmds = ['aoflagger', '-v', '-j', f'{num_threads}', '-indirect-read', '-strategy', flagging_strategy, vis]
 
 
 
@@ -246,6 +266,7 @@ def execute_aoflagger_strategy():
     aoflagger_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after automatic flagging")
     report_flag(aoflagger_flagging_summary, 'field')
+
 
 def calc_flagged_data(field):
 
@@ -419,10 +440,12 @@ def applycal_mbd_fringe():
     mbd_plotfile = f'{calibration_dir}/applied_mbd.png'
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
+    fields = phase_calibrator + ',' + target
     logging.info(f"======>>>Applying {table} using interpolation {interp}")    
+    logging.info(f"======>>>Applying to {fields} ")
 
     casatasks.applycal(
-            vis = vis, field = phase_calibrator + ',' + target, gaintable=table,
+            vis = vis, field = fields, gaintable=table,
             interp = interp, spwmap = [[], 8*[0]], parang = True,
         )
 
@@ -455,7 +478,7 @@ def bpass():
     casatasks.bandpass(
         vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
         # field = phase_calibrator + ',' + fringe_finder, 
-        field = fringe_finder,
+        field = phase_calibrator,
         refant=refant, caltable = bpass_table,gaintable = table, 
         interp = interp,spwmap = [[], 8*[0]], parang=True 
         )
@@ -516,7 +539,7 @@ def after_cal_plots():
     yaxis = ['amp', 'phase']
 
     for source in sources:
-        for y_value in yaxis:
+        for y_value in yaxis:                
             plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_{source}_{y_value}.png"
             plotms(vis=vis, xaxis='frequency', yaxis=y_value, antenna='EF&*', ydatacolumn='corrected',
                 correlation='LL', showgui=False, coloraxis='spw', avgtime='9999', field=source,
