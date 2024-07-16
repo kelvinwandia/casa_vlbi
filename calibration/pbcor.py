@@ -198,7 +198,7 @@ def calculate_pb_attenuations():
 
     return attenuations
 
-
+@time_execution
 def gencal_pb_table():
     
     """
@@ -246,7 +246,8 @@ def gencal_pb_table():
                     caltable = caltable
                 )
         else:
-            logging.info(f"======>>> Caltable {caltable} exists. Will not generate a new one")
+            # logging.info(f"======>>> Caltable {caltable} exists. Will not generate a new one")
+            pass
 
         if coord not in caltables:
             caltables[coord] = []
@@ -270,34 +271,27 @@ def gencal_pb_table():
                 with open(cal_table,'w') as file:
                     cal_file = "caltable='"+''.join(table[0])+"'"
                     file.write(cal_file+'\n')
-            else:
-                logging.info(f"======>>> Calfile {cal_table} exists. Will not generate a new one")
+          
+            phaseshifted_ms = coordinate.replace(' ','')+'_phaseshifted.ms'
+            os.system(f"rm -r {phaseshifted_ms}*")
+            # subprocess.run(['rm','-r',phaseshifted_ms])
+            phasecenter = 'J2000'+ ' '+ coordinate
+            if not os.path.exists(phaseshifted_ms):
+                logging.info(f"======>>> Phaseshifting {vis} to {phasecenter}")
+                casatasks.phaseshift(
+                    vis = vis, outputvis = phaseshifted_ms, datacolumn='corrected',
+                    phasecenter = phasecenter
+                )
 
-            
-
-
-        # phaseshifted_ms = coordinate.replace(' ','')+'_phaseshifted.ms'
-        # os.system(f"rm -r {phaseshifted_ms}*")
-        # # subprocess.run(['rm','-r',phaseshifted_ms])
-        # phasecenter = 'J2000'+ ' '+ coordinate
-        # print(f"Phaseshifting {vis} to {phasecenter}")
-        # casatasks.phaseshift(
-        #     vis = vis, outputvis = phaseshifted_ms, 
-        #     phasecenter = phasecenter
-        # )
-
-        # transformed_ms = coordinate.replace(' ','')+'_transformed'+'.ms'
-        # os.system(f"rm -r {transformed_ms}.*")
-        # flagvers = transformed_ms+'.flagversions'
-        # subprocess.run(['rm','-r',transformed_ms])
-        # subprocess.run(['rm','-r',flagvers])
-        # print(f"Transforming {transformed_ms} and applying {cal_table}")
-        # casatasks.mstransform(
-        #     vis = phaseshifted_ms,outputvis = transformed_ms,
-        #     timeaverage=True, timebin='20s',datacolumn='data',
-        #     chanaverage=True, chanbin=512, docallib = True,
-        #     callib = cal_table
-        # )
+            transformed_ms = coordinate.replace(' ','')+'_transformed'+'.ms'
+            if not os.path.exists(transformed_ms):
+                logging.info("======>>>Transforming {transformed_ms} and applying {cal_table}")
+                casatasks.mstransform(
+                    vis = phaseshifted_ms,outputvis = transformed_ms,
+                    timeaverage=True, timebin='20s',datacolumn='data',
+                    chanaverage=True, chanbin=512, docallib = True,
+                    callib = cal_table
+                )
 
         # # helper_functions.run_singularity_container
 
@@ -315,9 +309,3 @@ def gencal_pb_table():
         # # helper_functions.plot_fits(fitsimage)
         
 
-# import time
-# start = time.time()
-# load_primary_beams(pb_file)
-# apply_corrections_and_image()
-# end = time.time()
-# print(f" The script took {(end - start) / 3600:.2f} hours")
