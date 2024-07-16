@@ -15,10 +15,11 @@ from scipy.constants import c
 from scipy.special import j1 # bessel func of order 1
 
 
+import logging
+from utils.helper_functions import *
 
-import helper_functions
-import config_loader
 
+vis = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/simulations/J2139+1423_added_source.ms'
 
 # TODO: phasecenters should be supplied by the gaia querying script
 offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s',
@@ -26,7 +27,7 @@ offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d
             '21h30m02.085700s +12d09m04.2203s']
 # offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
 
-
+pointing_centre = ['21h29m58.350000s +12d10m01.50000s']
 
 def load_primary_beams(pb_file):
 
@@ -37,14 +38,14 @@ def load_primary_beams(pb_file):
         stations: names of antennas that participated in the observation
         antenna_parameters: antenna names, primary beam model and diameters
     """
-
     pb_json_file = pb_file
     try:
         with open(pb_json_file, 'r') as file:
             primary_beams = json.load(file)
+            logging.info(f"======>>> {pb_json_file} found")
 
     except FileNotFoundError:
-        print(f"{pb_json_file} not found")
+        logging.info(f"======>>> {pb_json_file} not found")
         return {}
    
 
@@ -86,7 +87,7 @@ def load_primary_beams(pb_file):
     return stations, antenna_parameters
 
 
-def angsep(offset_source):
+def angsep():
 
     """
     Calculates the angular separation between provided coordinates and the pointing centre and
@@ -103,14 +104,13 @@ def angsep(offset_source):
 
     separation_angle =  []
 
-    params = config_loader.load_config()
-    pointing_centre = params["pointing_centre"]
-    ra_pointing_centre, dec_pointing_centre = pointing_centre.split()
+
+    ra_pointing_centre, dec_pointing_centre = pointing_centre[0].split(' ')
     
     
     pointing_centre_skycoord_obj = SkyCoord(ra_pointing_centre,dec_pointing_centre, unit=(u.hourangle,u.deg),frame='icrs')
     
-    for source_coords in offset_source:
+    for source_coords in offset_sources_coords:
         
         source_coords_skycoord_obj = SkyCoord(source_coords.split()[0],source_coords.split()[1],unit=(u.hourangle,u.deg),frame='icrs')
         
@@ -148,9 +148,8 @@ def calculate_pb_attenuations():
 
     # Calling load_primary_beam and angsep
 
-    _, antenna_parameters = load_primary_beams() 
-    separation_angle = angsep(offset_sources_coords) ########### OFFSET COORDS GO HERE
-
+    _, antenna_parameters = load_primary_beams(pb_file) 
+    separation_angle = angsep()
     attenuations = {}
     separation_angle_radians = []
 
@@ -207,16 +206,12 @@ def gencal_pb_table():
     and generates a calibration table with the corrections
 
     Calls:
-        pb_model
+        calculate_pb_attenuations
 
     Returns:
         caltables (dict): dict of keys:coordinates (str) and values:caltables (list)  of all the generated calibration tables
     """
     
-    params = config_loader.load_config()
-    msfile_path = params["fitsidifiles"]
-    vis = msfile_path + params["measurement_set"]+'.ms'
-
 
     # stations,_ =  load_primary_beams()
     attenuations = calculate_pb_attenuations()
@@ -238,97 +233,91 @@ def gencal_pb_table():
             file.write(f"Coordinate: {coordinate}, Attenuation: {attenuation}\n")
         file.write("\n")
     caltables = {}
+
     for coord, antennas_atten in offset_data.items():
         caltable = coord.replace(' ','')+'.pbcorr'
-        os.system(f'rm -r {caltable}')
+        # os.system(f'rm -r {caltable}')
+        if not os.path.exists(caltable):
         # Get the station name and attenuation and generate a caltable
-        for station, antenna_atten in antennas_atten.items():
-            casatasks.gencal(
-                vis = vis, parameter=antenna_atten, antenna=station,caltype='amp',
-                caltable = caltable
-            )
+            for station, antenna_atten in antennas_atten.items():
+                logging.info(f"======>>> Generating caltable {caltable} for antenna {station}")
+                casatasks.gencal(
+                    vis = vis, parameter=antenna_atten, antenna=station,caltype='amp',
+                    caltable = caltable
+                )
+        else:
+            logging.info(f"======>>> Caltable {caltable} exists. Will not generate a new one")
+
         if coord not in caltables:
             caltables[coord] = []
         caltables[coord].append(caltable)
 
-    return caltables
 
-def apply_corrections_and_image():
+        """
+        Applies the pbcorr calibration tables and maps the sources
+        Will phaseshift the data to the offset position and applycalibrations using mstransform
 
-    """
-    Applies the pbcorr calibration tables and maps the sources
-    Will phaseshift the data to the offset position and applycalibrations using mstransform
+        Calls:
+            pbcorr
+        """
 
-    Calls:
-        pbcorr
-    """
+        
+        for coordinate, table in caltables.items():
+            # Write cal_table as txt for docallib in mstransform
+            cal_table = 'caltable_'+coordinate.replace(" ","")+'.txt'
+            logging.info(f"======>>> Writing calfile {cal_table}")
+            if not os.path.exists(cal_table):
+                with open(cal_table,'w') as file:
+                    cal_file = "caltable='"+''.join(table[0])+"'"
+                    file.write(cal_file+'\n')
+            else:
+                logging.info(f"======>>> Calfile {cal_table} exists. Will not generate a new one")
 
-    params = config_loader.load_config()
-    msfile_path = params["fitsidifiles"]
-    vis = msfile_path + params["measurement_set"]+'.ms'
-    imsize = params["imsize"]
-    cellsize = params["cellsize"]
+            
 
-    sif_file_path = params["sif_file_path"]
-    wsclean_sif = sif_file_path+"wsclean_no_gpu.sif"
 
-    # if os.path.exists(wsclean_sif):
-    #     print("Found wsclean singularity image")
-    # else:
-    #     print("Singularity image not found")
-    #     sys.exit(1)
-    
-    caltables = gencal_pb_table()
-    for coordinate, table in caltables.items():
-        # Write cal_table as txt for docallib in mstransform
-        cal_table = 'caltable_'+coordinate.replace(" ","")+'.txt'
-        os.system(f"rm -r {cal_table}")
-  
-        with open(cal_table,'w') as file:
-            cal_file = "caltable='"+''.join(table[0])+"'"
-            file.write(cal_file+'\n')
+        # phaseshifted_ms = coordinate.replace(' ','')+'_phaseshifted.ms'
+        # os.system(f"rm -r {phaseshifted_ms}*")
+        # # subprocess.run(['rm','-r',phaseshifted_ms])
+        # phasecenter = 'J2000'+ ' '+ coordinate
+        # print(f"Phaseshifting {vis} to {phasecenter}")
+        # casatasks.phaseshift(
+        #     vis = vis, outputvis = phaseshifted_ms, 
+        #     phasecenter = phasecenter
+        # )
 
-        phaseshifted_ms = coordinate.replace(' ','')+'_phaseshifted.ms'
-        os.system(f"rm -r {phaseshifted_ms}*")
-        # subprocess.run(['rm','-r',phaseshifted_ms])
-        phasecenter = 'J2000'+ ' '+ coordinate
-        print(f"Phaseshifting {vis} to {phasecenter}")
-        casatasks.phaseshift(
-            vis = vis, outputvis = phaseshifted_ms, 
-            phasecenter = phasecenter
-        )
+        # transformed_ms = coordinate.replace(' ','')+'_transformed'+'.ms'
+        # os.system(f"rm -r {transformed_ms}.*")
+        # flagvers = transformed_ms+'.flagversions'
+        # subprocess.run(['rm','-r',transformed_ms])
+        # subprocess.run(['rm','-r',flagvers])
+        # print(f"Transforming {transformed_ms} and applying {cal_table}")
+        # casatasks.mstransform(
+        #     vis = phaseshifted_ms,outputvis = transformed_ms,
+        #     timeaverage=True, timebin='20s',datacolumn='data',
+        #     chanaverage=True, chanbin=512, docallib = True,
+        #     callib = cal_table
+        # )
 
-        transformed_ms = coordinate.replace(' ','')+'_transformed'+'.ms'
-        os.system(f"rm -r {transformed_ms}.*")
-        flagvers = transformed_ms+'.flagversions'
-        subprocess.run(['rm','-r',transformed_ms])
-        subprocess.run(['rm','-r',flagvers])
-        print(f"Transforming {transformed_ms} and applying {cal_table}")
-        casatasks.mstransform(
-            vis = phaseshifted_ms,outputvis = transformed_ms,
-            timeaverage=True, timebin='20s',datacolumn='data',
-            chanaverage=True, chanbin=512, docallib = True,
-            callib = cal_table
-        )
+        # # helper_functions.run_singularity_container
 
-        # helper_functions.run_singularity_container
-
-        print(f"Imaging {transformed_ms}")
-        imagename = "map_"+coordinate.replace(' ','')
-        os.system(f"rm -r {imagename}")
-        casatasks.tclean(
-            vis = transformed_ms,imagename= imagename, datacolumn='corrected',
-            cell = cellsize, imsize=imsize, deconvolver='clark',
-            niter=0
-        )
-        fitsimage = imagename+'.fits'
-        casatasks.exportfits(imagename=imagename+'.image',fitsimage=fitsimage)
-        helper_functions.get_im_stats(imagename)
-        # helper_functions.plot_fits(fitsimage)
+        # print(f"Imaging {transformed_ms}")
+        # imagename = "map_"+coordinate.replace(' ','')
+        # os.system(f"rm -r {imagename}")
+        # casatasks.tclean(
+        #     vis = transformed_ms,imagename= imagename, datacolumn='corrected',
+        #     cell = cellsize, imsize=imsize, deconvolver='clark',
+        #     niter=0
+        # )
+        # fitsimage = imagename+'.fits'
+        # casatasks.exportfits(imagename=imagename+'.image',fitsimage=fitsimage)
+        # get_im_stats(imagename)
+        # # helper_functions.plot_fits(fitsimage)
         
 
-import time
-start = time.time()
-apply_corrections_and_image()
-end = time.time()
-print(f" The script took {(end - start) / 3600:.2f} hours")
+# import time
+# start = time.time()
+# load_primary_beams(pb_file)
+# apply_corrections_and_image()
+# end = time.time()
+# print(f" The script took {(end - start) / 3600:.2f} hours")
