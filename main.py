@@ -27,6 +27,7 @@ exec(open("./utils/helper_functions.py").read())
 exec(open("./calibration/calibrate.py").read())
 exec(open("./selfcal/selfcal.py").read())
 exec(open("./selfcal/detect_sources.py").read())
+exec(open("./calibration/pbcor.py").read())
 
 ### This is important for running the sif container
 ### it allows the logfiles to be placed in the same dir as main.py
@@ -175,11 +176,11 @@ if load_data == True:
 if do_flagging == True:
     try:
         logging.info("Flagging data")
-        plot_check_baddata(save_as="_before_flagging")
+        # plot_check_baddata(save_as="_before_flagging")
         if use_aoflagger == True:
             execute_aoflagger_strategy()
         flagging()
-        flag_edge_channels()
+        # flag_edge_channels()
         if flag_antenna == True:
             antenna_flag(antenna_to_flag)
         plot_check_baddata(save_as="_after_flagging")
@@ -266,9 +267,15 @@ if apply_to_target == True:
 if detect_sources == True:
 
     selfcal_dir = os.path.join(working_directory,'selfcal_dir')
+    target_ms = os.path.join(selfcal_dir,target+'.ms')
+    detected_sources = os.path.join(working_directory,'detected_sources')
+    logging.info(f"Making and switching to {detected_sources}")
+    if not os.path.exists(detected_sources):
+        os.makedirs(detected_sources)
+ 
     try:
-        logging.info(f"Switching to {selfcal_dir}")
-        os.chdir(selfcal_dir)
+        logging.info(f"Switching to {detected_sources}")
+        os.chdir(detected_sources)
         logging.info("Detecting sources")
         m15_sources()
         os.chdir(working_directory)
@@ -279,6 +286,12 @@ if detect_sources == True:
 if do_pbcor == True:
     try:
         logging.info(f"You are about to perform pb corrections")
-        load_primary_beams(pb_file)
+        pbcor_dir = os.path.join(working_directory,'pbcor_dir')
+        logging.info(f"Making and switching to {pbcor_dir}")
+        if not os.path.exists(pbcor_dir):
+            os.makedirs(pbcor_dir)
+        os.chdir(pbcor_dir)
+        gencal_pb_table()
+        os.chdir(working_directory)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
