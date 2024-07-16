@@ -19,13 +19,12 @@ import logging
 from utils.helper_functions import *
 
 
-vis = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/simulations/J2139+1423_added_source.ms'
-
+vis = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/m15_split.ms'
 # TODO: phasecenters should be supplied by the gaia querying script
-offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s',
-            '21h29m58.312403s +12d10m02.6740s','21h29m51.9034555s +12d10m17.13240s',
-            '21h30m02.085700s +12d09m04.2203s']
-# offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
+# offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s',
+#             '21h29m58.312403s +12d10m02.6740s','21h29m51.9034555s +12d10m17.13240s',
+#             '21h30m02.085700s +12d09m04.2203s']
+offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
 
 pointing_centre = ['21h29m58.350000s +12d10m01.50000s']
 
@@ -247,7 +246,8 @@ def gencal_pb_table():
                 )
         else:
             # logging.info(f"======>>> Caltable {caltable} exists. Will not generate a new one")
-            pass
+            logging.info(f"======>>> Caltables exists. Will not generate a new one")
+            
 
         if coord not in caltables:
             caltables[coord] = []
@@ -265,16 +265,18 @@ def gencal_pb_table():
         
         for coordinate, table in caltables.items():
             # Write cal_table as txt for docallib in mstransform
-            cal_table = 'caltable_'+coordinate.replace(" ","")+'.txt'
-            logging.info(f"======>>> Writing calfile {cal_table}")
-            if not os.path.exists(cal_table):
-                with open(cal_table,'w') as file:
-                    cal_file = "caltable='"+''.join(table[0])+"'"
-                    file.write(cal_file+'\n')
+            # cal_table = 'caltable_'+coordinate.replace(" ","")+'.txt'
+            # os.system(f"rm -r {cal_table}")
+            # logging.info(f"======>>> Writing calfile {cal_table}")
+            # if not os.path.exists(cal_table):
+            #     with open(cal_table,'w') as file:
+            #         cal_file = "caltable='"+''.join(table[0])+"'"
+            #         file.write(cal_file+'\n')
           
             phaseshifted_ms = coordinate.replace(' ','')+'_phaseshifted.ms'
-            os.system(f"rm -r {phaseshifted_ms}*")
+            
             # subprocess.run(['rm','-r',phaseshifted_ms])
+            # os.system(f"rm -r {phaseshifted_ms}*")
             phasecenter = 'J2000'+ ' '+ coordinate
             if not os.path.exists(phaseshifted_ms):
                 logging.info(f"======>>> Phaseshifting {vis} to {phasecenter}")
@@ -282,17 +284,21 @@ def gencal_pb_table():
                     vis = vis, outputvis = phaseshifted_ms, datacolumn='corrected',
                     phasecenter = phasecenter
                 )
-
+            
             transformed_ms = coordinate.replace(' ','')+'_transformed'+'.ms'
+            os.system(f"rm -r {transformed_ms}*")
             if not os.path.exists(transformed_ms):
-                logging.info("======>>>Transforming {transformed_ms} and applying {cal_table}")
-                casatasks.mstransform(
-                    vis = phaseshifted_ms,outputvis = transformed_ms,
-                    timeaverage=True, timebin='20s',datacolumn='data',
-                    chanaverage=True, chanbin=512, docallib = True,
-                    callib = cal_table
-                )
+                # logging.info(f"======>>>Transforming {transformed_ms} and applying {cal_table}")
+                # casatasks.mstransform(
+                #     vis = phaseshifted_ms,outputvis = transformed_ms,
+                #     timeaverage=True, timebin='20s',datacolumn='data',
+                #     chanaverage=True, chanbin=512, docallib = True,
+                #     callib = cal_file )
+                casatasks.split(vis=phaseshifted_ms,outputvis=transformed_ms, datacolumn='data',timebin='16s',width=8)
+                os.system(f"rm -r {phaseshifted_ms}*")
+                casatasks.applycal(vis=transformed_ms,gaintable=table)
 
+                
         # # helper_functions.run_singularity_container
 
         # print(f"Imaging {transformed_ms}")
