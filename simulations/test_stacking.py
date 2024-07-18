@@ -15,6 +15,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 import casatasks
 import casatools
+import time
 
 
 def generate_random_coordinates(ra_center, dec_center, min_separation_arcmin, num_points, seed=None):
@@ -37,7 +38,7 @@ def generate_random_coordinates(ra_center, dec_center, min_separation_arcmin, nu
     # Generate the coordinates ensuring sufficient separation and within the radius
     while len(coordinates) < num_points:
         # Generate random points within a circle of radius 1 arcmin
-        r = max_radius_deg * np.sqrt(np.random.uniform(0, 1))
+        r = max_radius_deg * np.sqrt(np.random.uniform(0,1))
         theta = np.random.uniform(0, 2 * np.pi)
         delta_ra_deg = r * np.cos(theta)
         delta_dec_deg = r * np.sin(theta)
@@ -91,17 +92,8 @@ def plot_coordinates(coordinates, ra_center_deg, dec_center_deg):
 ra_center = 322.49304  # RA in degrees
 dec_center = 12.16700  # Dec in degrees
 min_separation_arcmin = 0.1  # Minimum separation in arcminutes
-num_points = 6
-seed = 42
-
-# coordinates = generate_random_coordinates(ra_center, dec_center, min_separation_arcmin, num_points, seed)
-
-# Print the generated coordinates
-# for coord in coordinates:
-#     print(coord.to_string('hmsdms'))
-
-# Plot the coordinates with the center and the circle
-# plot_coordinates(coordinates, ra_center, dec_center)
+num_points = 10
+seed = 1234
 
 
 
@@ -118,8 +110,8 @@ mysu = simutil.simutil()
 observatory = 'EVN'
 integration_time = '0.5s'
 starting_freq = '1602.5056MHz'
-# channel_width ='31.250kHz'
-channel_width='32.5kHz'
+channel_width ='31.250kHz'
+# channel_width='1MHz'
 freq_resolution = channel_width
 freq_increment = channel_width
 num_channels=8*512
@@ -148,7 +140,28 @@ def direction_string(ra, dec, frame):
 
     return ' '.join([frame, ra, dec])
 
+def time_execution(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
+        if execution_time < 60:  # If execution time is less than a minute
+            time_unit = "seconds"
+            formatted_time = execution_time
+        elif execution_time < 3600:  # If execution time is less than an hour
+            time_unit = "minutes"
+            formatted_time = execution_time / 60
+        else:  # If execution time is an hour or more
+            time_unit = "hours"
+            formatted_time = execution_time / 3600
+            
+        print(f"======>>>EXECUTION TIME for {func.__name__}: {formatted_time:.2f} {time_unit}")
+        return result
+    return wrapper
 
+@time_execution
 def makeEmptyMS():
 
 
@@ -191,33 +204,64 @@ def makeEmptyMS():
         print(line.replace('\n',''))
     file.close()
 
+# @time_execution
+# def addCompandPredictVis():
+
+#     clname = 'model_component.cl'
+
+#     os.system('rm -r *.cl')
+
+#     ra_dir,dec_dir = phasecenter[0].split(' ')
+#     print(f"The coordinates are {ra_dir} and {dec_dir}")
+
+#     print(f"Making component {clname}")
+#     cl.addcomponent(
+#         dir=direction_string(ra_dir,dec_dir,frame='J2000'),flux=5.0,fluxunit='Jy',
+#         freq=starting_freq,shape='point'
+#     )
+#     cl.rename(clname)
+#     cl.done()
+
+@time_execution    
 def addCompandPredictVis():
 
-    clname = 'model_component.cl'
+    coordinates = generate_random_coordinates(ra_center, dec_center, min_separation_arcmin, num_points, seed)
+    ## Plot the coordinates with the center and the circle
+    plot_coordinates(coordinates, ra_center, dec_center)
 
-    os.system('rm -r *.cl')
-
-    ra_dir,dec_dir = phasecenter[0].split(' ')
-    print(f"The coordinates are {ra_dir} and {dec_dir}")
-
-    print(f"Making component {clname}")
-    cl.addcomponent(
-        dir=direction_string(ra_dir,dec_dir,frame='J2000'),flux=5.0,fluxunit='Jy',
-        freq=starting_freq,shape='point'
-    )
-    cl.rename(clname)
+    # clname = coord.replace(' ', '').replace('+', '_') + '.cl'
+    flux_density=1.0
+    clname = 'model.cl'
+    for coord in coordinates:
+        coord = coord.to_string('hmsdms')
+        # print(clname)
+        if os.path.exists(clname):
+            os.system(f"rm -r {clname}")
+        # print(coordinates[i].to_string('hmsdms'))
+        # for j in range(len(flux_density)):
+        #     print(flux_density[j])
+        direction = 'J2000'+' '+ coord
+        # print(direction)
+        cl.addcomponent( dir = direction, flux=flux_density,
+        fluxunit='Jy',shape='Point',freq=starting_freq)
+    cl.rename(filename=clname)
+    # component_list.append(clname)
     cl.done()
-
-
+       
+    
+    # print(component_list)
+    # for complist in component_list:
+    complist = clname
+    print(f"Adding {complist} to {msname} using FT")
     casatasks.ft(
-        vis=msname,complist=clname,incremental=False,usescratch=True
-    )
+        vis=msname,complist=complist,incremental=False,usescratch=True
+        )
 
     print("Copying model to DATA column")
     tb.open(msname,nomodify=False)
     moddata = tb.getcol(columnname='MODEL_DATA')
     tb.putcol(columnname='DATA',value=moddata)
-    moddata.fill(0.0)
+    ##moddata.fill(0.0) # D0 NOT rewrite model column
     tb.putcol(columnname='MODEL_DATA',value=moddata)
     tb.close()
 
@@ -299,16 +343,27 @@ def addNoiseSim():
     sm.corrupt()
     sm.close()
 
+@time_execution
 def makeImage():
-    imagename = 'image_trial'
-    fitsname = imagename+'.fits'
-    os.system(f"rm -r {imagename}.*")
-    tclean(vis=msname,cell=cellsize,niter=0,imagename=imagename,deconvolver='clark',
-           weighting='natural',imsize=[256,256],datacolumn='data')
-    exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
-    get_im_stats(imagename=imagename+'.image')
-    plot_fits(fitsname)
-    
+    coordinates = generate_random_coordinates(ra_center, dec_center, min_separation_arcmin, num_points, seed)
+
+    for coord in coordinates:
+        coord = coord.to_string('hmsdms')
+        direction = 'J2000'+' '+coord
+        imagename = 'image_'+coord.replace(' +','_')
+        fitsname = imagename+'.fits'
+        os.system(f"rm -r {imagename}.*")
+        print(f"Making image for phasecenter {direction}")
+        tclean(vis=msname,cell=cellsize,niter=0,imagename=imagename,deconvolver='clark',
+            weighting='natural',imsize=[256,256],datacolumn='data',phasecenter=direction)
+        exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
+        get_im_stats(imagename=imagename+'.image')
+        plot_fits(fitsname)
+
+
+
+
+
 makeEmptyMS()
 addCompandPredictVis()
 addNoiseSim()
