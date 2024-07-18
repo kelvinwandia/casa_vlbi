@@ -19,12 +19,13 @@ import logging
 from utils.helper_functions import *
 
 
-vis = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/m15_split.ms'
-# TODO: phasecenters should be supplied by the gaia querying script
-# offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s',
-#             '21h29m58.312403s +12d10m02.6740s','21h29m51.9034555s +12d10m17.13240s',
-#             '21h30m02.085700s +12d09m04.2203s']
-offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
+vis = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/M15.ms'
+### TODO: phasecenters should be supplied by the gaia querying script
+offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s',
+            '21h29m58.312403s +12d10m02.6740s','21h29m51.9034555s +12d10m17.13240s',
+            '21h30m02.085700s +12d09m04.2203s']
+
+# offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
 
 pointing_centre = ['21h29m58.350000s +12d10m01.50000s']
 
@@ -278,40 +279,39 @@ def gencal_pb_table():
             # subprocess.run(['rm','-r',phaseshifted_ms])
             # os.system(f"rm -r {phaseshifted_ms}*")
             phasecenter = 'J2000'+ ' '+ coordinate
-            if not os.path.exists(phaseshifted_ms):
-                logging.info(f"======>>> Phaseshifting {vis} to {phasecenter}")
-                casatasks.phaseshift(
-                    vis = vis, outputvis = phaseshifted_ms, datacolumn='corrected',
-                    phasecenter = phasecenter
-                )
+            # if not os.path.exists(phaseshifted_ms):
+            #     logging.info(f"======>>> Phaseshifting {vis} to {phasecenter}")
+            #     casatasks.phaseshift(
+            #         vis = vis, outputvis = phaseshifted_ms, datacolumn='corrected',
+            #         phasecenter = phasecenter
+            #     )
             
             transformed_ms = coordinate.replace(' ','')+'_transformed'+'.ms'
-            os.system(f"rm -r {transformed_ms}*")
-            if not os.path.exists(transformed_ms):
-                # logging.info(f"======>>>Transforming {transformed_ms} and applying {cal_table}")
-                # casatasks.mstransform(
-                #     vis = phaseshifted_ms,outputvis = transformed_ms,
-                #     timeaverage=True, timebin='20s',datacolumn='data',
-                #     chanaverage=True, chanbin=512, docallib = True,
-                #     callib = cal_file )
-                casatasks.split(vis=phaseshifted_ms,outputvis=transformed_ms, datacolumn='data',timebin='16s',width=8)
-                os.system(f"rm -r {phaseshifted_ms}*")
-                casatasks.applycal(vis=transformed_ms,gaintable=table)
+            # os.system(f"rm -r {transformed_ms}*")
+            # if not os.path.exists(transformed_ms):
+            #     # logging.info(f"======>>>Transforming {transformed_ms} and applying {cal_table}")
+            #     # casatasks.mstransform(
+            #     #     vis = phaseshifted_ms,outputvis = transformed_ms,
+            #     #     timeaverage=True, timebin='20s',datacolumn='data',
+            #     #     chanaverage=True, chanbin=512, docallib = True,
+            #     #     callib = cal_file )
+            #     casatasks.split(vis=phaseshifted_ms,outputvis=transformed_ms, datacolumn='data',timebin='16s',width=8)
+            #     os.system(f"rm -r {phaseshifted_ms}*")
+            #     casatasks.applycal(vis=transformed_ms,gaintable=table)
 
                 
-        # # helper_functions.run_singularity_container
-
-        # print(f"Imaging {transformed_ms}")
-        # imagename = "map_"+coordinate.replace(' ','')
-        # os.system(f"rm -r {imagename}")
-        # casatasks.tclean(
-        #     vis = transformed_ms,imagename= imagename, datacolumn='corrected',
-        #     cell = cellsize, imsize=imsize, deconvolver='clark',
-        #     niter=0
-        # )
-        # fitsimage = imagename+'.fits'
-        # casatasks.exportfits(imagename=imagename+'.image',fitsimage=fitsimage)
-        # get_im_stats(imagename)
-        # # helper_functions.plot_fits(fitsimage)
-        
+            # helper_functions.run_singularity_container
+            print(f"Imaging {transformed_ms}")
+            imagename = "map_"+coordinate.replace(' ','')
+            os.system(f"rm -r {imagename}")
+            casatasks.tclean(
+                vis = transformed_ms,imagename= imagename, datacolumn='corrected',
+                cell = cell, imsize=imsize, deconvolver='clark',
+                niter=0
+            )
+            fitsimage = imagename+'.fits'
+            casatasks.exportfits(imagename=imagename+'.image',fitsimage=fitsimage,overwrite=True)
+            get_im_stats(imagename+'.image')
+            # helper_functions.plot_fits(fitsimage)
+            
 
