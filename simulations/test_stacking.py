@@ -109,7 +109,8 @@ mysu = simutil.simutil()
 
 observatory = 'EVN'
 integration_time = '0.5s'
-starting_freq = '1602.5056MHz'
+# starting_freq = '1602.5056MHz'
+starting_freq = '1594.521MHz'
 channel_width ='31.250kHz'
 # channel_width='1MHz'
 freq_resolution = channel_width
