@@ -328,12 +328,12 @@ def get_obs_params():
     # Something is off with epoch 1
     # Antennas that participated
     
-    # if params['file_extension'] == "gv020a":
-    #     obs_antennas = ['JB', 'WB', 'EF', 'ON', 'MC', 'TR', 'NT', 'AR', 'GB']
-    # else:
-    obs_antennas = []
-    for antenna in tasav_indata.antennas:
-        obs_antennas.append(antenna)
+    if experiment == "gv020a":
+        obs_antennas = ['JB', 'WB', 'EF', 'ON', 'MC', 'TR', 'NT', 'AR', 'GB']
+    else:
+        obs_antennas = []
+        for antenna in tasav_indata.antennas:
+            obs_antennas.append(antenna)
 
     logging.info(f"{obs_antennas} participated in the observation")
     logging.info(f"{searchants} will be used as substitute if {refant} not found")
@@ -595,6 +595,7 @@ def fring_instr(calsour):
 
     set_indata()
     indata = set_indata.indata
+    print(indata)
     
     _,_,_,refant_index,refant_indices = get_obs_params()
 
@@ -790,11 +791,14 @@ def runsplat_init(target,phase_calibrator,fringe_finder):
             splat_file.zap(force=True)
         except Exception as e:
             logging.error(f"Unable to zap {splat_file}") 
-
-    doband = -1; docal =1; doflag = 1; flg_table = get_table(indata,'FG'); cal_table = get_table(indata,'CL')
-    logging.info("You are applying apriori flags and calibration tables")
-    logging.info(f"Applying caltable: {cal_table}, apriori flags: {flg_table}")
-    logging.info(f"Bandpass calibration is disabled: doband={doband}")
+    ## if docal=-1, this means that the files will just be splat without any cal getting applied
+    doband = -1; docal = -1; doflag = 1; flg_table = get_table(indata,'FG'); cal_table = get_table(indata,'CL')
+    logging.info("You are splatting the data")
+    if docal==1:
+        logging.info(f"Applying caltable: {cal_table}, apriori flags: {flg_table}")
+        logging.info(f"Bandpass calibration is disabled: doband={doband}")
+    else:
+        logging.info(f"docal set to {docal}. No calibrations to be applied.")
 
     splat = AIPSTask('SPLAT')
     splat.indata = indata
