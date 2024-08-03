@@ -540,9 +540,14 @@ def sbd_fringefit():
 
 
     ### create an empty dict to hold the cal tables
-    
-    cal_tables_dict[sbd_table] = "nearest"
-    logging.info(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
+    if not use_casa: 
+        global cal_tables_dict
+        cal_tables_dict = {}
+        cal_tables_dict[sbd_table] = "nearest"
+        logging.info(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
+    else:
+        cal_tables_dict[sbd_table] = "nearest"
+        logging.info(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
 
 @time_execution
 def applycal_sbd_fringe():
