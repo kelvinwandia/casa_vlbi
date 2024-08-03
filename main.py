@@ -7,6 +7,9 @@ import subprocess
 import matplotlib
 # matplotlib.use('Agg')  
 import time
+from natsort import natsorted
+import zipfile
+import shutil
 
 
 """
@@ -59,7 +62,7 @@ except:
 
 
 
-
+# globals
 load_data = config.getboolean('globals','load_data')
 experiment = config.get('globals','experiment_name')
 working_directory = config.get('globals', 'working_directory')
@@ -69,6 +72,15 @@ use_singularity = config.getboolean('globals','use_singularity')
 # singularity_bind = config.get('globals','singularity_bind')
 wsclean_sif = config.get('globals','wsclean_sif')
 singularity_container = config.get('globals','singularity_container')
+
+# casa
+use_casa = config.getboolean('casa','use_casa')
+attach_metadata = config.getboolean('casa','attach_metadata')
+idifitsfiles = config.get('casa','idifitsfiles')
+antab_file = config.get('casa','antab_file')
+uvflg_file = config.get('casa','uvflg_file')
+do_apriori_cal = config.getboolean('casa','do_apriori_cal')
+apply_apriori_cal = config.getboolean('casa','apply_apriori_cal')
 
 target = config.get('basic','target')
 phase_calibrator = config.get('basic','phase_calibrator')
@@ -155,10 +167,13 @@ else:
     os.chdir(working_directory)
 
 if load_data == True:
+    if use_casa == True and attach_metadata == True:
+        logging.info(f"Attaching tsys and gc to fitsfiles")
+        attach_tsys_gc()
     try:
         vis = experiment + '.ms'
         splitvis = None
-        logging.info("Running CASA task importuvfits")
+        logging.info("Making measurement set")
         makems(vis)
 
         if do_split:
@@ -186,6 +201,23 @@ if do_flagging == True:
         plot_check_baddata(save_as="_after_flagging")
     except Exception as e:
         logging.critical(f"Exception {e} occurred")
+
+if use_casa == True:
+    logging.info(f"Using CASA to do apriori cal")
+    if do_apriori_cal == True:
+        try:
+            logging.info("Doing amplitude calibration using TSYS and GC tables")
+            gencal_tsys_gc()
+        except Exception as e:
+            logging.warning(f"Encountered error {e}")
+
+    if apply_apriori_cal == True:
+        try:
+            logging.info("Doing amplitude calibration using TSYS and GC tables")
+            applycal_tsys_gc()
+        except Exception as e:
+            logging.warning(f"Encountered error {e}")
+
 
 if do_sbd_fringe == True:
     try:
