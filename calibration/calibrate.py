@@ -375,8 +375,14 @@ def execute_aoflagger_strategy():
     # bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
     # faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
     # bright_strategy_fringefinder = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, fringe_finder_keys)), '-strategy', bright_source_strategy, vis]
-    aoflagger_cmds = ['aoflagger', '-v', '-j', f'{num_threads}', '-indirect-read', '-strategy', flagging_strategy, vis]
+    
 
+    aoflagger_cmds = ['aoflagger', '-j', f'{num_threads}', '-indirect-read', '-strategy', flagging_strategy, vis]
+
+    insert_position = 1  # Insert after 'aoflagger'
+    # Insert the verbosity flag at the specified position if verbosity is enabled
+    if verbosity==True:
+        aoflagger_cmds.insert(insert_position, '-v')
 
 
     # for field in fields.values():
@@ -483,7 +489,7 @@ def gencal_tsys_gc():
 
     # Plot the caltable
     for m in ['frequency','time']:
-        plotfile = f"{plots_dir}/{vis.replace('.ms', '')}"+f"_tsys_{m}.png"
+        plotfile = os.path.join(calibration_dir, f"{vis.replace('.ms', '')}_tsys_{m}.png")
         if not os.path.exists(plotfile):
             plotms(
                 vis=f'{experiment}.tsys', yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
@@ -597,9 +603,9 @@ def mbd_fringefit():
     mbd_table = vis.replace('.ms', '_mbd.gcal')
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
-
+    logging.info(f"======>>>Running global fring")
     if not os.path.exists(mbd_table):
-        # logging.info(f"{mbd_table} exists. Will not create a new one")
+        logging.info(f"Fringefitting and making {mbd_table}")
         casatasks.fringefit(
             vis=vis, caltable=mbd_table, solint=solint,
             zerorates=False, field=phase_calibrator, refant=refant, minsnr=snr_mbd, combine='spw',
@@ -680,7 +686,7 @@ def bpass():
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
 
-    nspw,_ = get_msinfo
+    nspw,_ = get_msinfo()
     
     if use_casa == True:
         spwmap = [[],[],[], nspw*[0]]
@@ -727,7 +733,7 @@ def applycal_bpass():
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")   
 
-    nspw,_ = get_msinfo
+    nspw,_ = get_msinfo()
     
     if use_casa == True:
         spwmap = [[],[],[], nspw*[0]]
@@ -831,9 +837,16 @@ def dirty_map(source):
 
     if use_wsclean == True:
         if not os.path.exists(imagename+'-image.fits'):
+                
             logging.info(f"Making {imagename}")
+            # Insert the verbosity flag at the specified position if verbosity is enabled
+            
             wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
                                 '-mgain', '0.8', '-niter', '0' , '-field',f'{field_id}',f'{vis}']
+            insert_position = 2
+            if verbosity==True:
+                wsclean_cmd.insert(insert_position, '-quiet')
+
             
             run_wsclean(wsclean_sif,wsclean_cmd)
 
