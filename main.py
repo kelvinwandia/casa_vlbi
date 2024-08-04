@@ -248,6 +248,7 @@ if apply_mbd == True:
         logging.warning(f"Encountered error {e}")
 
 if do_bpass == True:
+    print("Executing this section")
     try:
         logging.info("Calculating bandpass solutions")
         bpass()
