@@ -89,6 +89,7 @@ integration_time = config.getfloat('basic','integration_time')
 do_split = config.getboolean('basic','do_split')
 timebin = config.get('basic','timebin')
 width = config.getint('basic','width')
+verbosity = config.getboolean('basic','verbosity')
 
 # flag
 do_flagging = config.getboolean('flagging','do_flagging')
@@ -321,6 +322,8 @@ if do_pbcor == True:
         logging.info(f"You are about to perform pb corrections")
         pbcor_dir = os.path.join(working_directory,'pbcor_dir')
         logging.info(f"Making and switching to {pbcor_dir}")
+        selfcal_dir = os.path.join(working_directory,'selfcal_dir')
+        target_ms = os.path.join(selfcal_dir,target+'.ms')
         if not os.path.exists(pbcor_dir):
             os.makedirs(pbcor_dir)
         os.chdir(pbcor_dir)
