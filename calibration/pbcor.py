@@ -13,22 +13,58 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from scipy.constants import c
 from scipy.special import j1 # bessel func of order 1
+import os, glob, subprocess
+import pandas as pd
+from casatasks import *
+from casaplotms import *
+import bdsf
+import casalogger
+from astropy.io import fits
+import numpy as np
+import matplotlib.pyplot as plt
+from utils.helper_functions import *
+from astropy.coordinates import SkyCoord
+from astropy import units as u
 
 
 import logging
 from utils.helper_functions import *
 
 
-vis = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/M15.ms'
-### TODO: phasecenters should be supplied by the gaia querying script
-offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s',
-            '21h29m58.312403s +12d10m02.6740s','21h29m51.9034555s +12d10m17.13240s',
-            '21h30m02.085700s +12d09m04.2203s']
+# vis = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/M15.ms'
+# ### TODO: phasecenters should be supplied by the gaia querying script
+# offset_sources_coords=['21h29m58.246512s +12d10m01.2339s','21h30m01.203493s +12d10m38.1592s',
+#             '21h29m58.312403s +12d10m02.6740s','21h29m51.9034555s +12d10m17.13240s',
+#             '21h30m02.085700s +12d09m04.2203s']
 
-# offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
+# # offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
 
 pointing_centre = ['21h29m58.350000s +12d10m01.50000s']
 
+filename ='/raid1/scratch/kelvinw/casa_vlbi/data/white_dwarfs_propagated_coords.txt'
+df = pd.read_csv(filename, delimiter='\t')
+
+@time_execution
+def get_phasecenters():
+    """
+    Reads the extracted stellar positions form the HR diagram and formats them
+    to J2000 HMS DMS
+    """
+
+    """
+    Image stars from a txt file
+    """
+    phasecenter = []
+    for index, row in df.iterrows():
+        # ra_str = str(row['RA'])
+        # dec_str = str(row['Dec'])
+        c = SkyCoord(row['RA']*u.deg,row['Dec']*u.deg,frame='icrs')
+        hmsdms = c.to_string('hmsdms')
+        phasecenter.append('J2000'+' '+hmsdms)
+    
+    return phasecenter
+
+@time_execution
 def load_primary_beams(pb_file):
 
     """
@@ -51,7 +87,7 @@ def load_primary_beams(pb_file):
 
     # Read the stations from the measurement set
     tb = casatools.table()
-    tb.open(f'{vis}/ANTENNA',nomodify=False)
+    tb.open(f'{target_ms}/ANTENNA',nomodify=False)
     stations = tb.getcol('STATION')
     tb.close()
 
@@ -104,26 +140,26 @@ def angsep():
 
     separation_angle =  []
 
-
+    phasecenters = get_phasecenters()
     ra_pointing_centre, dec_pointing_centre = pointing_centre[0].split(' ')
     
     
     pointing_centre_skycoord_obj = SkyCoord(ra_pointing_centre,dec_pointing_centre, unit=(u.hourangle,u.deg),frame='icrs')
     
-    for source_coords in offset_sources_coords:
-        
-        source_coords_skycoord_obj = SkyCoord(source_coords.split()[0],source_coords.split()[1],unit=(u.hourangle,u.deg),frame='icrs')
+    for phasecenter in phasecenters[0:1]:
+        phasecenter = phasecenter.replace('J2000','')
+        phasecenter_skycoord_obj = SkyCoord(phasecenter.split()[0],phasecenter.split()[1],unit=(u.hourangle,u.deg),frame='icrs')
         
         ## This formular needs fixing -- has been fixed
-        vector_dot_product =  np.cos(pointing_centre_skycoord_obj.dec.radian)*np.cos(source_coords_skycoord_obj.dec.radian)*\
-            np.cos( pointing_centre_skycoord_obj.ra.radian- source_coords_skycoord_obj.ra.radian) + \
-            np.sin(pointing_centre_skycoord_obj.dec.radian)*np.sin(source_coords_skycoord_obj.dec.radian)
+        vector_dot_product =  np.cos(pointing_centre_skycoord_obj.dec.radian)*np.cos(phasecenter_skycoord_obj.dec.radian)*\
+            np.cos( pointing_centre_skycoord_obj.ra.radian- phasecenter_skycoord_obj.ra.radian) + \
+            np.sin(pointing_centre_skycoord_obj.dec.radian)*np.sin(phasecenter_skycoord_obj.dec.radian)
        
         angle = np.arccos(vector_dot_product)
         # print(f"The offset angle is {angle*180*60/np.pi} arcmin")
 
         offset_angles_dict = {
-            'coordinates':source_coords_skycoord_obj.to_string('hmsdms'),
+            'coordinates':phasecenter_skycoord_obj.to_string('hmsdms'),
             'angular_separation_arcmin': angle*180*60/np.pi, # arcmin
             'angular_separation_radians': angle
         }
@@ -235,14 +271,15 @@ def gencal_pb_table():
     caltables = {}
 
     for coord, antennas_atten in offset_data.items():
+        print(coord)
         caltable = coord.replace(' ','')+'.pbcorr'
-        # os.system(f'rm -r {caltable}')
+        os.system(f'rm -r {caltable}')
         if not os.path.exists(caltable):
         # Get the station name and attenuation and generate a caltable
             for station, antenna_atten in antennas_atten.items():
                 logging.info(f"======>>> Generating caltable {caltable} for antenna {station}")
                 casatasks.gencal(
-                    vis = vis, parameter=antenna_atten, antenna=station,caltype='amp',
+                    vis = target_ms, parameter=antenna_atten, antenna=station,caltype='amp',
                     caltable = caltable
                 )
         else:
@@ -254,64 +291,76 @@ def gencal_pb_table():
             caltables[coord] = []
         caltables[coord].append(caltable)
 
-
         """
         Applies the pbcorr calibration tables and maps the sources
-        Will phaseshift the data to the offset position and applycalibrations using mstransform
-
+        Will phaseshift the data to the offset position, then averaged and applies calibrations 
+        and images
         Calls:
             pbcorr
         """
 
         
         for coordinate, table in caltables.items():
-            # Write cal_table as txt for docallib in mstransform
-            # cal_table = 'caltable_'+coordinate.replace(" ","")+'.txt'
-            # os.system(f"rm -r {cal_table}")
-            # logging.info(f"======>>> Writing calfile {cal_table}")
-            # if not os.path.exists(cal_table):
-            #     with open(cal_table,'w') as file:
-            #         cal_file = "caltable='"+''.join(table[0])+"'"
-            #         file.write(cal_file+'\n')
+            ## Write cal_table as txt for docallib in mstransform
+            cal_table = 'caltable_'+coordinate.replace(" ","")+'.txt'
+            os.system(f"rm -r {cal_table}")
+            logging.info(f"======>>> Writing calfile {cal_table}")
+            if not os.path.exists(cal_table):
+                with open(cal_table,'w') as file:
+                    cal_file = "caltable='"+''.join(table[0])+"'"
+                    file.write(cal_file+'\n')
           
             phaseshifted_ms = coordinate.replace(' ','')+'_phaseshifted.ms'
             
-            # subprocess.run(['rm','-r',phaseshifted_ms])
-            # os.system(f"rm -r {phaseshifted_ms}*")
+            subprocess.run(['rm','-r',phaseshifted_ms])
+            os.system(f"rm -r {phaseshifted_ms}*")
             phasecenter = 'J2000'+ ' '+ coordinate
-            # if not os.path.exists(phaseshifted_ms):
-            #     logging.info(f"======>>> Phaseshifting {vis} to {phasecenter}")
-            #     casatasks.phaseshift(
-            #         vis = vis, outputvis = phaseshifted_ms, datacolumn='corrected',
-            #         phasecenter = phasecenter
-            #     )
+            if not os.path.exists(phaseshifted_ms):
+                logging.info(f"======>>> Phaseshifting {target_ms} to {phasecenter}")
+                casatasks.phaseshift(
+                    vis = target_ms, outputvis = phaseshifted_ms, datacolumn='corrected',
+                    phasecenter = phasecenter
+                )
             
             transformed_ms = coordinate.replace(' ','')+'_transformed'+'.ms'
-            # os.system(f"rm -r {transformed_ms}*")
-            # if not os.path.exists(transformed_ms):
-            #     # logging.info(f"======>>>Transforming {transformed_ms} and applying {cal_table}")
-            #     # casatasks.mstransform(
-            #     #     vis = phaseshifted_ms,outputvis = transformed_ms,
-            #     #     timeaverage=True, timebin='20s',datacolumn='data',
-            #     #     chanaverage=True, chanbin=512, docallib = True,
-            #     #     callib = cal_file )
-            #     casatasks.split(vis=phaseshifted_ms,outputvis=transformed_ms, datacolumn='data',timebin='16s',width=8)
-            #     os.system(f"rm -r {phaseshifted_ms}*")
-            #     casatasks.applycal(vis=transformed_ms,gaintable=table)
+            os.system(f"rm -r {transformed_ms}*")
+            if not os.path.exists(transformed_ms):
+                # logging.info(f"======>>>Transforming {transformed_ms} and applying {cal_table}")
+                # casatasks.mstransform(
+                #     vis = phaseshifted_ms,outputvis = transformed_ms,
+                #     timeaverage=True, timebin='20s',datacolumn='data',
+                #     chanaverage=True, chanbin=512, docallib = True,
+                #     callib = cal_file )
+                casatasks.split(vis=phaseshifted_ms,outputvis=transformed_ms, datacolumn='data',timebin='16s',width=8)
+                os.system(f"rm -r {phaseshifted_ms}*")
+                casatasks.applycal(vis=transformed_ms,gaintable=table)
+
+                imagename =  transformed_ms.replace(".ms","")
+                if not os.path.exists(imagename):
+                    logging.info(f"Making image {imagename}")
+
+                    wsclean_cmd = ['wsclean', '-log-time', '-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}', \
+                            '-scale', f'{cell}','-mgain', '0.8', '-niter', '0', f'{transformed_ms}']
+
+                    run_wsclean(wsclean_sif,wsclean_cmd)
+
+                    wsclean_fitsfile = imagename+'-image.fits'
+                    get_im_stats(wsclean_fitsfile)
+                    plot_fits(wsclean_fitsfile)
 
                 
-            # helper_functions.run_singularity_container
-            print(f"Imaging {transformed_ms}")
-            imagename = "map_"+coordinate.replace(' ','')
-            os.system(f"rm -r {imagename}")
-            casatasks.tclean(
-                vis = transformed_ms,imagename= imagename, datacolumn='corrected',
-                cell = cell, imsize=imsize, deconvolver='clark',
-                niter=0
-            )
-            fitsimage = imagename+'.fits'
-            casatasks.exportfits(imagename=imagename+'.image',fitsimage=fitsimage,overwrite=True)
-            get_im_stats(imagename+'.image')
-            # helper_functions.plot_fits(fitsimage)
+#             # helper_functions.run_singularity_container
+#             print(f"Imaging {transformed_ms}")
+#             imagename = "map_"+coordinate.replace(' ','')
+#             os.system(f"rm -r {imagename}")
+#             casatasks.tclean(
+#                 vis = transformed_ms,imagename= imagename, datacolumn='corrected',
+#                 cell = cell, imsize=imsize, deconvolver='clark',
+#                 niter=0
+#             )
+#             fitsimage = imagename+'.fits'
+#             casatasks.exportfits(imagename=imagename+'.image',fitsimage=fitsimage,overwrite=True)
+#             get_im_stats(imagename+'.image')
+#             # helper_functions.plot_fits(fitsimage)
             
 
