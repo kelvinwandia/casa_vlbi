@@ -39,7 +39,7 @@ from utils.helper_functions import *
 
 # # offset_sources_coords=['21h29m58.246512s +12d10m01.2339s']
 
-pointing_centre = ['21h29m58.350000s +12d10m01.50000s']
+pointing_centre = ['21h30m01.203400s +12d10m38.16000s']
 
 filename ='/raid1/scratch/kelvinw/casa_vlbi/data/white_dwarfs_propagated_coords.txt'
 df = pd.read_csv(filename, delimiter='\t')
