@@ -227,3 +227,8 @@ with fits.open(fitsfile) as hdul:
     plt.colorbar()
     plt.savefig('masked_fit.pdf',dpi=300)
     plt.show()
+
+    # Get the standard deviation ie the rms
+    unmasked_values = image_data[mask]
+    std_dev = np.std(unmasked_values)
+    print(f"The rms is {std_dev}")
