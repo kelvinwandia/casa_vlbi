@@ -9,6 +9,7 @@ import casalogger
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
+from astropy.constants import c
 
 
 def time_execution(func):
@@ -113,6 +114,7 @@ def run_wsclean(wsclean_sif,command):
         singularity_bind = os.path.join(os.path.dirname(os.path.dirname(container)))
 
     command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
+
     try:
         print("Executing: %s", ' '.join(command_to_execute))
         process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
@@ -129,3 +131,27 @@ def run_wsclean(wsclean_sif,command):
     except Exception as e:
         print(f"An error occurred: {e}")
 
+
+def get_imaging_params(vis):
+
+    
+
+    ms = casatools.ms()
+    tb = casatools.table()
+    ms.open(vis)
+    max_uv = ms.getdata('uvdist')['uvdist'].max()
+    ms.close()
+
+    tb.open(vis+'/SPECTRAL_WINDOW')
+    chan_freq = tb.getcol('CHAN_FREQ')
+    highest_freq = chan_freq.max()
+    tb.close()
+
+    # 3.6e6 converts the degrees to mas
+    # 5 is the sampling
+
+    cell_size = ((c.value/highest_freq)/max_uv)*(180./np.pi)*(3.6e6/5)
+    cell_size = np.round(cell_size)
+    print("The imaging cell size is:", cell_size)
+
+    return cell_size
