@@ -126,7 +126,7 @@ def calculate_rms_noise(all_data,headers,fitsfiles):
         crpix1 = header.get('CRPIX1')
         crpix2 = header.get('CRPIX2')
         """YOU NEED TO PASS BMAJ AS AN ARG OR PUT IT HERE"""
-        bmaj = 3.178236333446e-06 
+        # bmaj = 3.178236333446e-06 
         if bmaj is None or bmaj == 0.0:
             print("BMAJ is either not set or zero. Please enter a manual beam size.")
             # try:
@@ -215,7 +215,7 @@ if __name__ =="__main__":
 
     filepath = '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_aoflagger_working_dir/pbcor_dir'
 
-    bmaj = 3.178236333446e-06 
+    # bmaj = 3.178236333446e-06 
 
 
     working_dir(filepath)
