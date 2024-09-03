@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --nodes 7
+#SBATCH --nodes 8
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=24
 #SBATCH --time=7-00:00:00
-#SBATCH --mem="32GB"
+#SBATCH --mem="16GB"
 #SBATCH --output=/share/nas/kelvinw/sbatch/logs/out-slurm_%j.out
 #SBATCH --error=/share/nas/kelvinw/sbatch/logs/out-slurm_%j.err
 #SBATCH --job-name tclean
@@ -16,7 +16,7 @@ echo "Job started on:"
 date +'%Y-%m-%d %H:%M:%S'
 DATE_START=$(date +%s)
 
-# Load necessary modules
+# Load necessary modules #SBATCH -w compute-0-116
 echo "Loading openmpi module..."
 module load openmpi-2.1.1 || { echo "Failed to load openmpi module"; exit 1; }
 echo "MPI Environment Variables:"
@@ -24,14 +24,14 @@ env | grep MPI
 
 
 
-# # Paths and files
-# directory="/state/partition1/kelvinw/m15psrc_working_dir"
-# fileToCopy="/share/nas/kelvinw/trial/M15PSRC.ms"
-# fileToCheck="$directory/M15PSRC.ms"
-# fileToCopy1="/share/nas/kelvinw/casa_vlbi"
-# fileToCheck1="$directory/casa_vlbi"
+# Paths and files
+directory="/state/partition1/kelvinw/stacking_working_dir"
+fileToCopy="/share/nas/kelvinw/trial/M15PSRC.ms"
+fileToCheck="$directory/M15PSRC.ms"
+fileToCopy1="/share/nas/kelvinw/casa_vlbi"
+fileToCheck1="$directory/casa_vlbi"
 
-# # Function to copy files and check for success
+# Function to copy files and check for success
 # copy_file_if_not_exists() {
 #     local src=$1
 #     local dest=$2
@@ -53,13 +53,13 @@ env | grep MPI
 # # Change to working directory
 # cd "$directory" || { echo "Failed to change directory to $directory"; exit 1; }
 
-### Use this when using ssh-compute-0-XXX ie when in /state/partition1
-# FILENAME="/casa_vlbi/data/white_dwarfs_propagated_coords.txt"
-# VIS="M15PSRC.ms"
+# ## Use this when using ssh-compute-0-XXX ie when in /state/partition1
+# FILENAME="$directory/casa_vlbi/data/white_dwarfs_propagated_coords.txt"
+# VIS="$directory/M15PSRC.ms"
 # FIELD="M15PSRC"  
-# FILEPATH="trial/"
+# FILEPATH="$directory"
 
-# Filenames and field
+# # Filenames and field
 FILENAME="/mnt/casa_vlbi/data/white_dwarfs_propagated_coords.txt"
 VIS="/mnt/trial/M15PSRC.ms"
 FIELD="M15PSRC"  
