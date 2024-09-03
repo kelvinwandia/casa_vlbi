@@ -10,6 +10,10 @@ import astropy.units as u
 import pandas as pd
 from astropy.wcs import WCS
 from astropy.constants import c
+import matplotlib
+matplotlib.use('Agg') 
+import argparse
+
 
 def time_execution(func):
     def wrapper(*args, **kwargs):
@@ -90,10 +94,10 @@ def working_dir(filepath):
         filepath: path to directory where casa images of wsclean fitsfiles are stored
     """
     
-    working_dir = os.path.join(filepath,'tclean_working_dir')
+    working_dir = os.path.join(filepath,'imaging_dir')
 
     if not os.path.exists(working_dir):
-        os.mkdir(working_dir)
+        os.makedirs(working_dir)
 
     os.chdir(working_dir)
 
@@ -122,6 +126,23 @@ def get_imaging_params(vis):
 
     return cell_size
 
+
+def create_mms(vis,outputvis,field):
+
+    msmd = casatools.msmetadata()
+    msmd.open(vis)
+    scans = msmd.scansforfield(field=field)
+    nspw = msmd.nspw()
+    nscans = len(scans)
+
+    print(f"You have {nspw} spectral windows and {nscans} scans")
+    print(f"Partitioning measurement set")
+    partition(vis=vis, outputvis = outputvis,  createmms=True, separationaxis='scan', numsubms = nscans)
+
+
+
+
+
 @time_execution
 def get_phasecenters(filename):
     """
@@ -144,31 +165,41 @@ def get_phasecenters(filename):
     return phasecenter
 
 @time_execution
-def make_map(phasecenter,vis):
+def make_map(phasecenter,vis,field):
 
-    for center in phasecenter:
+    ## Partition before imaging
+    # outputvis = field+'_partitioned.ms'
+    # create_mms(vis,outputvis,field)
+
+    for center in phasecenter[0:1]:
         imagename = center.replace("J2000 ","").replace(" ","")
         os.system(f"rm -r {imagename}.*")
         print(f"Making map {imagename}")
+
         tclean(
-            vis=vis,imagename=imagename, cell='1mas',imsize=[320],niter=0, weighting='natural',deconvolver='clark', phasecenter=center
+            vis=vis,imagename=imagename, cell='1mas',imsize=[320],niter=0, weighting='natural',deconvolver='clark', phasecenter=center, parallel=True,
+            
         )
         fitsname = imagename+'.fits'
         exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
         get_im_stats(imagename=imagename+'.image')
         plot_fits(fitsname)
 
-if __name__=="__main__":
-
-    pointing_centre = ['21h30m01.203400s +12d10m38.16000s']
-
-    filename ='/raid1/scratch/kelvinw/casa_vlbi/data/white_dwarfs_propagated_coords.txt'
-    filepath = '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_aoflagger_working_dir/'
-    vis = "/raid1/scratch/kelvinw/gv020_working_dir/gv020b_aoflagger_working_dir/M15PSRC.ms"
-
+def main(filename, vis, field, filepath):
+    
+    # Use the provided arguments
     working_dir(filepath)
     phasecenter = get_phasecenters(filename)
-    make_map(phasecenter,vis)
+    make_map(phasecenter, vis, field=field)
     get_imaging_params(vis)
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process some files.")
+    parser.add_argument("--filename", required=True, help="Path to the input file with phase center coordinates")
+    parser.add_argument("--vis", required=True, help="Path to the visibility dataset (e.g., M15PSRC.ms)")
+    parser.add_argument("--field", required=True, help="Field name to use in the map creation")
+    parser.add_argument("--filepath", required=True, help="Path to the working directory")
+
+    args = parser.parse_args()
     
+    main(args.filename, args.vis, args.field, args.filepath)
