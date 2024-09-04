@@ -146,7 +146,7 @@ def angsep():
     
     pointing_centre_skycoord_obj = SkyCoord(ra_pointing_centre,dec_pointing_centre, unit=(u.hourangle,u.deg),frame='icrs')
     
-    for phasecenter in phasecenters[0:1]:
+    for phasecenter in phasecenters:
         phasecenter = phasecenter.replace('J2000','')
         phasecenter_skycoord_obj = SkyCoord(phasecenter.split()[0],phasecenter.split()[1],unit=(u.hourangle,u.deg),frame='icrs')
         

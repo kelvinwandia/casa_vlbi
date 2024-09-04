@@ -489,7 +489,7 @@ def gencal_tsys_gc():
 
     # Plot the caltable
     for m in ['frequency','time']:
-        plotfile = os.path.join(calibration_dir, f"{vis.replace('.ms', '')}_tsys_{m}.png")
+        plotfile = os.path.join(calibration_dir, f"{vis.replace('.ms', '_tsys_{m}.png')}")
         if not os.path.exists(plotfile):
             plotms(
                 vis=f'{experiment}.tsys', yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
@@ -543,6 +543,14 @@ def sbd_fringefit():
             zerorates=True, timerange=timerange, refant=refant,
             minsnr=snr_sbd, parang=True
         )
+
+        if timerange_ar:
+            logging.info(f"Appending solutions derived when arecibo is up {timerange_ar} to {sbd_table}")
+            casatasks.fringefit(
+                vis=vis, caltable=sbd_table, solint='inf',
+                zerorates=True, timerange=timerange_ar, refant=refant, antenna='AR',
+                minsnr=snr_sbd, parang=True, append=True
+            )
 
 
     ### create an empty dict to hold the cal tables
@@ -846,7 +854,6 @@ def dirty_map(source):
             insert_position = 2
             if verbosity==True:
                 wsclean_cmd.insert(insert_position, '-quiet')
-
             
             run_wsclean(wsclean_sif,wsclean_cmd)
 

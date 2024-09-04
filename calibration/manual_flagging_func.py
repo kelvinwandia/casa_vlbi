@@ -11,12 +11,6 @@ Seems like the field is not working -- specify field when calling flagdata in CA
 not the issue ... try and figure out whats happening
 
 """
-working_dir = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_flagging_working_dir'
-casalog = 'casa-20240708-043801.log'
-outputfile = 'gv020a_1s_avg.flag'
-log_file = os.path.join(working_dir,casalog)
-flagging_file = os.path.join(working_dir,outputfile)
-
 
 def read_logfile():
 
@@ -83,9 +77,20 @@ def remove_duplicates(input_file, output_file):
             if line not in seen_lines:
                 seen_lines.add(line)
                 outfile.write(line)
+
+working_dir = '/raid1/scratch/kelvinw/gv020_working_dir/gv020a_flagging_working_dir'
+# casalog = 'casa-20240708-043801.log'
+casalog = 'casa-20240710-112514.log'
+outputfile = 'gv020a_1s_avg.flag'
+log_file = os.path.join(working_dir,casalog)
+flagging_file = os.path.join(working_dir,outputfile)
+
+
 read_logfile()
+
 input_file = flagging_file
-cleaned_flagging_file = 'gv020a_1s_final.flag'
+cleaned_flagging_file = 'gv020a_spw_0.flag'
 output_file = os.path.join(working_dir,cleaned_flagging_file)
+
 remove_duplicates(input_file, output_file)
 
