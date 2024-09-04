@@ -2,7 +2,7 @@ import os, glob, subprocess, json, re,sys, logging, traceback
 from natsort import natsorted
 from datetime import datetime
 import numpy as np
-from AIPS import AIPS
+from  AIPS  import AIPS
 from AIPSTV import AIPSTV
 from AIPSData import AIPSUVData
 from AIPSTask import AIPSTask
@@ -16,7 +16,7 @@ config.read('aips_config.ini')
 exec(open("./aips_functions.py").read())
 exec(open("../utils/helper_functions.py").read())
 exec(open("./casa_functions.py").read())
-# exec(open("./selfcal.py").read())
+exec(open("./selfcal.py").read())
 
 print("Creating log dir")
 log_dir = os.path.join(os.getcwd(), 'logs')
@@ -115,6 +115,8 @@ refant = config.get('calibrate','refant')
 searchants=config.get('calibrate','searchants').split(',')
 fring_solint = config.getfloat('calibrate','fring_solint')
 fring_timerange = config.get('calibrate','fring_timerange')
+fring_timerange_ar_down = config.get('calibrate','fring_timerange_ar_down')
+fring_timerange_ar_up = config.get('calibrate','fring_timerange_ar_up')
 do_amp_parang_correction = config.getboolean('calibrate','do_amp_parang_correction')
 do_tec_correction = config.getboolean('calibrate','do_tec_correction')
 do_singleband_fring = config.getboolean('calibrate','do_singleband_fring')
@@ -134,7 +136,7 @@ do_splat = config.getboolean('split','do_splat')
 write_fits = config.getboolean('split','write_fits')
 
 # selfcal
-# split_selfcal = config.getboolean('selfcal','split_selfcal')
+split_selfcal = config.getboolean('selfcal','split_selfcal')
 make_dirty_map = config.getboolean('selfcal','make_dirty_map')
 do_selfcal = config.getboolean('selfcal','do_selfcal')
 use_tclean = config.getboolean('selfcal','use_tclean')
@@ -251,7 +253,7 @@ if do_flagging == True:
     try:
         logging.info("Flagging data")
         phase_calibrator = phase_calibrator[0]
-        plot_check_baddata(phase_calibrator,save_as="_before_flagging")
+        # plot_check_baddata(phase_calibrator,save_as="_before_flagging")
         
         if use_aoflagger == True:
             execute_aoflagger_strategy()
@@ -294,17 +296,32 @@ if do_tec_correction == True:
         logging.error(f"An error occurred: {e}")
 
 
+
 if do_singleband_fring == True:
     try:
         logging.info("Running single band fring using")
-        fring_instr(phase_calibrator)
+        fring_instr(phase_calibrator,'ar_down')
     except Exception as e:
         logging.error(f"An error occurred: {e}")
 
 if apply_singleband_corrections == True:
     try:
         logging.info("Running CLCAL")
-        apply_solutions(phase_calibrator)
+        apply_instr_fring(phase_calibrator,opcode='CALP')
+    except Exception as e:
+        logging.info(f"An error occurred: {e}")
+
+if do_singleband_fring == True:
+    try:
+        logging.info("Running single band fring using")
+        fring_instr(phase_calibrator,'ar_up')
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+
+if apply_singleband_corrections == True:
+    try:
+        logging.info("Running CLCAL")
+        apply_instr_fring(phase_calibrator,opcode='CALI')
     except Exception as e:
         logging.info(f"An error occurred: {e}")
 
@@ -347,112 +364,64 @@ if write_fits == True:
 
 
 
-# if split_selfcal == True:
-#     try:
-#         logging.info("Splitting measurement set for selfcal")
-#         cal_output_ext = 'UVFITS'
-#         fitsfile = experiment+'.'+cal_output_ext
-#         makems_split(fitsfile,cal_output_ext,phase_calibrator,target)
-#     except Exception as e:
-#         logging.critical(f"Exception: {e} occured during splitting")
 
-#     if make_dirty_map == True:
-#         try:
-#             logging.info("Making dirty map")
-#             dirty_map()
-#         except Exception as e:
-#             logging.warning(f"Encountered error {e}")
+vis = experiment+'.calibrated.ms'
 
-# if do_selfcal == True:
+if split_selfcal == True:
+    try:
+        logging.info("Splitting measurement set for selfcal")
+        cal_output_ext = 'UVFITS'
+        fitsfile = experiment+'.'+cal_output_ext
+        fitsfile=os.path.join(working_dir,fitsfile)
+        makems_split(vis,fitsfile)
+    except Exception as e:
+        logging.critical(f"Exception: {e} occured during splitting")
 
-#     try:
-#         logging.info("Self calibrating the data")
-#         selfcal_dir = os.path.join(working_dir,'selfcal_dir')
-#         logging.info(f"Making and switching to {selfcal_dir}")
-#         if not os.path.exists(selfcal_dir):
-#             os.makedirs(selfcal_dir)
-#         os.chdir(selfcal_dir)
-#         try:
-#             logging.info("Self calibrating the data")
-#             selfcal_part1()
-#             selfcal_part2()
-#         except Exception as e:
-#             logging.critical(f"Error: {e} occured whilst self calibrating the data")
-#         os.chdir(working_dir)
-#     except Exception as e:
-#         logging.warning(f"Encountered error {e}")
 
-# if apply_to_target == True:
-#     try:
-#         logging.info("Applying calibrations to science target")
-#         applycal_target()
-#     except Exception as e:
-#         logging.warning(f"Encountered error {e}")
+if make_dirty_map == True:
+    try:
+        logging.info("Making dirty map")
+        dirty_map(vis,phase_calibrator)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
 
-# if detect_sources == True:
-#     try:
-#         logging.info("Detecting sources")
-#         m15_sources()
-#     except Exception as e:
-#         logging.warning(f"Encountered error {e}")
+if do_selfcal == True:
 
-# if do_selfcal == True:
-#     #######
-#     try:
-#         logging.info("Making measurement set for selfcal")
-#         cal_output_ext = 'UVFITS'
-#         fitsfile = experiment+'.'+cal_output_ext
-#         makems_selfcal(fitsfile)
-#     except Exception as e:
-#         logging.critical(f"Exception: {e} occured during splitting")
-#     try:
-#         logging.info("Self calibrating the data")
-#         selfcal_dir = os.path.join(working_dir,'selfcal_dir')
-#         logging.info(f"Making and switching to {selfcal_dir}")
-#         if not os.path.exists(selfcal_dir):
-#             os.makedirs(selfcal_dir)
-#         os.chdir(selfcal_dir)
-#         ########
-#         if make_dirty_map == True:
-#             try:
-#                 logging.info("Making dirty map")
-#                 dirty_map(phase_calibrator)
-#             except Exception as e:
-#                 logging.warning(f"Encountered error {e}")
+    try:
+        logging.info("Self calibrating the data")
+        selfcal_dir = os.path.join(working_dir,'selfcal_dir')
+        logging.info(f"Making and switching to {selfcal_dir}")
+        if not os.path.exists(selfcal_dir):
+            os.makedirs(selfcal_dir)
+        os.chdir(selfcal_dir)
 
-#         split_selfcal()
-#         selfcal_part1()
-#         selfcal_part2()
-#         os.chdir(working_dir)
-#     except Exception as e:
-#         logging.warning(f"Encountered error {e}")
+        try:
+            logging.info("Self calibrating the data")
+            selfcal_part1(phase_calibrator)
+            selfcal_part2(phase_calibrator)
+        except Exception as e:
+            logging.critical(f"Error: {e} occured whilst self calibrating the data")
+        os.chdir(working_dir)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
 
-# if apply_to_target == True:
-#     selfcal_dir = os.path.join(working_dir,'selfcal_dir')
-#     try:
-#         logging.info(f"Switching to {selfcal_dir}")
-#         os.chdir(selfcal_dir)
-#         logging.info("Applying calibrations to science target")
-#         applycal_target()
-#         os.chdir(working_dir)
-#     except Exception as e:
-#         logging.warning(f"Encountered error {e}")
+if apply_to_target == True:
+    try:
+        logging.info("Applying calibrations to science target")
+        applycal_target(target)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
 
-# if detect_sources == True:
+if detect_sources == True:
 
-#     selfcal_dir = os.path.join(working_dir,'selfcal_dir')
-#     target_ms = os.path.join(selfcal_dir,target+'.ms')
-#     detected_sources = os.path.join(working_dir,'detected_sources')
-#     logging.info(f"Making and switching to {detected_sources}")
-#     if not os.path.exists(detected_sources):
-#         os.makedirs(detected_sources)
+    selfcal_dir = os.path.join(working_dir,'selfcal_dir')
  
-#     try:
-#         logging.info(f"Switching to {detected_sources}")
-#         os.chdir(detected_sources)
-#         logging.info("Detecting sources")
-#         m15_sources()
-#         os.chdir(working_dir)
+    try:
+        logging.info(f"Switching to {selfcal_dir}")
+        os.chdir(selfcal_dir)
+        logging.info("Detecting sources")
+        m15_sources(target)
+        os.chdir(working_dir)
 
-#     except Exception as e:
-#         logging.warning(f"Encountered error {e}")
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")

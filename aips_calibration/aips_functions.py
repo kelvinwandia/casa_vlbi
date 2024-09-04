@@ -357,7 +357,7 @@ def get_obs_params():
 
     logging.info(f"The refant indices are {refant_indices} and the refant is {refant} with index {refant_index}")
 
-
+    # print(refant)
     # TODO: Get the integration time from the data
     # Get the solution interval
     # data_keys = indata.header.keys()
@@ -584,7 +584,60 @@ def runtecor():
     tecor.go()
 
 
-def fring_instr(calsour):
+# def fring_instr(calsour):
+
+#     """
+#     Corrects the phases by calibrating for delays and rates
+#     Args:
+#         timerange (int list): The timerange to search for solutions
+#         type (str): for controlling FRING; instrumental or global fringefitting
+#     """
+
+#     set_indata()
+#     indata = set_indata.indata
+#     print(indata)
+    
+#     _,_,_,refant_index,refant_indices = get_obs_params()
+
+#     if isinstance(calsour, str):
+#         calsour = [calsour]
+
+#     timerange_str = fring_timerange
+#     timerange = [int(value) for value in timerange_str.split(',')]
+
+#     fring = AIPSTask('FRING')
+#     fring.indata = indata
+#     fring.docal = 1
+#     fring.gainuse = get_table(indata,'CL')
+#     fring.weightit = 1
+#     fring.refant = refant_index
+#     fring.solint = 0 # 0 means 10 min
+#     fring.dparm[9] = 1 # do not fit rates
+#     fring.timerang[1:] = timerange
+#     fring.snver = get_table(indata,'SN')+1
+#     fring.calsour[1:] = calsour
+#     fring.aparm[6] = 3 # print in detail
+#     fring.aparm[7] = 7 # snr
+#     fring.cmethod = 'dft'
+#     fring.search[1:] = refant_indices
+
+
+#     if len(timerange) !=8:
+#         logging.error(f"Invalid format for AIPS timerang")
+#         logging.error("Timerange should consist of 8 entries")
+#         logging.error("First four entries specify the start day, hour, minute and second")
+#         logging.error("and the last four give the end day, hour, minute and second")
+#         logging.critical("Please supply a valid timerange")
+
+#     else:
+#         logging.info(f"Running FRING using timerange: {timerange} and  refant indexed as: {refant_index}")
+#         logging.info(f"FRING corrections will be derived using timerange: {timerange}")
+
+#         fring.go()
+
+
+
+def fring_instr(calsour,type):
 
     """
     Corrects the phases by calibrating for delays and rates
@@ -597,32 +650,48 @@ def fring_instr(calsour):
     indata = set_indata.indata
     print(indata)
     
-    _,_,_,refant_index,refant_indices = get_obs_params()
+    _,_,obs_antennas,refant_index,refant_indices = get_obs_params()
 
     if isinstance(calsour, str):
         calsour = [calsour]
 
-    timerange_str = fring_timerange
-    timerange = [int(value) for value in timerange_str.split(',')]
+    timerange_str_1 = fring_timerange_ar_down
+    timerange_ar_down = [int(value) for value in timerange_str_1.split(',')]
 
+    timerange_str_2 = fring_timerange_ar_up
+    timerange_ar_up = [int(value) for value in timerange_str_2.split(',')]
+
+    ar_index = obs_antennas.index('AR')+1 # AIPS begins indexing at 1 
+    print(ar_index)
+
+  
     fring = AIPSTask('FRING')
     fring.indata = indata
     fring.docal = 1
     fring.gainuse = get_table(indata,'CL')
     fring.weightit = 1
     fring.refant = refant_index
-    fring.solint = 0 # 0 means 10 min
-    fring.dparm[9] = 1 # do not fit rates
-    fring.timerang[1:] = timerange
-    fring.snver = get_table(indata,'SN')+1
-    fring.calsour[1:] = calsour
+    if (type=='ar_down'):
+        fring.solint = 0 # 0 means 10 min
+        fring.dparm[9] = 1 # do not fit rates
+        fring.timerang[1:] = timerange_ar_down
+        fring.snver = get_table(indata,'SN') # use the same snver for 
+    elif (type=='ar_up'):
+        fring.solint = 0 # 0 means 10 min
+        fring.dparm[9] = 1 # do not fit rates
+        fring.timerang[1:] = timerange_ar_up
+        fring.snver = get_table(indata,'SN') # use the same snver for 
+        fring.dofit[1:] = [ar_index] ## TODO: Assuming AR is index number 8 here -- fix properly later
+        fring.antenna[1:] = [refant_index,ar_index]
+        fring.snver = get_table(indata,'SN')
     fring.aparm[6] = 3 # print in detail
     fring.aparm[7] = 7 # snr
     fring.cmethod = 'dft'
     fring.search[1:] = refant_indices
+    # fring.go()
 
 
-    if len(timerange) !=8:
+    if len(timerange_ar_up) != 8 or len(timerange_ar_down) != 8:
         logging.error(f"Invalid format for AIPS timerang")
         logging.error("Timerange should consist of 8 entries")
         logging.error("First four entries specify the start day, hour, minute and second")
@@ -630,12 +699,65 @@ def fring_instr(calsour):
         logging.critical("Please supply a valid timerange")
 
     else:
-        logging.info(f"Running FRING using timerange: {timerange} and  refant indexed as: {refant_index}")
-        logging.info(f"FRING corrections will be derived using timerange: {timerange}")
+        logging.info(f"Running FRING usingthe refant indexed as: {refant_index}")
+        # logging.info(f"FRING corrections will be derived using timerange: {timerange}")
 
         fring.go()
 
 
+def apply_instr_fring(calsour,opcode):
+
+    """
+    Takes the SN table and makes a new CL table
+
+    Args:
+        calsour (str): source used to derive the calibrations
+        sources (str): sources to which the calibrations are to be applied
+        interpol (str): the interpolation scheme to be used
+        opcode (str): either CALI or CALP; CALP does not flag the CL table
+
+    """
+
+    
+    if isinstance(calsour, str):
+        calsour = [calsour]
+
+    if not target or not calsour:
+        logging.error("Target or phase calibrator is empty")
+    
+    else:
+        sources = target+calsour
+        logging.info(f"Sources: {sources}")
+
+    set_indata()
+    indata = set_indata.indata
+
+    _,_,_,refant_index,_ = get_obs_params()
+
+    clcal = AIPSTask('CLCAL')
+    clcal.indata = indata
+    clcal.calsour[1:]=calsour
+    clcal.sources[1:] = sources 
+
+    cl_ver = get_table(indata,'CL')
+    sn_ver = get_table(indata,'SN')
+    print(cl_ver,sn_ver)
+    if (opcode=='CALP'):
+        clcal.gainver = cl_ver
+        clcal.snver = sn_ver
+        clcal.gainuse = cl_ver+1
+
+    elif (opcode=='CALI'):
+        clcal.gainver = cl_ver-1 # -1 to force use of same CL and SN
+        clcal.snver = sn_ver-1
+        clcal.gainuse = cl_ver # use table clver - executing funct twice will get clver+1 due to gainu in CALP
+    
+    clcal.interpol = ""
+    clcal.refant = refant_index
+    clcal.opcode=opcode
+    logging.info(f"Calsour is {calsour}")
+    logging.info(f"Applying calibration solutions to {sources} and writing CL table {get_table(indata,'CL')+1}")
+    clcal.go()
  
 def apply_solutions(calsour):
 
@@ -683,7 +805,7 @@ def apply_solutions(calsour):
     clcal.snver = get_table(indata,'SN')
     clcal.gainver = get_table(indata,'CL')
     clcal.gainuse = get_table(indata,'CL')+1
-    clcal.opcode = "CALI"
+    clcal.opcode = 'CALI'
     clcal.refant = refant_index
     logging.info(f"Calsour is {calsour}")
     logging.info(f"Applying calibration solutions to {sources} and writing CL table {get_table(indata,'CL')+1}")
