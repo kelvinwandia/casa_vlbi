@@ -41,10 +41,10 @@ def calculate_attenuation(diameters,offset,wavelength,pb_model):
         else:
             print("Attenuations due to primary beams not calculated")
         attenuation_factors.append(attenuation)
-    print(attenuation_factors)
+    # print(attenuation_factors)
     attenuation_factors = np.sqrt(attenuation_factors) # sqrt is important
-    for attenuation in attenuation_factors:
-        print(f"{attenuation:.6f}")
+    # for attenuation in attenuation_factors:
+    #     print(f"{attenuation:.6f}")
     return np.array(attenuation_factors)
 
 def calculate_sefd_array_scaled(sefd_list, attenuation_factors):
@@ -66,8 +66,8 @@ def calculate_sefd_array_scaled(sefd_list, attenuation_factors):
             sum_inv_sefd_pairs = sum_inv_sefd_pairs + (sefd_i_scaled*sefd_j_scaled) ** -1
 
     sefd_array = sum_inv_sefd_pairs ** -0.5
-    print(sum_inv_sefd_pairs**-0.5)
-    print(f"The SEFD of the array is : {sefd_array} Jy")
+    # print(sum_inv_sefd_pairs**-0.5)
+    # print(f"The SEFD of the array is : {sefd_array:.2f} Jy")
 
     return sefd_array
 
@@ -94,7 +94,8 @@ def format_thermal_noise(thermal_noise):
 
     return thermal_noise, unit
 
-
+def calculate_primary_beam(diameter, wavelength):
+    return 1.22 * wavelength / diameter
 
 def calculate_thermal_noise(sefd_list,efficiency, bandwidth,obs_time,num_pol,attenuation_factors):
 
@@ -111,39 +112,106 @@ def calculate_thermal_noise(sefd_list,efficiency, bandwidth,obs_time,num_pol,att
 
     # formatted_noise, unit = format_thermal_noise(thermal_noise)
 
-    print(f"The rms noise for a naturally weighted image is {thermal_noise:.3f} µJy ")
+    # print(f"The rms noise for a naturally weighted image is {thermal_noise:.3f} µJy ")
 
     return thermal_noise
 
 
-def make_noise_map(sefd_list,efficiency,bandwidth,obs_time,num_pol,attenuation_factors):
-    """
-    Make an rms noise map
-    """
+def create_noise_map(sefd_list,efficiency, bandwidth,obs_time,num_pol,diameters,offset,wavelength,pb_model, grid_size):
+
+    # Create a 2D grid of radial offsets from the phase center
+    max_offset_rad = offset * np.pi / (180 * 60)  # Convert arcminutes to radians
+    x = np.linspace(-max_offset_rad, max_offset_rad, grid_size)
+    y = np.linspace(-max_offset_rad, max_offset_rad, grid_size)
+    X, Y = np.meshgrid(x, y)
+    radial_offsets = np.sqrt(X**2 + Y**2)  # Radial distance from the center
+    
+    # Initialize an empty noise map
+    noise_map = np.zeros_like(radial_offsets)
+    
+    # Calculate noise at each point in the grid
+    for i in range(grid_size):
+        for j in range(grid_size):
+            offset_rad = radial_offsets[i, j]
+            ## You have called the function calculate attenuation here
+            noise_map[i, j] =calculate_thermal_noise(sefd_list,efficiency, bandwidth,obs_time,num_pol,
+                            calculate_attenuation(diameters,offset_rad,wavelength,pb_model))
+            
+    
+    # Calculate noise at the phase center
+    # The scaling factor will be 1 at the phase_centre
+    ones_list = [1.0 for _ in range(len(sefd_list))]
+    noise_center =calculate_thermal_noise(sefd_list,efficiency, bandwidth,obs_time,num_pol,ones_list)
+    # print(noise_center)
+    noise_map = noise_map*1e6
+    print(f'Min Noise: {noise_map.min()}, Max Noise: {noise_map.max()}')
+
+    return X, Y, noise_map, noise_center
+
+
+def main():
+
+    sefd_list = [40,560,19,310,700,300,740,3,10]  
+    diameters = [67,25,76,25,32,32,32,213,70.2]  # Diameters of the antennas in meters
+    antennas = ['JB','WB','EF','ON','MC','TR','NT','AR','GB']
+    pb_model = ['G','G','G','G','G','G','G','B','B']
+    efficiency= 0.7
+    bandwidth = 128e6
+    ## obs_time in list format allows unequal obs_times
+    obs_time = [3.6,3.6,3.6,3.6,3.6,3.6,3.6,3.6,3.6] # in minutes or hours 
+    obs_time = np.mean(obs_time)*3600 # change to hours
+    num_pol = 2
+    wavelength = 0.18  # Observing wavelength in meters (e.g., 21 cm for 1.4 GHz)
+    grid_size = 100  # Size of the grid for the noise map
+    offset = 3.1  # Maximum radial offset in arcminutes
+
+
+
 
     attenuation_factors = calculate_attenuation(diameters,offset,wavelength,pb_model)
 
     calculate_thermal_noise(sefd_list,efficiency,bandwidth,obs_time,num_pol,attenuation_factors)
 
 
-# Example values (adjust these as per your data)
-sefd_list = [40,560,19,310,700,300,740,3,10]  
-diameters = [67,25,76,25,32,32,32,213,70.2]  # Diameters of the antennas in meters
-antennas = ['JB','WB','EF','ON','MC','TR','NT','AR','GB']
-pb_model = ['G','G','G','G','G','G','G','B','B']
-efficiency= 0.7
-bandwidth = 128e6
-## obs_time in list format allows unequal obs_times
-obs_time = [3.6,3.6,3.6,3.6,3.6,3.6,3.6,3.6,3.6] # in minutes or hours 
-obs_time = np.mean(obs_time)*3600 # change to hours
-num_pol = 2
-wavelength = 0.18  # Observing wavelength in meters (e.g., 21 cm for 1.4 GHz)
-grid_size = 100  # Size of the grid for the noise map
-offset = 3.0  # Maximum radial offset in arcminutes
+    X, Y, noise_map,noise_center =create_noise_map(sefd_list,efficiency, bandwidth,obs_time,num_pol,diameters,offset,wavelength,pb_model, grid_size)
+
+
+    # Define the colorbar limits based on the noise center
+    noise_center_value = noise_center * 1e6  # Convert noise center to µJy
+    vmin = min(noise_map.min(), noise_center_value)
+    vmax = max(noise_map.max(), noise_center_value)
+    print(vmin)
+
+    # Plotting the noise map
+    plt.figure(figsize=(10, 8))
+    cmap = plt.get_cmap('inferno')
+    cmap.set_under('gray')  # Set color for values below the minimum
+
+    # Display the noise map with adjusted colorbar limits
+    cmap = plt.imshow(noise_map, extent=[X.min() * 180 / np.pi * 60, X.max() * 180 / np.pi * 60, Y.min() * 180 / np.pi * 60, Y.max() * 180 / np.pi * 60],
+                    origin='lower', cmap=cmap, aspect='auto', vmin=vmin, vmax=vmax)
+    plt.colorbar(label='Thermal Noise (µJy)')
 
 
 
-attenuation_factors = calculate_attenuation(diameters,offset,wavelength,pb_model)
 
-calculate_thermal_noise(sefd_list,efficiency,bandwidth,obs_time,num_pol,attenuation_factors)
 
+
+    # Calculate the primary beam for the largest antenna (smallest beamwidth)
+    largest_antenna_diameter = max(diameters)
+    primary_beam_rad = calculate_primary_beam(largest_antenna_diameter, wavelength)
+    primary_beam_arcmin = primary_beam_rad * 180 / np.pi * 60  # Convert primary beam from radians to arcminutes
+
+    # Overlay a circle representing the primary beam of the largest antenna
+    circle = plt.Circle((0, 0), primary_beam_arcmin / 2, color='white', fill=False, linestyle='--', label=f'Arecibo PB ({largest_antenna_diameter}m)')
+    plt.gca().add_artist(circle)
+
+    plt.xlabel('Offset (arcminutes)')
+    plt.ylabel('Offset (arcminutes)')
+    plt.legend()
+    plt.show()
+    plt.savefig('rms_noise_map.pdf',dpi=300)
+
+
+if __name__=="__main__":
+    main()
