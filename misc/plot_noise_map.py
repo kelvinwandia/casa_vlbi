@@ -19,6 +19,8 @@ def calculate_attenuation(diameters,offset,wavelength,pb_model):
     if len(pb_model) != len(diameters):
         raise ValueError("Length of pb_models must match length of diameters")
     
+    first_bessel_zero = 3.8317  # First zero of the Bessel function j1
+
     for diameter,pb_model in zip(diameters,pb_model):
         if pb_model == 'G':
             factor_gauss = 4 * np.log(2) * diameter**2 * offset**2
@@ -28,12 +30,21 @@ def calculate_attenuation(diameters,offset,wavelength,pb_model):
             if factor_bessel == 0:
                 # Handle phasecenter where offset is zero
                 attenuation = P 
+            elif factor_bessel > first_bessel_zero:
+                # Handle the zeros of the bessel function -- goes negative after the first dark; which breaks the code
+                # the Bessel function will produce multiple darks giving wromg attenuation values for
+                # different darks e.g, the positive darks will give positive values of attenuation
+                # set all values outside the first dark to zero to avoid this
+                attenuation = 0.0000001
             else:
                 attenuation = P*(2*j1(factor_bessel)/factor_bessel)
         else:
             print("Attenuations due to primary beams not calculated")
         attenuation_factors.append(attenuation)
     print(attenuation_factors)
+    attenuation_factors = np.sqrt(attenuation_factors) # sqrt is important
+    for attenuation in attenuation_factors:
+        print(f"{attenuation:.6f}")
     return np.array(attenuation_factors)
 
 def calculate_sefd_array_scaled(sefd_list, attenuation_factors):
@@ -96,26 +107,43 @@ def calculate_thermal_noise(sefd_list,efficiency, bandwidth,obs_time,num_pol,att
     sefd_array = calculate_sefd_array_scaled(sefd_list,attenuation_factors)
     thermal_noise = (1/efficiency)*(sefd_array)*(1/np.sqrt(2*bandwidth*obs_time*num_pol))
 
-    formatted_noise, unit = format_thermal_noise(thermal_noise)
+    thermal_noise = thermal_noise*1e6
 
-    print(f"The rms noise for a naturally weighted image is {formatted_noise:.3f} {unit} ")
+    # formatted_noise, unit = format_thermal_noise(thermal_noise)
 
-    return thermal_noise, unit
+    print(f"The rms noise for a naturally weighted image is {thermal_noise:.3f} µJy ")
+
+    return thermal_noise
+
+
+def make_noise_map(sefd_list,efficiency,bandwidth,obs_time,num_pol,attenuation_factors):
+    """
+    Make an rms noise map
+    """
+
+    attenuation_factors = calculate_attenuation(diameters,offset,wavelength,pb_model)
+
+    calculate_thermal_noise(sefd_list,efficiency,bandwidth,obs_time,num_pol,attenuation_factors)
+
 
 # Example values (adjust these as per your data)
-sefd_list = [35,420,20,490,740,350,250,360,300,330,67]  
-diameters = [76, 25, 100, 25, 25, 25, 32, 32, 32, 25, 25]  # Diameters of the antennas in meters
-pb_model = ['G','G','G','G','G','G','G','G','G','G','B']
+sefd_list = [40,560,19,310,700,300,740,3,10]  
+diameters = [67,25,76,25,32,32,32,213,70.2]  # Diameters of the antennas in meters
+antennas = ['JB','WB','EF','ON','MC','TR','NT','AR','GB']
+pb_model = ['G','G','G','G','G','G','G','B','B']
 efficiency= 0.7
-bandwidth = 8e6
+bandwidth = 128e6
 ## obs_time in list format allows unequal obs_times
-obs_time = [20,20,20,20,20,20,20,20,20,20,20] # in minutes or hours 
-obs_time = np.mean(obs_time)*60 # change to hours
+obs_time = [3.6,3.6,3.6,3.6,3.6,3.6,3.6,3.6,3.6] # in minutes or hours 
+obs_time = np.mean(obs_time)*3600 # change to hours
 num_pol = 2
-wavelength = 0.21  # Observing wavelength in meters (e.g., 21 cm for 1.4 GHz)
+wavelength = 0.18  # Observing wavelength in meters (e.g., 21 cm for 1.4 GHz)
 grid_size = 100  # Size of the grid for the noise map
-offset = 0 # Maximum radial offset in arcminutes
+offset = 3.0  # Maximum radial offset in arcminutes
+
+
 
 attenuation_factors = calculate_attenuation(diameters,offset,wavelength,pb_model)
 
 calculate_thermal_noise(sefd_list,efficiency,bandwidth,obs_time,num_pol,attenuation_factors)
+
