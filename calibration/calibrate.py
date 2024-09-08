@@ -513,45 +513,52 @@ def applycal_tsys_gc():
     logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
     report_flag(tsys_gc_flagging_summary, 'field')
 
+def plot_sbd(plotfile,timerange,datacolumn):
+    try:
+        casaplotms.plotms(
+            vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
+            timerange=timerange, correlation='LL',avgtime='1200',
+            showgui=False, coloraxis='spw', overwrite=True, ydatacolumn = datacolumn,
+            gridcols=3, gridrows=3, iteraxis='baseline', width=1920, height=1080, 
+            plotfile=plotfile.replace('.png',timerange)+'.png',
+        )
+    except Exception as plotms_error:
+        logging.critical(f"Error occurred during plotms: {plotms_error}")
+
+
 @time_execution
 def sbd_fringefit():
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
+    calibration_dir = os.path.join(plots_dir,'calibration_dir')
 
 
     sbd_plotfile_before = f"{calibration_dir}/before_sbd_fringefit.png"
 
     sbd_table = vis.replace('.ms', '_sbd.gcal')
-    try:
-        casaplotms.plotms(
-            vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
-            timerange=timerange, correlation='LL',avgtime='1200',
-            showgui=False, plotfile= sbd_plotfile_before, coloraxis='spw', overwrite=True,
-            gridcols=3, gridrows=3, iteraxis='baseline', width=1920, height=1080
-        )
-    except Exception as plotms_error:
-        logging.critical(f"Error occurred during plotms: {plotms_error}")
-
     
-    sbd_table = vis.replace('.ms', '_sbd.gcal')
-   
     if not os.path.exists(sbd_table):
-        # logging.info(f"{sbd_table} exists. Will not create a new one")
+        logging.info(f"Fringefitting and writing caltable: {sbd_table}")
         casatasks.fringefit(
             vis=vis, caltable=sbd_table, solint='inf',
             zerorates=True, timerange=timerange, refant=refant,
             minsnr=snr_sbd, parang=True
         )
+        
+        plot_sbd(sbd_plotfile_before.replace('.png',timerange)+'.png',timerange,'data')
 
         if timerange_ar:
             logging.info(f"Appending solutions derived when arecibo is up {timerange_ar} to {sbd_table}")
             casatasks.fringefit(
                 vis=vis, caltable=sbd_table, solint='inf',
-                zerorates=True, timerange=timerange_ar, refant=refant, antenna='AR',
+                zerorates=True, timerange=timerange_ar, refant=refant,
+                # antenna='AR',
                 minsnr=snr_sbd, parang=True, append=True
             )
 
+            plot_sbd(sbd_plotfile_before.replace('.png',timerange_ar)+'.png',timerange_ar,'data')
+    else:
+        logging.info(f"Caltable {sbd_table} exists. Will not write a new one")
 
     ### create an empty dict to hold the cal tables
     if not use_casa: 
@@ -584,11 +591,14 @@ def applycal_sbd_fringe():
     logging.info(f"======>>>Applying {table} using interpolation {interp}")  
     casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
+
     
-    casaplotms.plotms(vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
-        timerange=timerange, correlation='LL',showgui=False, coloraxis='spw',avgtime='1200', width=1920, height=1080,
-        gridcols=3, gridrows=3, iteraxis='baseline',plotfile=sbd_plotfile_after,overwrite=True
-        )
+    plot_sbd(sbd_plotfile_after,timerange,'corrected')
+
+    if timerange_ar:
+
+        plot_sbd(sbd_plotfile_after.replace('.png',timerange_ar)+'.png',timerange_ar,'corrected')
+       
     
     sbd_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying sbd corrections")
@@ -708,7 +718,8 @@ def bpass():
         casatasks.bandpass(
             vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
             # field = phase_calibrator + ',' + fringe_finder, 
-            field = phase_calibrator,
+            # field = phase_calibrator,
+            field = fringe_finder,
             refant=refant, caltable = bpass_table,gaintable = table, 
             interp = interp,spwmap = spwmap, parang=True 
             )

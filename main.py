@@ -223,7 +223,7 @@ if use_casa == True:
 
 if do_sbd_fringe == True:
     try:
-        logging.info(f"Deriving corrections for instrumental")
+        logging.info(f"Calculating instrumental delay corrections")
         sbd_fringefit()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
