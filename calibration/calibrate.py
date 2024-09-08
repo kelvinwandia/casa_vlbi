@@ -666,7 +666,8 @@ def applycal_mbd_fringe():
 
     ## Fix this by checking the position of the dictionary
     ## also dont hardcode the num spw
-    nspw,_ = get_msinfo
+    nspw,_ = get_msinfo()
+    print(f"Applying to spws: {nspw}")
     
     if use_casa == True:
         spwmap = [[],[],[], nspw*[0]]
@@ -680,11 +681,11 @@ def applycal_mbd_fringe():
             interp = interp, spwmap = spwmap , parang = True,
         )
 
-    # casaplotms.plotms(
-    #         vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
-    #         correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw',
-    #         plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
-    #     ) 
+    casaplotms.plotms(
+            vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
+            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw',
+            plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
+        ) 
     
     mbd_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying mbd corrections")
@@ -718,8 +719,7 @@ def bpass():
         casatasks.bandpass(
             vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
             # field = phase_calibrator + ',' + fringe_finder, 
-            # field = phase_calibrator,
-            field = fringe_finder,
+            field = phase_calibrator,
             refant=refant, caltable = bpass_table,gaintable = table, 
             interp = interp,spwmap = spwmap, parang=True 
             )
@@ -755,10 +755,10 @@ def applycal_bpass():
     nspw,_ = get_msinfo()
     
     if use_casa == True:
-        spwmap = [[],[],[], nspw*[0]]
+        spwmap = [[],[],[], nspw*[0],[]]
         logging.info(f"spw mapping is {spwmap}")
     else:
-        spwmap = [[], nspw*[0]]
+        spwmap = [[], nspw*[0],[]]
         logging.info(f"spw mapping is {spwmap}")
 
     casatasks.applycal(vis = vis, field = '', gaintable = table,interp = interp,
