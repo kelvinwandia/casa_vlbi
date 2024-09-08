@@ -244,7 +244,7 @@ if do_mbd_fringe == True:
 
 if apply_mbd == True:
     try:
-        logging.info("Apply multiband corrections")
+        logging.info("Applying multiband corrections")
         applycal_mbd_fringe()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
