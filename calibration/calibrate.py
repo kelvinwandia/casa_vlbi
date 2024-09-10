@@ -22,7 +22,7 @@ def set_working_dir():
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
-
+@time_execution
 def attach_tsys_gc():
 
 
@@ -90,8 +90,23 @@ def attach_tsys_gc():
         logging.info(f"======>>> Error during flag conversion: {e}")
 
 
-    filename = fitsidifiles[0]
-    hdul = fits.open(filename)
+    """ To remove all GC and TSYS"""
+    extension_names = ['GAIN_CURVE', 'SYSTEM_TEMPERATURE']
+    for filename in fitsidifiles:
+        print(f"Processing file: {filename}")
+        with fits.open(filename, mode='update') as hdul:
+            # Find extensions to remove
+            extensions_to_remove = [i for i, ext in enumerate(hdul) if ext.header.get('EXTNAME') in extension_names]
+            
+            if extensions_to_remove:
+                logging.info(f"Extensions {', '.join(extension_names)} exist in the FITS file. Removing them.")
+                # Remove the extensions
+                for i in reversed(extensions_to_remove):
+                    del hdul[i]
+                hdul.flush()
+                logging.info("Extensions removed.")
+            else:
+                logging.info(f"Extensions {', '.join(extension_names)} do not exist in the FITS file.")
 
     extension_name = 'SYSTEM_TEMPERATURE'
 
@@ -102,53 +117,38 @@ def attach_tsys_gc():
         print(f"Extension '{extension_name}' does not exist in the FITS file.")
     
         hdul.close()
-
         print("Attaching TSYS table")
         for i in fitsidifiles:
             append_tsys(antab_file,idifiles=i)
-        
         print("Finished attaching TSYS table")
 
-    with fits.open(filename, mode='update') as hdul:
-            gain_curve_exists = False
-            try:
-                hdu = hdul['GAIN_CURVE']
-                gain_curve_exists = True
-                print("GAIN_CURVE table found.")
-            except KeyError:
-                print("GAIN_CURVE table does not exist")
 
-            if not gain_curve_exists:
-                print("Attaching GAIN_CURVE table")
-                append_gc(antab_file, fitsidifiles[0])  # Gain curve requires only one of the fits-idi files
-                print("Finished attaching GAIN_CURVE table")
+    print("Attaching GAIN_CURVE table.")
+    append_gc(antab_file, fitsidifiles[0])  # Append the GAIN_CURVE table
+    print("Finished attaching GAIN_CURVE table.")
 
     # Convert gain curves and flag files
     logging.info("Converting gain curves")
     gc_table = f'{experiment}.gc'
+    os.system(f"rm -r {gc_table}")
     if not os.path.exists(gc_table):
+        logging.info(f"Writing gaincurve input table {gc_table}")
         convert_gaincurve(antab_file, gc_table, min_elevation=0.0, max_elevation=90.0)
 
+    # Find missing system temperature extension
+    extension_name = 'SYSTEM_TEMPERATURE'
+    missing_extensions = []
+    for filename in fitsidifiles:
+        hdul = fits.open(filename)
+        # checks the extension through the ext.header.get ... loop ext through entire hdul
+        if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
+            logging.info(f"======>>>{extension_name}' exists in the FITS file.")
+        else:
+            logging.info(f"======>>>Extension '{extension_name}' does not exist in the {filename} file.")
+            missing_extensions.append(filename)
 
-
-    """
-    loops over all the FITS-IDI files and checks if the system temperatures
-    have successfully been appended
-    """
-    # extension_name = 'SYSTEM_TEMPERATURE'
-    # missing_extensions = []
-    # for filename in fitsidifiles:
-    #     hdul = fits.open(filename)
-
-    #     # checks the extension through the ext.header.get ... loop ext through entire hdul
-    #     if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
-    #         logging.info(f"======>>>{extension_name}' exists in the FITS file.")
-    #     else:
-    #         logging.info(f"======>>>Extension '{extension_name}' does not exist in the {filename} file.")
-    #         missing_extensions.append(filename)
-
-    #     # Close the FITS file
-    #     hdul.close()
+        # Close the FITS file
+        hdul.close()
         
     # # Print the filenames that do not contain the 'SYSTEM_TEMPERATURE' extension
     # logging.info("======>>> Filenames with missing 'SYSTEM_TEMPERATURE' extension:", missing_extensions)
@@ -480,20 +480,23 @@ def gencal_tsys_gc():
     calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
     tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gcal')
+
+    tsys_plotfile = f"{plots_dir}/time_tsys.png"
+
     
     if not os.path.exists(tsys_caltable):
         gencal(vis=vis, caltable=tsys_caltable, caltype='tsys', uniform = False)
 
     if not os.path.exists(gcal_caltable):
         gencal(vis =vis, caltable=gcal_caltable, caltype='gc', infile= f'{experiment}.gc')
-
+    
     # Plot the caltable
-    for m in ['frequency','time']:
+    for m in ['time']:
         plotfile = os.path.join(calibration_dir, f"{vis.replace('.ms', '_tsys_{m}.png')}")
         if not os.path.exists(plotfile):
             plotms(
                 vis=f'{experiment}.tsys', yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
-                iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=plotfile,
+                iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=tsys_plotfile,
                 overwrite=True,  
             ) 
     cal_tables_dict[tsys_caltable] = "nearest,nearest"
@@ -530,10 +533,10 @@ def plot_sbd(plotfile,timerange,datacolumn):
 def sbd_fringefit():
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
+    calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
 
-    sbd_plotfile_before = f"{calibration_dir}/before_sbd_fringefit.png"
+    sbd_plotfile_before = f"{plots_dir}/before_sbd_fringefit.png"
 
     sbd_table = vis.replace('.ms', '_sbd.gcal')
     
@@ -583,7 +586,7 @@ def applycal_sbd_fringe():
     if not os.path.exists(calibration_dir):
         os.makedirs(calibration_dir)
 
-    sbd_plotfile_after =f"{calibration_dir}/after_sbd_fringefit.png"
+    sbd_plotfile_after =f"{plots_dir}/after_sbd_fringefit.png"
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
@@ -633,7 +636,7 @@ def mbd_fringefit():
         )
 
     for m in ['delay', 'phase', 'rate']:
-        plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_mbd_{m}.png"
+        plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_mbd_{m}.png"
         casaplotms.plotms(
             vis=mbd_table, yaxis=m, xaxis='time', gridcols=3, gridrows=3,
             coloraxis='corr', iteraxis='antenna', highres=True, showgui=False,  width=1920, height=1080,
@@ -657,7 +660,7 @@ def applycal_mbd_fringe():
         os.makedirs(calibration_dir)
 
 
-    mbd_plotfile = f'{calibration_dir}/applied_mbd.png'
+    mbd_plotfile = f'{plots_dir}/applied_mbd.png'
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     fields = phase_calibrator + ',' + target
@@ -683,7 +686,7 @@ def applycal_mbd_fringe():
 
     casaplotms.plotms(
             vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
-            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw',
+            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw', iteraxis='baseline',
             plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
         ) 
     
@@ -731,7 +734,7 @@ def bpass():
         os.makedirs(calibration_dir)
 
     for m in ['amp','phase']:
-        plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_bpass_{m}.png"
+        plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_bpass_{m}.png"
         casaplotms.plotms(
                 vis=bpass_table, yaxis=m, xaxis='frequency', gridcols=3, gridrows=3, 
                 coloraxis='spw',iteraxis='antenna', highres=True, showgui=False, width=1920, height=1080,
@@ -790,7 +793,7 @@ def after_cal_plots():
 
     for source in sources:
         for y_value in yaxis:                
-            plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_{source}_{y_value}.png"
+            plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_{source}_{y_value}.png"
             plotms(vis=vis, xaxis='frequency', yaxis=y_value, antenna='EF&*', ydatacolumn='corrected',
                 correlation='LL', showgui=False, coloraxis='spw', avgtime='9999', field=source,
                 gridcols=3, gridrows=3, iteraxis='baseline', plotfile=plotfile, overwrite=True, width=1920, height=1080)
