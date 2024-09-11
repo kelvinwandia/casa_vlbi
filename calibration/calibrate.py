@@ -480,7 +480,7 @@ def gencal_tsys_gc():
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
     calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
-    tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gcal')
+    tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gaincurves')
   
     
     if not os.path.exists(tsys_caltable):
@@ -538,7 +538,7 @@ def sbd_fringefit():
 
     sbd_plotfile_before = f"{plots_dir}/before_sbd_fringefit.png"
 
-    sbd_table = vis.replace('.ms', '_sbd.gcal')
+    sbd_table = vis.replace('.ms', '.sbd')
     
     if not os.path.exists(sbd_table):
         logging.info(f"Fringefitting and writing caltable: {sbd_table}")
@@ -621,7 +621,7 @@ def mbd_fringefit():
         os.makedirs(calibration_dir)
 
 
-    mbd_table = vis.replace('.ms', '_mbd.gcal')
+    mbd_table = vis.replace('.ms', '.mbd')
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Running global fring")
@@ -703,7 +703,7 @@ def bpass():
     """
 
 
-    bpass_table = vis.replace(".ms","_gcal.bpass")
+    bpass_table = vis.replace(".ms",".bpass")
 
     logging.info("Calculating bandpass solutions")
     table = list(cal_tables_dict.keys())
