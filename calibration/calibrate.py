@@ -482,8 +482,6 @@ def gencal_tsys_gc():
 
     tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gcal')
   
-    tsys_plotfile = f"{plots_dir}/time_tsys.png"
-
     
     if not os.path.exists(tsys_caltable):
         gencal(vis=vis, caltable=tsys_caltable, caltype='tsys', uniform = False)
@@ -497,7 +495,7 @@ def gencal_tsys_gc():
         if not os.path.exists(plotfile):
             plotms(
                 vis=tsys_caltable, yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
-                iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=tsys_plotfile,
+                iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=plotfile,
                 overwrite=True,  
             ) 
     cal_tables_dict[tsys_caltable] = "nearest,nearest"
