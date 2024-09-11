@@ -472,6 +472,7 @@ def gencal_tsys_gc():
     This function generates the system temperatures and gaincurve calibration tables
 
     """
+    
 
     global cal_tables_dict
     cal_tables_dict = {}
@@ -480,7 +481,7 @@ def gencal_tsys_gc():
     calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
     tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gcal')
-
+  
     tsys_plotfile = f"{plots_dir}/time_tsys.png"
 
     
@@ -495,7 +496,7 @@ def gencal_tsys_gc():
         plotfile = os.path.join(calibration_dir, f"{vis.replace('.ms', '_tsys_{m}.png')}")
         if not os.path.exists(plotfile):
             plotms(
-                vis=f'{experiment}.tsys', yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
+                vis=tsys_caltable, yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
                 iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=tsys_plotfile,
                 overwrite=True,  
             ) 
@@ -508,13 +509,14 @@ def applycal_tsys_gc():
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
-
-    logging.info(f"======>>>Applying {table} using interpolation {interp}")  
-    casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
-    )
-    tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
-    logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
-    report_flag(tsys_gc_flagging_summary, 'field')
+    print(table,interp)
+    print(os.getcwd())
+    # logging.info(f"======>>>Applying {table} using interpolation {interp}")  
+    # casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
+    # )
+    # tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
+    # logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
+    # report_flag(tsys_gc_flagging_summary, 'field')
 
 def plot_sbd(plotfile,timerange,datacolumn):
     try:
