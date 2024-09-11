@@ -509,12 +509,12 @@ def applycal_tsys_gc():
     interp = list(cal_tables_dict.values())
     print(table,interp)
     print(os.getcwd())
-    # logging.info(f"======>>>Applying {table} using interpolation {interp}")  
-    # casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
-    # )
-    # tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
-    # logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
-    # report_flag(tsys_gc_flagging_summary, 'field')
+    logging.info(f"======>>>Applying {table} using interpolation {interp}")  
+    casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
+    )
+    tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
+    logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
+    report_flag(tsys_gc_flagging_summary, 'field')
 
 def plot_sbd(plotfile,timerange,datacolumn):
     try:
@@ -625,6 +625,7 @@ def mbd_fringefit():
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Running global fring")
+    # logging.info(f"Using solution interval {solint}")
     if not os.path.exists(mbd_table):
         logging.info(f"Fringefitting and making {mbd_table}")
         casatasks.fringefit(
@@ -687,7 +688,7 @@ def applycal_mbd_fringe():
     casaplotms.plotms(
             vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
             correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw', iteraxis='baseline',
-            plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
+            plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080, avgtime='9999',
         ) 
     
     mbd_flagging_summary = flagdata(vis=vis, mode='summary')
@@ -721,7 +722,6 @@ def bpass():
         # logging.info(f"{bpass_table} exists. Will not create a new one")
         casatasks.bandpass(
             vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
-            # field = phase_calibrator + ',' + fringe_finder, 
             field = phase_calibrator,
             refant=refant, caltable = bpass_table,gaintable = table, 
             interp = interp,spwmap = spwmap, parang=True 
