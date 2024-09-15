@@ -103,9 +103,11 @@ flagging_strategy = config.get('flagging','flagging_strategy')
 
 flag_antenna = config.getboolean('flagging','flag_antenna')
 antenna_to_flag = config.get('flagging','antenna_to_flag')
+export_uvfits = config.getboolean('flagging','export_uvfits')
 
 
 # calibrate
+do_tec_corrections = config.getboolean('calibrate','do_tec_corrections')
 do_sbd_fringe = config.getboolean('calibrate','do_sbd_fringe')
 apply_sbd = config.getboolean('calibrate','apply_sbd')
 refant = config.get('calibrate','refant')
@@ -223,6 +225,19 @@ if use_casa == True:
             applycal_tsys_gc()
         except Exception as e:
             logging.warning(f"Encountered error {e}")
+
+if export_uvfits == True:
+    try:
+        export_to_uvfits(vis)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
+
+if do_tec_corrections == True:
+    try:
+        logging.info(f"Calculating ionospheric corrections")
+        tec_corrections(vis)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
 
 
 if do_sbd_fringe == True:

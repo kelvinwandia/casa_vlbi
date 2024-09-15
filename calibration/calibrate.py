@@ -199,7 +199,19 @@ def makems(vis,splitvis=None):
             casatasks.listobs(vis = splitvis, listfile = listfile, overwrite=True)
 
 
-            
+def export_to_uvfits(vis):
+    """
+    Exports the flagged measurement set to UVFITS for calibration in AIPS
+    """
+    uvfitsfile = vis.replace('.ms','.FITS')
+    logging.info(f"Exporting {vis} to AIPS compatible {uvfitsfile}")
+    if not os.path.exists(uvfitsfile):
+        casatasks.exportuvfits(
+            vis = vis, fitsfile=uvfitsfile, writesyscal=False, overwrite=False
+        )
+    else:
+        logging.info(f"{uvfitsfile} exists.")
+                
 def getfields():
         
         """get list of field names in the ms """
@@ -507,14 +519,37 @@ def applycal_tsys_gc():
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
-    print(table,interp)
-    print(os.getcwd())
+    # print(table,interp)
+    # print(os.getcwd())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")  
     casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
     tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
     report_flag(tsys_gc_flagging_summary, 'field')
+
+def tec_corrections():
+
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    tec_caltable = vis.replace('.ms','.tec')
+
+    logging.info("Downloading tec files")
+    from casatasks.private import tec_maps
+
+    tec_image, tec_rms_image, plotname = tec_maps.create(vis=vis,doplot=False)
+  
+    logging.info("Generating tec solutions")
+  
+    if not os.path.exists(tec_caltable):
+        gencal(vis=vis, caltable=tec_caltable, caltype='tecim', infile=tec_image)
+
+    cal_tables_dict[tec_caltable] = ""
+
+    logging.info(f"Applying tec calibration table {tec_caltable}")
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
+    logging.info(f"======>>>Applying {table} using interpolation {interp}")  
+    applycal(vis=vis, field="",gaintable=table,interp=interp,parang=True)
 
 def plot_sbd(plotfile,timerange,datacolumn):
     try:
@@ -838,7 +873,7 @@ def dirty_map(source):
     
     
     msmd.open(vis)
-    field_id = msmd.fieldsforname(source)[0]
+    field_id = msmd.fieldsforname(source)[1]
     msmd.close()
 
 
