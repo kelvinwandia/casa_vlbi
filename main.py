@@ -120,6 +120,7 @@ do_bpass = config.getboolean('calibrate','do_bpass')
 apply_bpass = config.getboolean('calibrate','apply_bpass')
 
 make_dirty_map = config.getboolean('calibrate','make_dirty_map')
+split_calibrated = config.getboolean('calibrate','split_calibrated')
 imsize= [int(part) for part in config.get('calibrate', 'imsize').split(',')]
 detection_threshold = config.getfloat('selfcal','detection_threshold')
 
@@ -179,7 +180,10 @@ if load_data == True:
         makems(vis)
 
         if do_split:
-            splitvis = vis.replace('.ms', f'_split_{timebin}_{width}_chan.ms')
+            if timebin == '':
+                splitvis = vis.replace('.ms', f'_split_{width}_chan.ms')
+            else:
+                splitvis = vis.replace('.ms', f'_split_{timebin}_{width}_chan.ms')
             makems(vis,splitvis)
             vis = splitvis
 
@@ -271,6 +275,14 @@ if make_dirty_map == True:
         dirty_map(phase_calibrator)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
+
+if split_calibrated == True:
+    try:
+        logging.info("Making dirty map")
+        split_calibrated_ms(phase_calibrator)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
+
 
 if do_selfcal == True:
     try:

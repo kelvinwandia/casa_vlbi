@@ -344,7 +344,29 @@ def antenna_flag(antenna):
     logging.info(f"======>>>REPORTING FLAGGING STATS after flagging {antenna}")
     report_flag(antenna_flagging_summary, 'field')
 
-   
+def calc_flagged_data(field):
+
+    # Get the scan data
+    tb = casatools.table()
+    tb.open(vis + '/ANTENNA')
+    antenna_names = tb.getcol('NAME')
+    # antenna_names = [int(name) for name in antenna_names.tolist()]
+    tb.close()
+
+    try:
+        for antenna in antenna_names:
+            logging.info(f"======>>>Calculating the flagging statistics for scans in antenna {antenna}")
+            flagged_vis = flagdata(vis=vis,mode='summary',field=field,antenna=antenna)
+            for key in sorted(flagged_vis['scan']):
+                value = flagged_vis['scan'][key]
+                flagged_scan = value['flagged']
+                total_scan = value['total']
+                ratio = flagged_scan / total_scan
+                logging.info(f"{ratio * 100:.2f}% of antenna {antenna} in scan {key} are flagged")
+    except Exception as e:
+        logging.warning(f"======>>>Exception exception {e}: Antenna {antenna} may not have data due to flagging")
+        pass
+
 @time_execution
 def execute_aoflagger_strategy():
 
@@ -424,31 +446,9 @@ def execute_aoflagger_strategy():
 
     aoflagger_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after automatic flagging")
+    # calc_flagged_data(phase_calibrator)
+    calc_flagged_data(target)
     report_flag(aoflagger_flagging_summary, 'field')
-
-
-def calc_flagged_data(field):
-
-    # Get the scan data
-    tb = casatools.table()
-    tb.open(vis + '/ANTENNA')
-    antenna_names = tb.getcol('NAME')
-    # antenna_names = [int(name) for name in antenna_names.tolist()]
-    tb.close()
-
-    try:
-        for antenna in antenna_names:
-            print(f"======>>>Calculating the flagging statistics for scans in antenna {antenna}")
-            flagged_vis = flagdata(vis=vis,mode='summary',field=field,antenna=antenna)
-            for key in sorted(flagged_vis['scan']):
-                value = flagged_vis['scan'][key]
-                flagged_scan = value['flagged']
-                total_scan = value['total']
-                ratio = flagged_scan / total_scan
-                print(f"{ratio * 100:.2f}% of antenna {antenna} in scan {key} are flagged")
-    except Exception as e:
-        print(f"======>>>Exception exception {e}: Antenna {antenna} may not have data due to flagging")
-        pass
 
 
 
@@ -480,9 +480,9 @@ def gencal_tsys_gc():
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
     calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
-    tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gaincurves')
+    tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gcal')
   
-    
+  
     if not os.path.exists(tsys_caltable):
         gencal(vis=vis, caltable=tsys_caltable, caltype='tsys', uniform = False)
 
@@ -491,7 +491,7 @@ def gencal_tsys_gc():
     
     # Plot the caltable
     for m in ['time']:
-        plotfile = os.path.join(calibration_dir, f"{vis.replace('.ms', '_tsys_{m}.png')}")
+        plotfile = os.path.join(plots_dir, f"{vis.replace('.ms', '_tsys_{m}.png')}")
         if not os.path.exists(plotfile):
             plotms(
                 vis=tsys_caltable, yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
@@ -693,6 +693,9 @@ def applycal_mbd_fringe():
     
     mbd_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying mbd corrections")
+
+    calc_flagged_data(phase_calibrator)
+    calc_flagged_data(target)
     report_flag(mbd_flagging_summary, 'field')
 
 @time_execution
@@ -876,4 +879,31 @@ def dirty_map(source):
         plot_fits(wsclean_fitsfile)
 
 
+def convert_to_list(*args):
+    if all(isinstance(arg, str) for arg in args):
+        return list(args)
+    else:
+        raise ValueError("All inputs must be strings")
 
+
+@time_execution
+def split_calibrated_ms(sources):
+
+    sources = convert_to_list(sources)
+    vis_to_split = os.path.join(working_directory,vis)
+    
+    width = 4; timebin='2s'
+
+    for source in sources:
+        outputvis = source+'.ms'
+        if not os.path.exists(outputvis):
+            logging.info(f"======>>>Splitting {vis} to {outputvis}")
+            logging.info(f"Averaging to {width} channels and {timebin} ")
+            #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
+            # split(vis = vis_to_split, outputvis = outputvis, datacolumn='data',field=source) 
+            split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,
+            width=width,timebin=timebin) 
+        else:
+            logging.info(f"======>>>{outputvis} exists. Will not make a new one")
+
+       
