@@ -153,6 +153,19 @@ def attach_tsys_gc():
     # # Print the filenames that do not contain the 'SYSTEM_TEMPERATURE' extension
     # logging.info("======>>> Filenames with missing 'SYSTEM_TEMPERATURE' extension:", missing_extensions)
 
+
+def check_pols(vis):
+
+    tb = casatools.table()
+    tb.open(f"{vis}/FEED", nomodify=False)
+    feeds = tb.getcol("POLARIZATION_TYPE")
+
+    logging.info(f"Original POLARIZATION_TYPE: {feeds}")
+
+    feeds = np.where(feeds=="l","LL",feeds)
+    feeds = np.where(feeds=="?","RR",feeds)
+    tb.putcol("POLARIZATION_TYPE",feeds)
+    tb.close()
     
 @time_execution
 def makems(vis,splitvis=None):
@@ -177,6 +190,9 @@ def makems(vis,splitvis=None):
                 vis= vis, fitsidifile=fitsidifiles,scanreindexgap_s=15.0,constobsid=True)
             listfile = vis.replace(".ms","_listobs.list")
             casatasks.listobs(vis = vis, listfile = listfile, overwrite=True)
+
+            check_pols(vis)
+        
 
     else:
         logging.info("======>>> Using UVFITS from AIPS")
@@ -253,7 +269,6 @@ def get_msinfo():
     msmd.close()
 
     return nspw,nchan
-
 
 
 @time_execution
@@ -868,12 +883,12 @@ Yu need to remove this function and use wsclean here
 """
 
 @time_execution
-def dirty_map(source):
+def dirty_map(source='M15PSRC'):
 
     
     
     msmd.open(vis)
-    field_id = msmd.fieldsforname(source)[1]
+    field_id = msmd.fieldsforname(source)[0]
     msmd.close()
 
 
