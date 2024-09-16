@@ -160,10 +160,9 @@ def check_pols(vis):
     tb.open(f"{vis}/FEED", nomodify=False)
     feeds = tb.getcol("POLARIZATION_TYPE")
 
-    logging.info(f"Original POLARIZATION_TYPE: {feeds}")
-
-    feeds = np.where(feeds=="l","LL",feeds)
-    feeds = np.where(feeds=="?","RR",feeds)
+    # logging.info(f"Original POLARIZATION_TYPE: {feeds}")
+    feeds = np.where(feeds=="l","L",feeds)
+    feeds = np.where(feeds=="?","R",feeds)
     tb.putcol("POLARIZATION_TYPE",feeds)
     tb.close()
     
