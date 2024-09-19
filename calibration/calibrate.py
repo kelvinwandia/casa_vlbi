@@ -79,7 +79,7 @@ def attach_tsys_gc():
         logging.info("======>>> No uvflg file found")
 
 
-    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1_1.IDI*'))
+    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1.IDI*'))
     fitsidifiles = natsorted(fitsfiles)
 
     # Convert flags
@@ -160,7 +160,7 @@ def check_pols(vis):
     tb.open(f"{vis}/FEED", nomodify=False)
     feeds = tb.getcol("POLARIZATION_TYPE")
 
-    # logging.info(f"Original POLARIZATION_TYPE: {feeds}")
+    logging.info(f"Original POLARIZATION_TYPE: {feeds}")
     feeds = np.where(feeds=="l","L",feeds)
     feeds = np.where(feeds=="?","R",feeds)
     tb.putcol("POLARIZATION_TYPE",feeds)
@@ -170,10 +170,7 @@ def check_pols(vis):
 def makems(vis,splitvis=None):
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
@@ -191,7 +188,8 @@ def makems(vis,splitvis=None):
             casatasks.listobs(vis = vis, listfile = listfile, overwrite=True)
 
             check_pols(vis)
-        
+        else:
+            check_pols(vis)
 
     else:
         logging.info("======>>> Using UVFITS from AIPS")
@@ -504,7 +502,6 @@ def gencal_tsys_gc():
     cal_tables_dict = {}
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
     tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gcal')
   
@@ -516,8 +513,8 @@ def gencal_tsys_gc():
         gencal(vis =vis, caltable=gcal_caltable, caltype='gc', infile= f'{experiment}.gc')
     
     # Plot the caltable
-    for m in ['time']:
-        plotfile = os.path.join(plots_dir, f"{vis.replace('.ms', '_tsys_{m}.png')}")
+    for m in ['time','frequency']:
+        plotfile = os.path.join(plots_dir, f"{vis.replace('.ms', f'_tsys_{m}.png')}")
         if not os.path.exists(plotfile):
             plotms(
                 vis=tsys_caltable, yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
@@ -550,7 +547,7 @@ def tec_corrections():
     logging.info("Downloading tec files")
     from casatasks.private import tec_maps
 
-    tec_image, tec_rms_image, plotname = tec_maps.create(vis=vis,doplot=False)
+    tec_image, _, _ = tec_maps.create(vis=vis)
   
     logging.info("Generating tec solutions")
   
@@ -582,7 +579,6 @@ def plot_sbd(plotfile,timerange,datacolumn):
 def sbd_fringefit():
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
 
     sbd_plotfile_before = f"{plots_dir}/before_sbd_fringefit.png"
@@ -630,10 +626,9 @@ def applycal_sbd_fringe():
 
     """
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
 
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
+    if not os.path.exists(plots_dir):
+        os.makedirs(plots_dir)
 
     sbd_plotfile_after =f"{plots_dir}/after_sbd_fringefit.png"
 
@@ -664,11 +659,6 @@ def mbd_fringefit():
     """
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
-
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
-
 
     mbd_table = vis.replace('.ms', '.mbd')
     table = list(cal_tables_dict.keys())
@@ -704,11 +694,6 @@ def applycal_mbd_fringe():
     Applying all the global fringe fit solutions to the data and plotting the data 
     """
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
-
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
-
 
     mbd_plotfile = f'{plots_dir}/applied_mbd.png'
     table = list(cal_tables_dict.keys())
@@ -780,10 +765,6 @@ def bpass():
             )
     
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
-
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
 
     for m in ['amp','phase']:
         plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_bpass_{m}.png"
@@ -834,12 +815,7 @@ def after_cal_plots():
     """
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
-
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
-
-
+   
     sources = [phase_calibrator, target]
     yaxis = ['amp', 'phase']
 
@@ -882,9 +858,7 @@ Yu need to remove this function and use wsclean here
 """
 
 @time_execution
-def dirty_map(source='M15PSRC'):
-
-    
+def dirty_map(source):
     
     msmd.open(vis)
     field_id = msmd.fieldsforname(source)[0]
@@ -901,7 +875,7 @@ def dirty_map(source='M15PSRC'):
     if use_tclean == True:
         if not os.path.exists(imagename):
             tclean(vis= phasecal_ms, imagename=imagename,imsize=imsize, cell=cell,
-                gridder='standard',weighting='briggs',robust=robust,niter=0, field = str(field_id)
+                gridder='standard',weighting='natural',niter=0, field = str(field_id)
                 )
             fitsname = imagename+'.fits'
             exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
