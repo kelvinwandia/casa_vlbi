@@ -174,7 +174,7 @@ def makems(vis,splitvis=None):
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
-    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1_1.IDI*'))
+    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1.IDI*'))
     fitsidifiles = natsorted(fitsfiles)
 
     if use_casa == True:
