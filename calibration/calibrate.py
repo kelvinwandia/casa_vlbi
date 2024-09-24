@@ -160,7 +160,7 @@ def check_pols(vis):
     tb.open(f"{vis}/FEED", nomodify=False)
     feeds = tb.getcol("POLARIZATION_TYPE")
 
-    logging.info(f"Original POLARIZATION_TYPE: {feeds}")
+    # logging.info(f"Original POLARIZATION_TYPE: {feeds}")
     feeds = np.where(feeds=="l","L",feeds)
     feeds = np.where(feeds=="?","R",feeds)
     tb.putcol("POLARIZATION_TYPE",feeds)
@@ -858,10 +858,11 @@ Yu need to remove this function and use wsclean here
 """
 
 @time_execution
-def dirty_map(source):
+def dirty_map(vis,source):
     
     msmd.open(vis)
     field_id = msmd.fieldsforname(source)[0]
+    # print(field_id)
     msmd.close()
 
 
@@ -874,7 +875,7 @@ def dirty_map(source):
 
     if use_tclean == True:
         if not os.path.exists(imagename):
-            tclean(vis= phasecal_ms, imagename=imagename,imsize=imsize, cell=cell,
+            tclean(vis= vis, imagename=imagename,imsize=imsize, cell=cell,
                 gridder='standard',weighting='natural',niter=0, field = str(field_id)
                 )
             fitsname = imagename+'.fits'
@@ -910,23 +911,37 @@ def convert_to_list(*args):
 
 
 @time_execution
-def split_calibrated_ms(sources):
+def split_calibrated_ms(*args):
 
-    sources = convert_to_list(sources)
-    vis_to_split = os.path.join(working_directory,vis)
+    sources = args
     
-    width = 4; timebin='2s'
+    _,nchan = get_msinfo()
+    nchan = nchan[0] # assuming equal chans per spw
+    if nchan >=4:
+        width = int(nchan)
+    else:
+        width = nchan
+    
+    timebin = int(solint/10)
 
     for source in sources:
-        outputvis = source+'.ms'
+        outputvis = source+f'_{nchan}chan_{timebin}s.ms'
         if not os.path.exists(outputvis):
             logging.info(f"======>>>Splitting {vis} to {outputvis}")
-            logging.info(f"Averaging to {width} channels and {timebin} ")
+            logging.info(f"Averaging to width {width} channels and timebin {timebin} seconds ")
             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
             # split(vis = vis_to_split, outputvis = outputvis, datacolumn='data',field=source) 
-            split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,
-            width=width,timebin=timebin) 
+            split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source,
+            width=width,timebin=str(timebin)+'s') 
+
+            if make_dirty_map == True:
+                dirty_map(vis=outputvis,source=source)
+
         else:
             logging.info(f"======>>>{outputvis} exists. Will not make a new one")
+            if make_dirty_map == True:
+                dirty_map(vis=outputvis,source=source)
+
+    
 
        

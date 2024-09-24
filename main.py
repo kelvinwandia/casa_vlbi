@@ -235,7 +235,7 @@ if export_uvfits == True:
 if do_tec_corrections == True:
     try:
         logging.info(f"Calculating ionospheric corrections")
-        tec_corrections(vis)
+        tec_corrections()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
@@ -284,17 +284,18 @@ if apply_bpass == True:
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
-if make_dirty_map == True:
-    try:
-        logging.info("Making dirty map")
-        dirty_map(phase_calibrator)
-    except Exception as e:
-        logging.warning(f"Encountered error {e}")
+# if make_dirty_map == True:
+#     try:
+#         logging.info("Making dirty map")
+#         dirty_map(target)
+#         dirty_map(phase_calibrator)
+#     except Exception as e:
+#         logging.warning(f"Encountered error {e}")
 
 if split_calibrated == True:
     try:
         logging.info("Making dirty map")
-        split_calibrated_ms(phase_calibrator)
+        split_calibrated_ms(phase_calibrator,target)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
