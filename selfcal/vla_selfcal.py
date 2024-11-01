@@ -107,7 +107,7 @@ def check_longest_baseline():
     longest_baseline_meters = np.nanmax(uvdist_meters)
     
     # Get frequency data
-    band_name, mean_freq, max_freq, min_freq = check_band(vis)
+    band_name, mean_freq, max_freq, min_freq = check_band()
     frequency_hz = max_freq * 1e9
     speed_of_light = 3e8  # Speed of light in m/s
     wavelength_meters = speed_of_light / frequency_hz
@@ -168,20 +168,20 @@ def get_imaging_cellsize():
 
 
 
-def make_dirty_map():
-    cell = get_imaging_cellsize()
-    msmd.open(vis)
-    field_names = msmd.fieldnames()
-    for field in field_names:
-        imagename = field+'_dirty'
-        vis_to_image = field+'.ms'
-        print(f"Imaging {vis_to_image}")
-        tclean(
-            vis = vis_to_image, imagename = imagename, imsize=[5120,5120], cell=cell, gridder=gridder,
-            deconvolver = deconvolver, weighting = weighting,
-            robust = robust, niter=0, nterms=nterms, interactive=False, 
-        )
-        print(f"Finished imaging {vis_to_image}")
+# def make_dirty_map():
+#     cell = get_imaging_cellsize()
+#     msmd.open(vis)
+#     field_names = msmd.fieldnames()
+#     for field in field_names:
+#         imagename = field+'_dirty'
+#         vis_to_image = field+'.ms'
+#         print(f"Imaging {vis_to_image}")
+#         tclean(
+#             vis = vis_to_image, imagename = imagename, imsize=[5120,5120], cell=cell, gridder=gridder,
+#             deconvolver = deconvolver, weighting = weighting,
+#             robust = robust, niter=0, nterms=nterms, interactive=False, 
+#         )
+#         print(f"Finished imaging {vis_to_image}")
 
 
 def find_refant(vis, field=target, tablename=target+'.refant'):
@@ -232,16 +232,16 @@ def find_refant(vis, field=target, tablename=target+'.refant'):
     sort_idx = np.argsort(good_frac)[::-1]
     print(' ++==>> Antennas sorted by % of good solutions:')
     for i in sort_idx:
-        print.info(' ++==>> {0:3}: {1:4.1f}, <SNR> = {2:4.1f}'.format(antenna_names[i],
+        print(' ++==>> {0:3}: {1:4.1f}, <SNR> = {2:4.1f}'.format(antenna_names[i],
                                                          good_frac[i],
                                                          good_snrs[i]))
     if good_frac[sort_idx[0]] < 90:
-        print.info(' ++==>> Small fraction of good solutions with selected refant!')
-        print.info(' ++==>> Please inspect antennas to select optimal refant')
-        print.info(' ++==>> You may want to use refantmode="flex" in gaincal')
+        print(' ++==>> Small fraction of good solutions with selected refant!')
+        print(' ++==>> Please inspect antennas to select optimal refant')
+        print(' ++==>> You may want to use refantmode="flex" in gaincal')
     pref_ant = antenna_names[sort_idx]
     pref_ant_list = ','.join(list(pref_ant))
-
+    print(f"The following will be used as the reference antennas: {pref_ant_list}")
     return pref_ant_list
 
 def pybdsf(input_image):
@@ -269,30 +269,28 @@ def pybdsf(input_image):
 
     return regionfile
 
-def selfcal_part1():
+def make_dirty_map():
 
     """
     Creates an (a large) an image that is used to create a casa region file using pybdsf 
     for masking
     """
-    
-    global first_part_imagename
     cell = get_imaging_cellsize()
-    first_part_imagename = basename + '_first_masking'
+    dirty_map = basename + '_first_masking'
 
-    if not os.path.exists(first_part_imagename):
-        print(f"Making {first_part_imagename}")
+    if not os.path.exists(dirty_map):
+        print(f"Making {dirty_map}")
         tclean(
-            vis = vis, imagename=first_part_imagename, imsize=imsize, cell=cell,
+            vis = vis, imagename=dirty_map, imsize=imsize, cell=cell,
             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-            weighting = weighting, robust = robust, niter=1000, threshold = '0.5mJy',
+            weighting = weighting, robust = robust, niter=1000, # threshold = '0.5mJy',
             nterms = nterms, pblimit = pblimit
         )
 
-    regionfile = pybdsf(input_image=first_part_imagename+'.image.tt0')
+    regionfile = pybdsf(input_image=dirty_map+'.image.tt0')
 
 
-def selfcal_part2():
+def selfcal():
 
     if os.path.exists(outlier_file) and open(outlier_file).read() == '':
         outlierfile = ''
@@ -370,8 +368,8 @@ def selfcal_part2():
         robust = robust, niter=niter_final, threshold = threshold_final, nterms=nterms,
         pblimit=pblimit, interactive=False, usemask = 'user', mask=regionfile,
     )
-    ### Use the output here to peel -- wsclean predict should work
-    ## implement using wsclean -- also no need to create a large image
+    
+    
 
 
 # def applycal_target():
@@ -411,6 +409,47 @@ def run_wsclean(command):
     except Exception as e:
         print(f"An error occurred: {e}")
 
+
+
+def peeling():
+
+    """
+    Subtract the bright sources in the field so you are left with the emission from the star
+
+    Use pybsdf casa region file -- you can change the threshold to only select the bright sources you want
+
+    Run pybsdf on the final image
+    
+    """
+
+    # Using the final imagename 
+
+    imagename = basename +f'_{nloops-1}'+'.final'
+    # region_to_peel = pybdsf(input_image=imagename+'.image.tt0')
+
+    ## NB: You had masked the bright source from the dirty map -- so you can just subtract
+    uvsub(vis=vis)
+
+    ## Make a final map without the sources
+    cell = get_imaging_cellsize()
+    peeled_map = basename+'_peeled_map'
+    if not os.path.exists(peeled_map):
+        print(f"Making {peeled_map}")
+        tclean(
+            vis = vis, imagename=peeled_map, imsize=imsize, cell=cell,
+            gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
+            weighting = weighting, robust = robust, niter=1000, # threshold = '0.5mJy',
+            nterms = nterms, pblimit = pblimit
+        )
+
+
+
+
+
+
+
+
+    # delete model column to be d
 
 # def peeling():
 
@@ -454,25 +493,20 @@ def run_wsclean(command):
     # run_wsclean(threshold_cmd)
 
 
-
-
 def main():
 
     set_working_dir()
-    split_data(vis)
-    check_band(vis)
+    split_data()
+    check_band()
     global refant
     refant = find_refant(vis)
-
-    # make_dirty_map(cell)
-
-    # selfcal_part1()
-    # selfcal_part2()
+    # make_dirty_map()
+    # selfcal()
     # applycal_target()
-    # peeling()
+    peeling()
 
 
 
-
+main()
 
         
