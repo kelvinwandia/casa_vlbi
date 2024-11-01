@@ -6,6 +6,12 @@ import bdsf
 import casalogger
 import casatools
 import numpy as np
+import matplotlib.pyplot as plt
+import time 
+from radio_beam import Beam
+from astropy.io import fits
+from astropy import units as u
+from astropy.wcs import WCS
 
 msmd = casatools.msmetadata()
 tb = casatools.table()
@@ -83,6 +89,28 @@ def split_data():
             split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin='10s',width=4,field=field)
             print(f"Finished splitting")
     msmd.close()
+
+
+def time_execution(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
+        if execution_time < 60:  # If execution time is less than a minute
+            time_unit = "seconds"
+            formatted_time = execution_time
+        elif execution_time < 3600:  # If execution time is less than an hour
+            time_unit = "minutes"
+            formatted_time = execution_time / 60
+        else:  # If execution time is an hour or more
+            time_unit = "hours"
+            formatted_time = execution_time / 3600
+            
+        print(f"======>>>EXECUTION TIME for {func.__name__}: {formatted_time:.2f} {time_unit}")
+        return result
+    return wrapper
 
 
 
@@ -166,6 +194,90 @@ def get_imaging_cellsize():
     return cell
 
 
+def plot_fits(imagename,fig_width =8,fig_height=6):
+    """
+    Plots fitsfiles using astropy
+    """
+
+    fitsname = imagename+'.fits'
+    exportfits(imagename=imagename+'.image.tt0',fitsimage=fitsname,overwrite=True)
+
+    plt.figure(figsize=(fig_width, fig_height))  
+    hdul = fits.open(fitsname)
+    w = WCS(hdul[0].header, naxis=2)
+    w.wcs.ctype = ['RA---SIN', 'DEC--SIN']
+    ax = plt.subplot(projection=w)
+
+    # Disable automatic labelling
+    ax.coords[0].set_auto_axislabel(True) 
+    ax.coords[1].set_auto_axislabel(True) 
+
+    # Extract image data
+    
+    image_data = hdul[0].data[0,0,:,:]
+
+    # Display the image with a color map
+    im = ax.imshow(image_data, cmap=plt.get_cmap('cividis'))
+
+    # Automatically set pixel scale based on WCS header information
+    pixscale = abs(w.wcs.cdelt[0]) * u.deg.to(u.arcsec) * u.arcsec  # Convert from degrees to arcseconds
+
+    # Define and add the beam ellipse
+    array_beam = imhead(imagename+'.psf.tt0')['restoringbeam']
+    major_axis = array_beam['major']['value']
+    minor_axis = array_beam['minor']['value']
+    pos_angle = array_beam['positionangle']['value']
+
+    major_axis = major_axis*u.arcsec  # Convert to arcseconds if needed 
+    minor_axis = minor_axis*u.arcsec  # Convert to arcseconds if needed
+    pos_angle = pos_angle*u.deg
+
+    my_beam = Beam(major_axis, minor_axis, pos_angle)
+    ycen_pix, xcen_pix = 15, 15
+    ellipse_artist = my_beam.ellipse_to_plot(xcen_pix, ycen_pix, pixscale)
+    _ = ax.add_artist(ellipse_artist)
+
+    ax.set_xlabel('RA (J2000)',size=14)
+    ax.set_ylabel('Dec (J2000)',size=14)  
+
+    ax.tick_params(axis = "x", which = "both", bottom = True, top = False)
+    ax.tick_params(axis = "y", which = "both", right = False, left = True)
+
+    # ra = ax.coords[0]
+    # dec = ax.coords[1]
+
+    # ra.set_ticklabel(size=12)
+    # dec.set_ticklabel(size=12)
+
+    cbar = plt.colorbar(im,extend='both')
+    cbar.ax.tick_params(labelsize=16)
+    cbar.set_label('Jy/beam',rotation=90, labelpad=12,size=18)
+
+    # ax.contour(image_data,levels=[-3*0.136e-3,3*0.136e-3,5*0.136e-3,10*0.136e-3,15*0.136e-3], colors='white',
+    #         linewidths=0.5)
+
+    plt.savefig(fitsname.replace('.fits','_1.pdf'),dpi=300)
+
+# def get_im_stats(imagename):
+    
+#     """
+#     Gets the statistics for either a 256x256 pix image and writes
+#     them to a logfile
+#     """
+
+
+#     rms=imstat(imagename=imagename,box='60,60,580,240')['rms'][0]  # for 640x640 px
+#     peak=imstat(imagename=imagename,box='300,300,340,340')['max'][0]
+#     print('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+#                 (imagename, peak*1e3, rms*1e3, peak/rms))
+    
+#     logfile = 'imstat.txt'
+#     casa_imstat = imstat(imagename)
+#     with open(logfile,"a") as txt_file:
+#         txt_file.write('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+#                     (imagename, peak*1e3, rms*1e3, peak/rms))
+
+#         txt_file.write(f"For {imagename}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
 
 
 # def make_dirty_map():
@@ -283,7 +395,7 @@ def make_dirty_map():
         tclean(
             vis = vis, imagename=dirty_map, imsize=imsize, cell=cell,
             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-            weighting = weighting, robust = robust, niter=1000, # threshold = '0.5mJy',
+            weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
             nterms = nterms, pblimit = pblimit
         )
 
@@ -438,7 +550,7 @@ def peeling():
         tclean(
             vis = vis, imagename=peeled_map, imsize=imsize, cell=cell,
             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-            weighting = weighting, robust = robust, niter=1000, # threshold = '0.5mJy',
+            weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
             nterms = nterms, pblimit = pblimit
         )
 
@@ -499,11 +611,14 @@ def main():
     split_data()
     check_band()
     global refant
-    refant = find_refant(vis)
+    # refant = find_refant(vis)
     # make_dirty_map()
     # selfcal()
     # applycal_target()
-    peeling()
+    # peeling()
+
+    imagename = 'K2-18_dirty'
+    plot_fits(imagename)
 
 
 
