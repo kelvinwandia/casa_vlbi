@@ -18,12 +18,14 @@ tb = casatools.table()
 ms = casatools.ms()
 
 
-msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+# msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+msname ='/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307/pipeline.60615.3586805556/23B-307.sb44616223.eb44945938.60299.34304871528.ms'
 target = 'K2-18'
 vis = target+'.ms'
 
 
-working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424'
+# working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424'
+working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44616223.eb44945938.60299.34304871528'
 outlierfile = '/home/kelvin/Desktop/Synphly/selfcal/outlier_fields.txt'
 basename = os.path.splitext(os.path.basename(vis))[0]
 
@@ -79,13 +81,13 @@ def set_working_dir():
 def split_data():
     
     listobs(vis=msname, listfile='listobs.txt',overwrite=True)
-    msmd.open(vis)
+    msmd.open(msname)
     field_names = msmd.fieldnames()
     print(f"Field names: {field_names} found in {msname}")
     for field in field_names:
         outputvis = field+'.ms'
         if not os.path.exists(outputvis):
-            print(f"Splitting {vis} to {outputvis}")
+            print(f"Splitting {msname} to {outputvis}")
             split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin='10s',width=4,field=field)
             print(f"Finished splitting")
     msmd.close()
@@ -611,14 +613,14 @@ def main():
     split_data()
     check_band()
     global refant
-    # refant = find_refant(vis)
-    # make_dirty_map()
-    # selfcal()
+    refant = find_refant(vis)
+    make_dirty_map()
+    selfcal()
     # applycal_target()
     # peeling()
 
-    imagename = 'K2-18_dirty'
-    plot_fits(imagename)
+    # imagename = 'K2-18_dirty'
+    # plot_fits(imagename)
 
 
 
