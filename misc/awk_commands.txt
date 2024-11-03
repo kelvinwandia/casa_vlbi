@@ -1,0 +1,15 @@
+
+----> Use the following command to get the column headers:
+
+awk 'NR>=3 && NR<=9 {for (i=1;i<=NF;i++) {n=i; if (NR==3) a[i]=i; a[i]=a[i]" "$i}} END {for (i=1;i<=n;i++) print a[i]}' output.dat
+
+----> I don't store the astrometric data for cross-matches in the main output file, so I have had to generate a file for each source that can be found in the sed/ directory. 
+----> I've then used the following to produce the attached output file:
+
+cd output/sed/
+grep Gaia * | grep Gmag | awk '{print $1,$3,$4}' | sed 's/.sed:Gaia//g' > ../../foo
+cd ../anc/
+grep -re 'RA\|Dec' . | awk '$0~":RA" {printf "%s ",$1} {printf "%s %s ",$4,$5} $0~"PMDec" {printf "\n"}' | sed 's/.\///g' | sed 's/.anc:RA//g' > ../../bar
+cd ../../
+awk '{sub(/^\.\//, ""); print}' foo > foo1
+join -1 1 -2 1 <(sort -k1b,1 foo1) <(sort -k1b,1 bar) > gaia-offset.dat

@@ -15,24 +15,23 @@ from utils.helper_functions import *
 def split_selfcal():
 
     sources = [phase_calibrator,target]
-
     vis_to_split = os.path.join(working_directory,vis)
+    
+    width = 4; timebin='2s'
 
     for source in sources:
         outputvis = source+'.ms'
         if not os.path.exists(outputvis):
             logging.info(f"======>>>Splitting {vis} to {outputvis}")
+            logging.info(f"Averaging to {width} channels and {timebin} ")
             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-            # split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,timebin='2s',width=8) 
-            split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source) 
+            # split(vis = vis_to_split, outputvis = outputvis, datacolumn='data',field=source) 
+            split(vis = vis_to_split, outputvis = outputvis, datacolumn='corrected',field=source,
+            width=width,timebin=timebin) 
         else:
             logging.info(f"======>>>{outputvis} exists. Will not make a new one")
 
-        # flagdata(vis=outputvis,spw='0~7:0~5;123~127',mode='manual')
-        # flagdata(vis=outputvis, mode='list',inpfile='/raid1/scratch/kelvinw/casa_vlbi/data/flagging/gv020b.flag')
-        # flagdata(vis=outputvis,antenna='GB')
-        
-        
+       
 
     global phasecal_ms, target_ms
     phasecal_ms = phase_calibrator+'.ms'
@@ -82,8 +81,8 @@ def selfcal_part1():
         
         if use_tclean == True:
 
-            # tclean(vis= phasecal_ms, imagename=pybdsf_imagename,imsize=imsize, cell=cell,
-            #     gridder='standard',weighting='briggs',robust=robust,niter=pybdsf_niter)
+            tclean(vis= phasecal_ms, imagename=pybdsf_imagename,imsize=imsize, cell=cell,
+                gridder='standard',weighting='briggs',robust=robust,niter=0)
             fitsname = pybdsf_imagename+'.fits'
             exportfits(imagename=pybdsf_imagename+'.image',fitsimage=fitsname,overwrite=True)
             get_im_stats(fitsname)
@@ -275,7 +274,6 @@ def applycal_target():
     prev_caltables = sorted(glob.glob('*.tb'))
 
     logging.info(f"======>>>Applying calibration tables {prev_caltables} to {target_ms}")
-
     applycal(
         vis = target_ms, gaintable = prev_caltables, parang=False)
 

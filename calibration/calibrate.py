@@ -22,7 +22,7 @@ def set_working_dir():
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
-
+@time_execution
 def attach_tsys_gc():
 
 
@@ -79,7 +79,7 @@ def attach_tsys_gc():
         logging.info("======>>> No uvflg file found")
 
 
-    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1_1.IDI*'))
+    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1.IDI*'))
     fitsidifiles = natsorted(fitsfiles)
 
     # Convert flags
@@ -90,8 +90,23 @@ def attach_tsys_gc():
         logging.info(f"======>>> Error during flag conversion: {e}")
 
 
-    filename = fitsidifiles[0]
-    hdul = fits.open(filename)
+    """ To remove all GC and TSYS"""
+    extension_names = ['GAIN_CURVE', 'SYSTEM_TEMPERATURE']
+    for filename in fitsidifiles:
+        print(f"Processing file: {filename}")
+        with fits.open(filename, mode='update') as hdul:
+            # Find extensions to remove
+            extensions_to_remove = [i for i, ext in enumerate(hdul) if ext.header.get('EXTNAME') in extension_names]
+            
+            if extensions_to_remove:
+                logging.info(f"Extensions {', '.join(extension_names)} exist in the FITS file. Removing them.")
+                # Remove the extensions
+                for i in reversed(extensions_to_remove):
+                    del hdul[i]
+                hdul.flush()
+                logging.info("Extensions removed.")
+            else:
+                logging.info(f"Extensions {', '.join(extension_names)} do not exist in the FITS file.")
 
     extension_name = 'SYSTEM_TEMPERATURE'
 
@@ -102,70 +117,64 @@ def attach_tsys_gc():
         print(f"Extension '{extension_name}' does not exist in the FITS file.")
     
         hdul.close()
-
         print("Attaching TSYS table")
         for i in fitsidifiles:
             append_tsys(antab_file,idifiles=i)
-        
         print("Finished attaching TSYS table")
 
-    with fits.open(filename, mode='update') as hdul:
-            gain_curve_exists = False
-            try:
-                hdu = hdul['GAIN_CURVE']
-                gain_curve_exists = True
-                print("GAIN_CURVE table found.")
-            except KeyError:
-                print("GAIN_CURVE table does not exist")
 
-            if not gain_curve_exists:
-                print("Attaching GAIN_CURVE table")
-                append_gc(antab_file, fitsidifiles[0])  # Gain curve requires only one of the fits-idi files
-                print("Finished attaching GAIN_CURVE table")
+    print("Attaching GAIN_CURVE table.")
+    append_gc(antab_file, fitsidifiles[0])  # Append the GAIN_CURVE table
+    print("Finished attaching GAIN_CURVE table.")
 
     # Convert gain curves and flag files
     logging.info("Converting gain curves")
     gc_table = f'{experiment}.gc'
+    os.system(f"rm -r {gc_table}")
     if not os.path.exists(gc_table):
+        logging.info(f"Writing gaincurve input table {gc_table}")
         convert_gaincurve(antab_file, gc_table, min_elevation=0.0, max_elevation=90.0)
 
+    # Find missing system temperature extension
+    extension_name = 'SYSTEM_TEMPERATURE'
+    missing_extensions = []
+    for filename in fitsidifiles:
+        hdul = fits.open(filename)
+        # checks the extension through the ext.header.get ... loop ext through entire hdul
+        if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
+            logging.info(f"======>>>{extension_name}' exists in the FITS file.")
+        else:
+            logging.info(f"======>>>Extension '{extension_name}' does not exist in the {filename} file.")
+            missing_extensions.append(filename)
 
-
-    """
-    loops over all the FITS-IDI files and checks if the system temperatures
-    have successfully been appended
-    """
-    # extension_name = 'SYSTEM_TEMPERATURE'
-    # missing_extensions = []
-    # for filename in fitsidifiles:
-    #     hdul = fits.open(filename)
-
-    #     # checks the extension through the ext.header.get ... loop ext through entire hdul
-    #     if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
-    #         logging.info(f"======>>>{extension_name}' exists in the FITS file.")
-    #     else:
-    #         logging.info(f"======>>>Extension '{extension_name}' does not exist in the {filename} file.")
-    #         missing_extensions.append(filename)
-
-    #     # Close the FITS file
-    #     hdul.close()
+        # Close the FITS file
+        hdul.close()
         
     # # Print the filenames that do not contain the 'SYSTEM_TEMPERATURE' extension
     # logging.info("======>>> Filenames with missing 'SYSTEM_TEMPERATURE' extension:", missing_extensions)
 
+
+def check_pols(vis):
+
+    tb = casatools.table()
+    tb.open(f"{vis}/FEED", nomodify=False)
+    feeds = tb.getcol("POLARIZATION_TYPE")
+
+    # logging.info(f"Original POLARIZATION_TYPE: {feeds}")
+    feeds = np.where(feeds=="l","L",feeds)
+    feeds = np.where(feeds=="?","R",feeds)
+    tb.putcol("POLARIZATION_TYPE",feeds)
+    tb.close()
     
 @time_execution
 def makems(vis,splitvis=None):
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
-    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1_1.IDI*'))
+    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1.IDI*'))
     fitsidifiles = natsorted(fitsfiles)
 
     if use_casa == True:
@@ -177,6 +186,10 @@ def makems(vis,splitvis=None):
                 vis= vis, fitsidifile=fitsidifiles,scanreindexgap_s=15.0,constobsid=True)
             listfile = vis.replace(".ms","_listobs.list")
             casatasks.listobs(vis = vis, listfile = listfile, overwrite=True)
+
+            check_pols(vis)
+        else:
+            check_pols(vis)
 
     else:
         logging.info("======>>> Using UVFITS from AIPS")
@@ -199,7 +212,19 @@ def makems(vis,splitvis=None):
             casatasks.listobs(vis = splitvis, listfile = listfile, overwrite=True)
 
 
-            
+def export_to_uvfits(vis):
+    """
+    Exports the flagged measurement set to UVFITS for calibration in AIPS
+    """
+    uvfitsfile = vis.replace('.ms','.FITS')
+    logging.info(f"Exporting {vis} to AIPS compatible {uvfitsfile}")
+    if not os.path.exists(uvfitsfile):
+        casatasks.exportuvfits(
+            vis = vis, fitsfile=uvfitsfile, writesyscal=False, overwrite=False
+        )
+    else:
+        logging.info(f"{uvfitsfile} exists.")
+                
 def getfields():
         
         """get list of field names in the ms """
@@ -241,7 +266,6 @@ def get_msinfo():
     msmd.close()
 
     return nspw,nchan
-
 
 
 @time_execution
@@ -344,7 +368,29 @@ def antenna_flag(antenna):
     logging.info(f"======>>>REPORTING FLAGGING STATS after flagging {antenna}")
     report_flag(antenna_flagging_summary, 'field')
 
-   
+def calc_flagged_data(field):
+
+    # Get the scan data
+    tb = casatools.table()
+    tb.open(vis + '/ANTENNA')
+    antenna_names = tb.getcol('NAME')
+    # antenna_names = [int(name) for name in antenna_names.tolist()]
+    tb.close()
+
+    try:
+        for antenna in antenna_names:
+            logging.info(f"======>>>Calculating the flagging statistics for scans in antenna {antenna}")
+            flagged_vis = flagdata(vis=vis,mode='summary',field=field,antenna=antenna)
+            for key in sorted(flagged_vis['scan']):
+                value = flagged_vis['scan'][key]
+                flagged_scan = value['flagged']
+                total_scan = value['total']
+                ratio = flagged_scan / total_scan
+                logging.info(f"{ratio * 100:.2f}% of antenna {antenna} in scan {key} are flagged")
+    except Exception as e:
+        logging.warning(f"======>>>Exception exception {e}: Antenna {antenna} may not have data due to flagging")
+        pass
+
 @time_execution
 def execute_aoflagger_strategy():
 
@@ -424,31 +470,9 @@ def execute_aoflagger_strategy():
 
     aoflagger_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after automatic flagging")
+    # calc_flagged_data(phase_calibrator)
+    calc_flagged_data(target)
     report_flag(aoflagger_flagging_summary, 'field')
-
-
-def calc_flagged_data(field):
-
-    # Get the scan data
-    tb = casatools.table()
-    tb.open(vis + '/ANTENNA')
-    antenna_names = tb.getcol('NAME')
-    # antenna_names = [int(name) for name in antenna_names.tolist()]
-    tb.close()
-
-    try:
-        for antenna in antenna_names:
-            print(f"======>>>Calculating the flagging statistics for scans in antenna {antenna}")
-            flagged_vis = flagdata(vis=vis,mode='summary',field=field,antenna=antenna)
-            for key in sorted(flagged_vis['scan']):
-                value = flagged_vis['scan'][key]
-                flagged_scan = value['flagged']
-                total_scan = value['total']
-                ratio = flagged_scan / total_scan
-                print(f"{ratio * 100:.2f}% of antenna {antenna} in scan {key} are flagged")
-    except Exception as e:
-        print(f"======>>>Exception exception {e}: Antenna {antenna} may not have data due to flagging")
-        pass
 
 
 
@@ -472,27 +496,28 @@ def gencal_tsys_gc():
     This function generates the system temperatures and gaincurve calibration tables
 
     """
+    
 
     global cal_tables_dict
     cal_tables_dict = {}
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(working_directory).rstrip('/') + '/' + 'calibration_dir'
 
     tsys_caltable = vis.replace('.ms','.tsys'); gcal_caltable = vis.replace('.ms','.gcal')
-    
+  
+  
     if not os.path.exists(tsys_caltable):
         gencal(vis=vis, caltable=tsys_caltable, caltype='tsys', uniform = False)
 
     if not os.path.exists(gcal_caltable):
         gencal(vis =vis, caltable=gcal_caltable, caltype='gc', infile= f'{experiment}.gc')
-
+    
     # Plot the caltable
-    for m in ['frequency','time']:
-        plotfile = os.path.join(calibration_dir, f"{vis.replace('.ms', '_tsys_{m}.png')}")
+    for m in ['time','frequency']:
+        plotfile = os.path.join(plots_dir, f"{vis.replace('.ms', f'_tsys_{m}.png')}")
         if not os.path.exists(plotfile):
             plotms(
-                vis=f'{experiment}.tsys', yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
+                vis=tsys_caltable, yaxis='tsys', xaxis=m, gridcols=3, gridrows=3, coloraxis='corr',
                 iteraxis='antenna', highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=plotfile,
                 overwrite=True,  
             ) 
@@ -505,13 +530,37 @@ def applycal_tsys_gc():
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
-
+    # print(table,interp)
+    # print(os.getcwd())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")  
     casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
     tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
     report_flag(tsys_gc_flagging_summary, 'field')
+
+def tec_corrections():
+
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    tec_caltable = vis.replace('.ms','.tec')
+
+    logging.info("Downloading tec files")
+    from casatasks.private import tec_maps
+
+    tec_image, _, _ = tec_maps.create(vis=vis)
+  
+    logging.info("Generating tec solutions")
+  
+    if not os.path.exists(tec_caltable):
+        gencal(vis=vis, caltable=tec_caltable, caltype='tecim', infile=tec_image)
+
+    cal_tables_dict[tec_caltable] = ""
+
+    logging.info(f"Applying tec calibration table {tec_caltable}")
+    table = list(cal_tables_dict.keys())
+    interp = list(cal_tables_dict.values())
+    logging.info(f"======>>>Applying {table} using interpolation {interp}")  
+    applycal(vis=vis, field="",gaintable=table,interp=interp,parang=True)
 
 def plot_sbd(plotfile,timerange,datacolumn):
     try:
@@ -530,12 +579,11 @@ def plot_sbd(plotfile,timerange,datacolumn):
 def sbd_fringefit():
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
 
 
-    sbd_plotfile_before = f"{calibration_dir}/before_sbd_fringefit.png"
+    sbd_plotfile_before = f"{plots_dir}/before_sbd_fringefit.png"
 
-    sbd_table = vis.replace('.ms', '_sbd.gcal')
+    sbd_table = vis.replace('.ms', '.sbd')
     
     if not os.path.exists(sbd_table):
         logging.info(f"Fringefitting and writing caltable: {sbd_table}")
@@ -578,12 +626,11 @@ def applycal_sbd_fringe():
 
     """
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
 
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
+    if not os.path.exists(plots_dir):
+        os.makedirs(plots_dir)
 
-    sbd_plotfile_after =f"{calibration_dir}/after_sbd_fringefit.png"
+    sbd_plotfile_after =f"{plots_dir}/after_sbd_fringefit.png"
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
@@ -612,16 +659,12 @@ def mbd_fringefit():
     """
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
 
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
-
-
-    mbd_table = vis.replace('.ms', '_mbd.gcal')
+    mbd_table = vis.replace('.ms', '.mbd')
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     logging.info(f"======>>>Running global fring")
+    # logging.info(f"Using solution interval {solint}")
     if not os.path.exists(mbd_table):
         logging.info(f"Fringefitting and making {mbd_table}")
         casatasks.fringefit(
@@ -633,7 +676,7 @@ def mbd_fringefit():
         )
 
     for m in ['delay', 'phase', 'rate']:
-        plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_mbd_{m}.png"
+        plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_mbd_{m}.png"
         casaplotms.plotms(
             vis=mbd_table, yaxis=m, xaxis='time', gridcols=3, gridrows=3,
             coloraxis='corr', iteraxis='antenna', highres=True, showgui=False,  width=1920, height=1080,
@@ -651,13 +694,8 @@ def applycal_mbd_fringe():
     Applying all the global fringe fit solutions to the data and plotting the data 
     """
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
 
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
-
-
-    mbd_plotfile = f'{calibration_dir}/applied_mbd.png'
+    mbd_plotfile = f'{plots_dir}/applied_mbd.png'
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     fields = phase_calibrator + ',' + target
@@ -683,12 +721,15 @@ def applycal_mbd_fringe():
 
     casaplotms.plotms(
             vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
-            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw',
-            plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080
+            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw', iteraxis='baseline',
+            plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080, avgtime='9999',
         ) 
     
     mbd_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying mbd corrections")
+
+    calc_flagged_data(phase_calibrator)
+    calc_flagged_data(target)
     report_flag(mbd_flagging_summary, 'field')
 
 @time_execution
@@ -699,7 +740,7 @@ def bpass():
     """
 
 
-    bpass_table = vis.replace(".ms","_gcal.bpass")
+    bpass_table = vis.replace(".ms",".bpass")
 
     logging.info("Calculating bandpass solutions")
     table = list(cal_tables_dict.keys())
@@ -718,20 +759,15 @@ def bpass():
         # logging.info(f"{bpass_table} exists. Will not create a new one")
         casatasks.bandpass(
             vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
-            # field = phase_calibrator + ',' + fringe_finder, 
             field = phase_calibrator,
             refant=refant, caltable = bpass_table,gaintable = table, 
             interp = interp,spwmap = spwmap, parang=True 
             )
     
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
-
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
 
     for m in ['amp','phase']:
-        plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_bpass_{m}.png"
+        plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_bpass_{m}.png"
         casaplotms.plotms(
                 vis=bpass_table, yaxis=m, xaxis='frequency', gridcols=3, gridrows=3, 
                 coloraxis='spw',iteraxis='antenna', highres=True, showgui=False, width=1920, height=1080,
@@ -779,18 +815,13 @@ def after_cal_plots():
     """
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-    calibration_dir = os.path.join(plots_dir,'calibration_dir')
-
-    if not os.path.exists(calibration_dir):
-        os.makedirs(calibration_dir)
-
-
+   
     sources = [phase_calibrator, target]
     yaxis = ['amp', 'phase']
 
     for source in sources:
         for y_value in yaxis:                
-            plotfile = f"{calibration_dir}/{vis.replace('.ms', '')}_{source}_{y_value}.png"
+            plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_{source}_{y_value}.png"
             plotms(vis=vis, xaxis='frequency', yaxis=y_value, antenna='EF&*', ydatacolumn='corrected',
                 correlation='LL', showgui=False, coloraxis='spw', avgtime='9999', field=source,
                 gridcols=3, gridrows=3, iteraxis='baseline', plotfile=plotfile, overwrite=True, width=1920, height=1080)
@@ -827,12 +858,11 @@ Yu need to remove this function and use wsclean here
 """
 
 @time_execution
-def dirty_map(source):
-
-    
+def dirty_map(vis,source):
     
     msmd.open(vis)
     field_id = msmd.fieldsforname(source)[0]
+    # print(field_id)
     msmd.close()
 
 
@@ -845,8 +875,8 @@ def dirty_map(source):
 
     if use_tclean == True:
         if not os.path.exists(imagename):
-            tclean(vis= phasecal_ms, imagename=imagename,imsize=imsize, cell=cell,
-                gridder='standard',weighting='briggs',robust=robust,niter=0, field = str(field_id)
+            tclean(vis= vis, imagename=imagename,imsize=imsize, cell=cell,
+                gridder='standard',weighting='natural',niter=0, field = str(field_id)
                 )
             fitsname = imagename+'.fits'
             exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
@@ -873,4 +903,45 @@ def dirty_map(source):
         plot_fits(wsclean_fitsfile)
 
 
+def convert_to_list(*args):
+    if all(isinstance(arg, str) for arg in args):
+        return list(args)
+    else:
+        raise ValueError("All inputs must be strings")
 
+
+@time_execution
+def split_calibrated_ms(*args):
+
+    sources = args
+    
+    _,nchan = get_msinfo()
+    nchan = nchan[0] # assuming equal chans per spw
+    if nchan >=4:
+        width = int(nchan)
+    else:
+        width = nchan
+    
+    timebin = int(solint/10)
+
+    for source in sources:
+        outputvis = source+f'_{nchan}chan_{timebin}s.ms'
+        if not os.path.exists(outputvis):
+            logging.info(f"======>>>Splitting {vis} to {outputvis}")
+            logging.info(f"Averaging to width {width} channels and timebin {timebin} seconds ")
+            #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
+            # split(vis = vis_to_split, outputvis = outputvis, datacolumn='data',field=source) 
+            split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source,
+            width=width,timebin=str(timebin)+'s') 
+
+            if make_dirty_map == True:
+                dirty_map(vis=outputvis,source=source)
+
+        else:
+            logging.info(f"======>>>{outputvis} exists. Will not make a new one")
+            if make_dirty_map == True:
+                dirty_map(vis=outputvis,source=source)
+
+    
+
+       

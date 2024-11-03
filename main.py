@@ -103,9 +103,11 @@ flagging_strategy = config.get('flagging','flagging_strategy')
 
 flag_antenna = config.getboolean('flagging','flag_antenna')
 antenna_to_flag = config.get('flagging','antenna_to_flag')
+export_uvfits = config.getboolean('flagging','export_uvfits')
 
 
 # calibrate
+do_tec_corrections = config.getboolean('calibrate','do_tec_corrections')
 do_sbd_fringe = config.getboolean('calibrate','do_sbd_fringe')
 apply_sbd = config.getboolean('calibrate','apply_sbd')
 refant = config.get('calibrate','refant')
@@ -120,6 +122,7 @@ do_bpass = config.getboolean('calibrate','do_bpass')
 apply_bpass = config.getboolean('calibrate','apply_bpass')
 
 make_dirty_map = config.getboolean('calibrate','make_dirty_map')
+split_calibrated = config.getboolean('calibrate','split_calibrated')
 imsize= [int(part) for part in config.get('calibrate', 'imsize').split(',')]
 detection_threshold = config.getfloat('selfcal','detection_threshold')
 
@@ -179,7 +182,10 @@ if load_data == True:
         makems(vis)
 
         if do_split:
-            splitvis = vis.replace('.ms', f'_split_{timebin}_{width}_chan.ms')
+            if timebin == '':
+                splitvis = vis.replace('.ms', f'_split_{width}_chan.ms')
+            else:
+                splitvis = vis.replace('.ms', f'_split_{timebin}_{width}_chan.ms')
             makems(vis,splitvis)
             vis = splitvis
 
@@ -219,6 +225,19 @@ if use_casa == True:
             applycal_tsys_gc()
         except Exception as e:
             logging.warning(f"Encountered error {e}")
+
+if export_uvfits == True:
+    try:
+        export_to_uvfits(vis)
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
+
+if do_tec_corrections == True:
+    try:
+        logging.info(f"Calculating ionospheric corrections")
+        tec_corrections()
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
 
 
 if do_sbd_fringe == True:
@@ -265,12 +284,21 @@ if apply_bpass == True:
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
-if make_dirty_map == True:
+# if make_dirty_map == True:
+#     try:
+#         logging.info("Making dirty map")
+#         dirty_map(target)
+#         dirty_map(phase_calibrator)
+#     except Exception as e:
+#         logging.warning(f"Encountered error {e}")
+
+if split_calibrated == True:
     try:
         logging.info("Making dirty map")
-        dirty_map(phase_calibrator)
+        split_calibrated_ms(phase_calibrator,target)
     except Exception as e:
         logging.warning(f"Encountered error {e}")
+
 
 if do_selfcal == True:
     try:
