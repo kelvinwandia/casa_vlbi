@@ -92,6 +92,29 @@ class Utils():
         logging.info(f"Changing cwd to {working_directory}")
         os.chdir(working_directory)
 
+
+    @staticmethod
+    def create_plots_directory() -> None:
+        """
+        Creates a 'plots' directory inside the current working directory.
+
+        Raises:
+        ------
+        OSError
+            If creating the plots directory fails.
+        """
+        plots_directory = os.path.join(os.getcwd(), 'plots')
+
+        if not os.path.exists(plots_directory):
+            try:
+                os.makedirs(plots_directory)
+                logging.info(f"Created plots directory at {plots_directory}.")
+            except OSError as e:
+                logging.error(f"Failed to create plots directory: {e}")
+                raise
+        else:
+            logging.info(f"Plots directory {plots_directory} already exists.")
+
     @staticmethod
     def time_execution(func: Callable) ->Callable:
 
@@ -221,7 +244,8 @@ class MeasurementSetProcessor:
                 outputvis = field+'.ms'
                 if not os.path.exists(outputvis):
                     logging.info(f"Splitting {msname} to {outputvis}")
-                    split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin=MeasurementSetProcessor.timebin,width=MeasurementSetProcessor.width,field=field)
+                    split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin=MeasurementSetProcessor.timebin,
+                        width=MeasurementSetProcessor.width,field=field)
                     logging.info(f"Finished splitting")
                 else:
                     logging.info(f"Split measurement set {outputvis} exists")
@@ -324,6 +348,23 @@ class MeasurementSetInfo:
         return longest_baseline_lambda
     
     @staticmethod
+    def get_imaging_cellsize(msname) -> str:
+        """
+        Calculate the cell size for imaging based on the longest baseline.
+        
+        Returns:
+        -------
+        str
+            The size of the imaging cell in arcseconds.
+        """
+        longest_baseline_lambda = MeasurementSetInfo.get_longest_baseline(msname)
+        cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
+        cell = f'{cell_float:.2f} arcsec'
+        logging.info(f"Imaging with a cell of size {cell}")
+        return cell
+    
+    
+    @staticmethod
     # @Utils.time_execution
     def find_refant(msname_tuple:tuple, field:str):
 
@@ -404,37 +445,9 @@ class MeasurementSetInfo:
 
 
 class tclean_Imager:
+
     """
     A class for performing imaging on measurement sets using the tclean algorithm.
-
-    Attributes:
-    ----------
-    msname : str
-        The name of the measurement set file.
-    gridder : str
-        The type of gridder to use (default is 'standard').
-    deconvolver : str
-        The type of deconvolver to use (default is 'multiscale').
-    weighting : str
-        The weighting scheme to use (default is 'natural').
-    robust : float
-        The robust parameter for weighting (default is 0.5).
-    nterms : int
-        The number of Taylor terms to use (default is 1).
-    imsize : int
-        The size of the image (default is 640).
-    niter : int
-        The number of iterations for the tclean process (default is 0).
-    threshold : str
-        The threshold for stopping the deconvolution (default is None).
-    wprojplanes : int
-        The number of w-projection planes (default is 1).
-    mask : str
-        The mask to apply during the imaging process (default is None).
-    usemask : str
-        The mask usage strategy (default is 'auto').
-    pblimit : float
-        The limit for the primary beam (default is 0.1).
 
     Methods:
     -------
@@ -446,8 +459,9 @@ class tclean_Imager:
     """
 
     def __init__(self, msname: str, field:str='', gridder: str = 'standard', deconvolver: str = 'multiscale', 
-                 weighting: str = 'natural', robust: float = 0.5, nterms: int = 1, imsize: int = 640,
-                 niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '', 
+                 weighting: str = 'natural', robust: float = 0, nterms: int = 1, imsize: int = 640,
+                 niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '',
+                 imagename: str = f"{msname.replace('.ms','_image')}",
                  usemask: str = 'user', pblimit: float = 0.1,phasecenter: str = '', overwrite:bool = False, 
                  use_pybdsf:bool = True, pybdsf_threshold: int = 5):
         """
@@ -465,6 +479,8 @@ class tclean_Imager:
             The type of deconvolver to use (default is 'multiscale').
         weighting : str, optional
             The weighting scheme to use (default is 'natural').
+        imagename: str, optional
+            Name of the images to be created
         robust : float, optional
             The robust parameter for weighting (default is 0.5).
         nterms : int, optional
@@ -496,6 +512,7 @@ class tclean_Imager:
         self.msname = msname  
         self.field = field
         self.gridder = gridder
+        self.imagename = imagename
         self.deconvolver = deconvolver
         self.weighting = weighting
         self.robust = robust
@@ -512,21 +529,7 @@ class tclean_Imager:
         self.use_pybdsf = use_pybdsf
         self.pybdsf_threshold = pybdsf_threshold
 
-    def get_imaging_cellsize(self) -> str:
-        """
-        Calculate the cell size for imaging based on the longest baseline.
-        
-        Returns:
-        -------
-        str
-            The size of the imaging cell in arcseconds.
-        """
-        longest_baseline_lambda = MeasurementSetInfo.get_longest_baseline(self.msname)
-        cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
-        cell = f'{cell_float:.2f} arcsec'
-        logging.info(f"Imaging with a cell of size {cell}")
-        return cell
-    
+
     @Utils.time_execution
     def imager(self) -> None:
         """
@@ -539,13 +542,11 @@ class tclean_Imager:
         -------
         None
         """
-        cell = self.get_imaging_cellsize() 
-        imagename = self.msname.replace('.ms', '_dirty') if self.niter == 0 else self.msname.replace('.ms', '_image') 
+        cell = MeasurementSetInfo.get_imaging_cellsize(msname)
+        self.imagename = self.imagename+'_dirty' if self.niter == 0 else self.imagename
 
-        
-        imagename_matching_files = glob.glob(f"{imagename}.*")
     
-        matching_files = glob.glob(f"{imagename}.*")
+        matching_files = glob.glob(f"{self.imagename}.*")
 
         # Check if any matching files exist
         if matching_files:
@@ -571,7 +572,7 @@ class tclean_Imager:
 
         tclean(
             vis=self.msname,
-            imagename=imagename,
+            imagename=self.imagename,
             imsize=[self.imsize, self.imsize], 
             cell=cell,
             gridder=self.gridder,
@@ -589,27 +590,36 @@ class tclean_Imager:
             interactive=False,
         )
 
-        logging.info(f"Finished imaging {self.msname}, created image: {imagename}")
+        logging.info(f"Finished imaging {self.msname}, created image: {self.imagename}")
         if self.deconvolver == 'mtmfs':
             image_ext = '.image.tt0'
         else:
             image_ext = '.image'
 
-        exportfits(imagename=imagename+image_ext,fitsimage=imagename+ image_ext+'.fits',overwrite=True)
-        try:
-            logging.info(f"Running pybdsf on {imagename}...")
-            if self.use_pybdsf:
-                Utils.pybdsf(imagename+image_ext,self.pybdsf_threshold)
-                logging.info(f"Successfully ran pybdsf on {imagename}.")
-            else:
-                logging.info(f"Masking using PYBDSF not requested")
-        except Exception as e:
-            logging.error(f"Failed to run pybdsf on {imagename}: {e}")
+        exportfits(imagename=self.imagename+image_ext,fitsimage=self.imagename+ image_ext+'.fits',overwrite=True)
+        # try:
+        #     logging.info(f"Running pybdsf on {self.imagename}...")
+        #     if self.use_pybdsf:
+        #         Utils.pybdsf(self.imagename+image_ext,self.pybdsf_threshold)
+        #         logging.info(f"Successfully ran pybdsf on {imagename}.")
+        #     else:
+        #         logging.info(f"Masking using PYBDSF not requested")
+        # except Exception as e:
+        #     logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
 
 
 class wsclean_Imager:
     """
     A class for performing imaging on measurement sets using the WSClean algorithm.
+
+    Methods:
+    -------
+    get_imaging_cellsize() -> str:
+        Calculates and returns the cell size for imaging in arcseconds.
+    
+    imager() -> None:
+        Performs the imaging process using the WSClean algorithm.
+
     """
 
     def __init__(self, msname: str, imsize: int = 640, niter: int = 0, threshold: str = None, deconvolution:str = None,
@@ -646,20 +656,7 @@ class wsclean_Imager:
         self.pybdsf_threshold = pybdsf_threshold
         self.mgain = mgain
 
-    def get_imaging_cellsize(self) -> str:
-        """
-        Calculate the cell size for imaging based on the longest baseline.
-        
-        Returns:
-        -------
-        str
-            The size of the imaging cell in arcseconds.
-        """
-        longest_baseline_lambda = MeasurementSetInfo.get_longest_baseline(self.msname)
-        cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
-        cell = f'{cell_float:.2f} arcsec'
-        logging.info(f"Imaging with a cell of size {cell}")
-        return cell
+    
     
     @Utils.time_execution
     def imager(self) -> None:
@@ -670,7 +667,7 @@ class wsclean_Imager:
         -------
         None
         """
-        cell = self.get_imaging_cellsize() 
+        cell = MeasurementSetInfo.get_imaging_cellsize(msname)
         imagename = self.msname.replace('.ms', '_image')
 
         
@@ -698,127 +695,152 @@ class wsclean_Imager:
             logging.error(f"Error during WSClean imaging: {e}")
 
         # If using PYBDSF for masking, call it here
-        if self.use_pybdsf:
-            try:
-                logging.info(f"Running pybdsf on {imagename}...")
-                Utils.pybdsf(imagename + '-image.fits', self.pybdsf_threshold)
-                logging.info(f"Successfully ran pybdsf on {imagename}.")
-            except Exception as e:
-                logging.error(f"Failed to run pybdsf on {imagename}: {e}")
-        else:
-            logging.info("Masking using PYBDSF not requested.")
+        # if self.use_pybdsf:
+        #     try:
+        #         logging.info(f"Running pybdsf on {imagename}...")
+        #         Utils.pybdsf(imagename + '-image.fits', self.pybdsf_threshold)
+        #         logging.info(f"Successfully ran pybdsf on {imagename}.")
+        #     except Exception as e:
+        #         logging.error(f"Failed to run pybdsf on {imagename}: {e}")
+        # else:
+        #     logging.info("Masking using PYBDSF not requested.")
 
 
 
-Utils.set_working_dir(working_directory)
-MeasurementSetProcessor.timebin='6s'
-MeasurementSetProcessor.width = 4
-msname_tuple = MeasurementSetProcessor.split_data(msname)
-band_info = MeasurementSetInfo.get_observing_band(msname)
-longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
-refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
+# Utils.set_working_dir(working_directory)
+# MeasurementSetProcessor.timebin='6s'
+# MeasurementSetProcessor.width = 4
+# msname_tuple = MeasurementSetProcessor.split_data(msname)
+# band_info = MeasurementSetInfo.get_observing_band(msname)
+# longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
+# refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
 
 
 
-# Define your measurement set file and parameters
-imsize = 1024             # Image size in pixels
-niter = 0              # Number of iterations for cleaning
-threshold = "0.01Jy"      # Cleaning threshold
-overwrite = True          # Overwrite existing images if they exist
-use_pybdsf = True         # Run PyBDSF for masking
-pybdsf_threshold = 5      # PyBDSF threshold level
-mgain = 0.8     
-deconvolution = 'multiscale'          # Gain parameter for minor cycles
+# # Define your measurement set file and parameters
+# imsize = 1024             # Image size in pixels
+# niter = 0              # Number of iterations for cleaning
+# threshold = "0.01Jy"      # Cleaning threshold
+# overwrite = True          # Overwrite existing images if they exist
+# use_pybdsf = True         # Run PyBDSF for masking
+# pybdsf_threshold = 5      # PyBDSF threshold level
+# mgain = 0.8     
+# deconvolution = 'multiscale'          # Gain parameter for minor cycles
 
-# Create an instance of wsclean_Imager with the parameters
-imager = wsclean_Imager(
-    msname=msname_tuple[0],
-    imsize=imsize,
-    niter=niter,
-    threshold=threshold,
-    overwrite=overwrite,
-    deconvolution=deconvolution,
-    use_pybdsf=use_pybdsf,
-    pybdsf_threshold=pybdsf_threshold,
-    mgain=mgain
-)
+# # Create an instance of wsclean_Imager with the parameters
+# imager = wsclean_Imager(
+#     msname=msname_tuple[0],
+#     imsize=imsize,
+#     niter=niter,
+#     threshold=threshold,
+#     overwrite=overwrite,
+#     deconvolution=deconvolution,
+#     use_pybdsf=use_pybdsf,
+#     pybdsf_threshold=pybdsf_threshold,
+#     mgain=mgain
+# )
 
-# Run the imaging process
-imager.imager()
-
-
+# # Run the imaging process
+# imager.imager()
 
 
 
 
 
-# class SelfCalibration:
 
-#     def selfcal():
+class SelfCalibration(tclean_Imager):
 
-# #         regionfile = basename + '_first_masking.casabox'
-# #         cell = get_imaging_cellsize()
-# #         print("Deleting model column before selfcal")
-#         delmod(vis=vis,otf=True)
+    def __init__(self, msname, nloops, thresholds, **kwargs):
+        """
+        Initializes SelfCalibration, inheriting from tclean_Imager.
 
-#         for selfcal_loop in range(nloops):
-#             caltable = f'caltable_{selfcal_loop}.gcal'
-#             prev_caltables = sorted(glob.glob('*.gcal'))
-#             if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
-#                 applycal(vis=vis, gaintable = prev_caltables, parang=False )
-        
-#             imagename = f'target_selfcal_{selfcal_loop}'
-#             if os.path.exists(imagename):
-#                 print("Continuing to the next image")
+        Parameters:
+        - msname: Name of the measurement set.
+        - nloops: Number of self-calibration loops.
+        - thresholds: List of threshold values for each loop.
+        - kwargs: Additional parameters for tclean_Imager.
+        """
+        super().__init__(msname=msname, **kwargs)  # Call the parent constructor
+        self.nloops = nloops
+        self.thresholds = thresholds  
+
+    def selfcal(self) -> None:
+        """
+        Perform self-calibration on the measurement set.
+        """
+        Utils.create_plots_directory()
+        regionfile = self.msname + '_first_masking.casabox'
+        # cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
+
+        logging.info("Deleting model column before selfcal")
+        delmod(vis=self.msname, otf=True)
+
+        for selfcal_loop in range(self.nloops):
+            caltable = f'{self.msname.replace(".ms", "_caltable_loop_")}_{selfcal_loop}.gcal'
+            prev_caltables = sorted(glob.glob('*.gcal'))
+            if len(prev_caltables) > 0 and calmode[selfcal_loop] != '':
+                applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
+
+            imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
+            if os.path.exists(imagename):
+                logging.info("Continuing to the next image")
+            else:
+                logging.info(f"Making image {imagename}")
+
+                # Initialize the imager_instance with required parameters
+                imager_instance = tclean_Imager(
+                    msname=self.msname,
+                    imagename = imagename,
+                    imsize=self.imsize,
+                    niter=self.niter,
+                    deconvolver=self.deconvolver,
+                    use_pybdsf=self.use_pybdsf,
+                    pybdsf_threshold=self.pybdsf_threshold,
+                    threshold=self.thresholds[selfcal_loop],
+                    mask=regionfile ,
+                )
+                
+                # Call the imager method
+                imager_instance.imager()
+
+
+        #         ## NB: The problem was niter -- there was a space in the list []
+
+        #         print("Adding modelcolumn to data")
+        #         # model images from the MTMFS images,
+        #         ft(vis = vis, model=[imagename+'.model.tt0',imagename+'.model.tt1'], nterms=2,usescratch=True)
+
+        #         # plot the model column
+        #         plotms(
+        #             vis=vis, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
+        #             showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
+        #         )
+
+        #         gaincal( vis =vis, caltable = caltable, refant = refant, solint = solint[selfcal_loop],
+        #                 gaintype = gaintype[selfcal_loop], gaintable=prev_caltables,  minsnr = minsnr[selfcal_loop],
+        #                 calmode = calmode[selfcal_loop], append=False, parang=False
+        #                 )
+        #         coloraxis = ['corr','spw']
+        #         for color in coloraxis:
+        #             if calmode[selfcal_loop] =='p':
+        #                 plotms(
+        #                     vis = caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+        #                     iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
+        #                     plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750,
+        #                 )
+        #             else:
+        #                 plotms(
+        #                         vis = caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+        #                         iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
+        #                         plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750
+        #                     )
+
+        #         if selfcal_loop == nloops-1:
+        #             prev_caltables = sorted(glob.glob('*.gcal'))
+        #             print("Applying the caltable derived from last gaincal iteration")
+        #             applycal(vis=vis, gaintable = prev_caltables, parang=False )
             
-#             else:
-#                 # imagename = f'target_selfcal_{selfcal_loop}'
-#                 print(f"Making image {imagename}")
-#                 tclean(
-#                     vis = vis, imagename=imagename, imsize=imsize, cell=cell,
-#                     parallel=False,
-#                     gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-#                     weighting = weighting, robust = robust, niter=niter[selfcal_loop], threshold = threshold[selfcal_loop],
-#                     nterms = nterms, pblimit = -1,interactive=False, usemask='user', mask=regionfile
-#                 )
-
-#                 ## NB: The problem was niter -- there was a space in the list []
-
-#                 print("Adding modelcolumn to data")
-#                 # model images from the MTMFS images,
-#                 ft(vis = vis, model=[imagename+'.model.tt0',imagename+'.model.tt1'], nterms=2,usescratch=True)
-
-#                 # plot the model column
-#                 plotms(
-#                     vis=vis, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
-#                     showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
-#                 )
-
-#                 gaincal( vis =vis, caltable = caltable, refant = refant, solint = solint[selfcal_loop],
-#                         gaintype = gaintype[selfcal_loop], gaintable=prev_caltables,  minsnr = minsnr[selfcal_loop],
-#                         calmode = calmode[selfcal_loop], append=False, parang=False
-#                         )
-#                 coloraxis = ['corr','spw']
-#                 for color in coloraxis:
-#                     if calmode[selfcal_loop] =='p':
-#                         plotms(
-#                             vis = caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
-#                             iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
-#                             plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750,
-#                         )
-#                     else:
-#                         plotms(
-#                                 vis = caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
-#                                 iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
-#                                 plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750
-#                             )
-
-#                 if selfcal_loop == nloops-1:
-#                     prev_caltables = sorted(glob.glob('*.gcal'))
-#                     print("Applying the caltable derived from last gaincal iteration")
-#                     applycal(vis=vis, gaintable = prev_caltables, parang=False )
-            
-#             # ### Get the last imagename from the loop and generate a final mask
+            # ### Get the last imagename from the loop and generate a final mask
             
 #         imagename = basename +f'_{nloops-1}'+'.final'
 #         ##  tclean here to make the final image
@@ -831,6 +853,40 @@ imager.imager()
 #         )
         
         
+
+Utils.set_working_dir(working_directory)
+MeasurementSetProcessor.timebin='6s'
+MeasurementSetProcessor.width = 4
+msname_tuple = MeasurementSetProcessor.split_data(msname)
+band_info = MeasurementSetInfo.get_observing_band(msname)
+longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
+refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
+
+def main():
+    # Define your parameters here
+    msname = msname_tuple[0]  # Replace with your actual measurement set file
+    nloops = 3              # Number of self-calibration loops
+    thresholds = ['0.1mJy', '0.05mJy', '0.01mJy']  # Example thresholds for each loop
+
+    # Create an instance of SelfCalibration
+    self_calibration_instance = SelfCalibration(
+        msname=msname,
+        nloops=nloops,
+        thresholds=thresholds,
+        imsize=640,
+        niter=0,
+        deconvolver='mtmfs',
+        weighting='briggs',
+        robust='0.5',
+        use_pybdsf=True,
+        pybdsf_threshold=5
+    )
+
+    # Call the selfcal method to perform self-calibration
+    self_calibration_instance.selfcal()
+
+if __name__ == "__main__":
+    main()
 
 
 #     # def applycal_target():
