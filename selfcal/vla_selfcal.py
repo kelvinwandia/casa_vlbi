@@ -708,46 +708,6 @@ class wsclean_Imager:
 
 
 
-# Utils.set_working_dir(working_directory)
-# MeasurementSetProcessor.timebin='6s'
-# MeasurementSetProcessor.width = 4
-# msname_tuple = MeasurementSetProcessor.split_data(msname)
-# band_info = MeasurementSetInfo.get_observing_band(msname)
-# longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
-# refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
-
-
-
-# # Define your measurement set file and parameters
-# imsize = 1024             # Image size in pixels
-# niter = 0              # Number of iterations for cleaning
-# threshold = "0.01Jy"      # Cleaning threshold
-# overwrite = True          # Overwrite existing images if they exist
-# use_pybdsf = True         # Run PyBDSF for masking
-# pybdsf_threshold = 5      # PyBDSF threshold level
-# mgain = 0.8     
-# deconvolution = 'multiscale'          # Gain parameter for minor cycles
-
-# # Create an instance of wsclean_Imager with the parameters
-# imager = wsclean_Imager(
-#     msname=msname_tuple[0],
-#     imsize=imsize,
-#     niter=niter,
-#     threshold=threshold,
-#     overwrite=overwrite,
-#     deconvolution=deconvolution,
-#     use_pybdsf=use_pybdsf,
-#     pybdsf_threshold=pybdsf_threshold,
-#     mgain=mgain
-# )
-
-# # Run the imaging process
-# imager.imager()
-
-
-
-
-
 
 class SelfCalibration(tclean_Imager):
 
@@ -788,23 +748,23 @@ class SelfCalibration(tclean_Imager):
                 Set niter to 0 and run PYBDSF
                 """
                 self.niter = 0  # Set niter for dirty map
-                imagename = self.imagename
+                imagename_dirty =  f'{self.msname.replace(".ms", "_dirty")}'
 
                 if self.deconvolver == 'mtmfs':
                     image_ext = '.image.tt0'
                 else:
                     image_ext = '.image'
-                exportfits(imagename=self.imagename+image_ext,fitsimage=self.imagename+ image_ext+'.fits',overwrite=True)
+                exportfits(imagename=imagename_dirty+image_ext,fitsimage=imagename_dirty+ image_ext+'.fits',overwrite=True)
 
                 try:
-                    logging.info(f"Running pybdsf on {self.imagename}...")
+                    logging.info(f"Running pybdsf on {imagename_dirty}...")
                     if self.use_pybdsf:
-                        Utils.pybdsf(self.imagename+image_ext,self.pybdsf_threshold)
-                        logging.info(f"Successfully ran pybdsf on {imagename}.")
+                        Utils.pybdsf(imagename_dirty+image_ext,self.pybdsf_threshold)
+                        logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
                     else:
                         logging.info(f"Masking using PYBDSF not requested")
                 except Exception as e:
-                    logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
+                    logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
 
             else:
                 """
@@ -831,22 +791,18 @@ class SelfCalibration(tclean_Imager):
                 overwrite = self.overwrite
             )
             
-            # Call the imager method
-            imager_instance.imager()
+            logging.info("Adding modelcolumn to data")
+            # model images from the MTMFS images,
+            if self.deconvolver == 'mtmfs':
+                ft(vis = msname, model=[imagename+'.model.tt0',imagename+'.model.tt1'], nterms=2,usescratch=True)
+            else:
+                ft(vis = msname, model=imagename+'.model', usescratch=True)
 
-
-
-        #         ## NB: The problem was niter -- there was a space in the list []
-
-        #         print("Adding modelcolumn to data")
-        #         # model images from the MTMFS images,
-        #         ft(vis = vis, model=[imagename+'.model.tt0',imagename+'.model.tt1'], nterms=2,usescratch=True)
-
-        #         # plot the model column
-        #         plotms(
-        #             vis=vis, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
-        #             showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
-        #         )
+            logging.info("Plotting the model column")
+            plotms(
+                vis=msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
+                showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
+            )
 
         #         gaincal( vis =vis, caltable = caltable, refant = refant, solint = solint[selfcal_loop],
         #                 gaintype = gaintype[selfcal_loop], gaintable=prev_caltables,  minsnr = minsnr[selfcal_loop],
@@ -897,6 +853,7 @@ refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
 def main():
     # Define your parameters here
     msname = msname_tuple[0]  #
+    print(msname)
     """First loop is a dirty map for masking """
     nloops = 4
     thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
