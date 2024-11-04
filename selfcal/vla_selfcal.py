@@ -126,14 +126,12 @@ class Utils():
         return wrapper
     
     @staticmethod
-    def run_wsclean(command):
+    def run_wsclean(wsclean_sif, command):
         """
         Runs wsclean commands.
         """
-
-        container = wsclean_sif
         singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
-        command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
+        command_to_execute = ['singularity', 'exec', '-B', singularity_bind, wsclean_sif] + command
 
         try:
             logging.info(f"Executing: {' '.join(command_to_execute)}")
@@ -608,6 +606,110 @@ class tclean_Imager:
         except Exception as e:
             logging.error(f"Failed to run pybdsf on {imagename}: {e}")
 
+
+class wsclean_Imager:
+    """
+    A class for performing imaging on measurement sets using the WSClean algorithm.
+    """
+
+    def __init__(self, msname: str, imsize: int = 640, niter: int = 0, threshold: str = None, deconvolution:str = None,
+                 overwrite: bool = False, use_pybdsf: bool = True, pybdsf_threshold: int = 5, mgain: float = 0.8):
+        """
+        Initializes the wsclean_Imager instance with specified parameters.
+
+        Parameters:
+        ----------
+        msname : str
+            The name of the measurement set file.
+        imsize : int, optional
+            The size of the image (default is 640).
+        niter : int, optional
+            The number of iterations for the WSClean process (default is 0).
+        threshold : str, optional
+            The threshold for stopping the deconvolution (default is None).
+        overwrite: bool, optional
+            If True, deletes existing images and creates new ones (default is False).
+        use_pybdsf: bool, optional
+            Calls pybdsf and uses it for masking.
+        pybdsf_threshold: int, optional
+            Masking threshold (default is 5).
+        mgain : float, optional
+            The gain for minor cycles in WSClean (default is 0.8).
+        """
+        self.msname = msname  
+        self.imsize = imsize  
+        self.niter = niter
+        self.threshold = threshold
+        self.deconvolution = deconvolution
+        self.overwrite = overwrite
+        self.use_pybdsf = use_pybdsf
+        self.pybdsf_threshold = pybdsf_threshold
+        self.mgain = mgain
+
+    def get_imaging_cellsize(self) -> str:
+        """
+        Calculate the cell size for imaging based on the longest baseline.
+        
+        Returns:
+        -------
+        str
+            The size of the imaging cell in arcseconds.
+        """
+        longest_baseline_lambda = MeasurementSetInfo.get_longest_baseline(self.msname)
+        cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
+        cell = f'{cell_float:.2f} arcsec'
+        logging.info(f"Imaging with a cell of size {cell}")
+        return cell
+    
+    @Utils.time_execution
+    def imager(self) -> None:
+        """
+        Perform the imaging process using the WSClean algorithm.
+
+        Returns:
+        -------
+        None
+        """
+        cell = self.get_imaging_cellsize() 
+        imagename = self.msname.replace('.ms', '_image')
+
+        
+        command = [
+            "wsclean",
+            "-log-time",
+            "-size", str(self.imsize), str(self.imsize),
+            "-reorder",      
+            "-name", imagename,
+            "-scale", cell,
+            "-mgain", str(self.mgain),
+            "-niter", str(self.niter),
+        ]
+
+        if self.deconvolution == "multiscale":
+            command.append("-multiscale")
+
+        command.append(self.msname)
+        
+        # Run the WSClean command
+        try:
+            Utils.run_wsclean(wsclean_sif,command)
+            logging.info(f"Finished imaging {self.msname}, created image: {imagename}")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error during WSClean imaging: {e}")
+
+        # If using PYBDSF for masking, call it here
+        if self.use_pybdsf:
+            try:
+                logging.info(f"Running pybdsf on {imagename}...")
+                Utils.pybdsf(imagename + '-image.fits', self.pybdsf_threshold)
+                logging.info(f"Successfully ran pybdsf on {imagename}.")
+            except Exception as e:
+                logging.error(f"Failed to run pybdsf on {imagename}: {e}")
+        else:
+            logging.info("Masking using PYBDSF not requested.")
+
+
+
 Utils.set_working_dir(working_directory)
 MeasurementSetProcessor.timebin='6s'
 MeasurementSetProcessor.width = 4
@@ -617,67 +719,206 @@ longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
 refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
 
 
-for msname in msname_tuple:
-    # logging.info(f"Processing measurement set {msname}")
-    try:
-        imager = tclean_Imager(
-            msname=msname_tuple[0],
-            gridder='standard',  
-            deconvolver='mtmfs', 
-            weighting='briggs',  
-            robust=0.5,  
-            nterms=2,  
-            imsize=640,  
-            niter=0,  
-            threshold='0.1mJy',  
-            wprojplanes=1,  
-            pblimit=0.1,  
-            phasecenter='',  
-            overwrite=True, 
-            use_pybdsf = False,
-            pybdsf_threshold=5 
-        )
-        imager.imager()  # Call the imaging process
+
+# Define your measurement set file and parameters
+imsize = 1024             # Image size in pixels
+niter = 0              # Number of iterations for cleaning
+threshold = "0.01Jy"      # Cleaning threshold
+overwrite = True          # Overwrite existing images if they exist
+use_pybdsf = True         # Run PyBDSF for masking
+pybdsf_threshold = 5      # PyBDSF threshold level
+mgain = 0.8     
+deconvolution = 'multiscale'          # Gain parameter for minor cycles
+
+# Create an instance of wsclean_Imager with the parameters
+imager = wsclean_Imager(
+    msname=msname_tuple[0],
+    imsize=imsize,
+    niter=niter,
+    threshold=threshold,
+    overwrite=overwrite,
+    deconvolution=deconvolution,
+    use_pybdsf=use_pybdsf,
+    pybdsf_threshold=pybdsf_threshold,
+    mgain=mgain
+)
+
+# Run the imaging process
+imager.imager()
+
+
+
+
+
+
+
+# class SelfCalibration:
+
+#     def selfcal():
+
+# #         regionfile = basename + '_first_masking.casabox'
+# #         cell = get_imaging_cellsize()
+# #         print("Deleting model column before selfcal")
+#         delmod(vis=vis,otf=True)
+
+#         for selfcal_loop in range(nloops):
+#             caltable = f'caltable_{selfcal_loop}.gcal'
+#             prev_caltables = sorted(glob.glob('*.gcal'))
+#             if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
+#                 applycal(vis=vis, gaintable = prev_caltables, parang=False )
+        
+#             imagename = f'target_selfcal_{selfcal_loop}'
+#             if os.path.exists(imagename):
+#                 print("Continuing to the next image")
+            
+#             else:
+#                 # imagename = f'target_selfcal_{selfcal_loop}'
+#                 print(f"Making image {imagename}")
+#                 tclean(
+#                     vis = vis, imagename=imagename, imsize=imsize, cell=cell,
+#                     parallel=False,
+#                     gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
+#                     weighting = weighting, robust = robust, niter=niter[selfcal_loop], threshold = threshold[selfcal_loop],
+#                     nterms = nterms, pblimit = -1,interactive=False, usemask='user', mask=regionfile
+#                 )
+
+#                 ## NB: The problem was niter -- there was a space in the list []
+
+#                 print("Adding modelcolumn to data")
+#                 # model images from the MTMFS images,
+#                 ft(vis = vis, model=[imagename+'.model.tt0',imagename+'.model.tt1'], nterms=2,usescratch=True)
+
+#                 # plot the model column
+#                 plotms(
+#                     vis=vis, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
+#                     showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
+#                 )
+
+#                 gaincal( vis =vis, caltable = caltable, refant = refant, solint = solint[selfcal_loop],
+#                         gaintype = gaintype[selfcal_loop], gaintable=prev_caltables,  minsnr = minsnr[selfcal_loop],
+#                         calmode = calmode[selfcal_loop], append=False, parang=False
+#                         )
+#                 coloraxis = ['corr','spw']
+#                 for color in coloraxis:
+#                     if calmode[selfcal_loop] =='p':
+#                         plotms(
+#                             vis = caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+#                             iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
+#                             plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750,
+#                         )
+#                     else:
+#                         plotms(
+#                                 vis = caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+#                                 iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
+#                                 plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750
+#                             )
+
+#                 if selfcal_loop == nloops-1:
+#                     prev_caltables = sorted(glob.glob('*.gcal'))
+#                     print("Applying the caltable derived from last gaincal iteration")
+#                     applycal(vis=vis, gaintable = prev_caltables, parang=False )
+            
+#             # ### Get the last imagename from the loop and generate a final mask
+            
+#         imagename = basename +f'_{nloops-1}'+'.final'
+#         ##  tclean here to make the final image
+#         print("Make final image with all selfcal corrections applied")
+#         tclean(
+#             vis = vis, imagename = imagename, imsize=imsize, cell=cell, gridder=gridder,
+#             wprojplanes = wprojplanes, deconvolver = deconvolver, weighting = weighting,
+#             robust = robust, niter=niter_final, threshold = threshold_final, nterms=nterms,
+#             pblimit=pblimit, interactive=False, usemask = 'user', mask=regionfile,
+#         )
+        
+        
+
+
+#     # def applycal_target():
+
+#     #     """
+#     #     Applies cal to the target field
+#     #     """
+#     #     prev_caltables = sorted(glob.glob('*.gcal'))
+#     #     applycal(
+#     #         vis = vis_tocal, gaintable = prev_caltables, parang=False
+#     #     )
+
+
+
+#     # def peeling():
+
+#     #     """
+#     #     Subtract the bright sources in the field so you are left with the emission from the star
+
+#     #     Use pybsdf casa region file -- you can change the threshold to only select the bright sources you want
+
+#     #     Run pybsdf on the final image
+        
+#     #     """
+
+#     #     # Using the final imagename 
+
+#     #     imagename = basename +f'_{nloops-1}'+'.final'
+#     #     # region_to_peel = pybdsf(input_image=imagename+'.image.tt0')
+
+#     #     ## NB: You had masked the bright source from the dirty map -- so you can just subtract
+#     #     uvsub(vis=vis)
+
+#     #     ## Make a final map without the sources
+#     #     cell = get_imaging_cellsize()
+#     #     peeled_map = basename+'_peeled_map'
+#     #     if not os.path.exists(peeled_map):
+#     #         print(f"Making {peeled_map}")
+#     #         tclean(
+#     #             vis = vis, imagename=peeled_map, imsize=imsize, cell=cell,
+#     #             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
+#     #             weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
+#     #             nterms = nterms, pblimit = pblimit
+#     #         )
+
+
+
+
+
+
+# for msname in msname_tuple:
+#     # logging.info(f"Processing measurement set {msname}")
+#     try:
+#         imager = tclean_Imager(
+#             msname=msname_tuple[0],
+#             gridder='standard',  
+#             deconvolver='mtmfs', 
+#             weighting='briggs',  
+#             robust=0.5,  
+#             nterms=2,  
+#             imsize=640,  
+#             niter=0,  
+#             threshold='0.1mJy',  
+#             wprojplanes=1,  
+#             pblimit=0.1,  
+#             phasecenter='',  
+#             overwrite=True, 
+#             use_pybdsf = False,
+#             pybdsf_threshold=5 
+#         )
+#         imager.imager()  # Call the imaging process
 
     
 
-    except Exception as e:
+#     except Exception as e:
         
-        print(f"An error occurred while processing {msname}: {e}")
-        logging.error(f"An error occurred while processing {msname}: {e}")
+#         print(f"An error occurred while processing {msname}: {e}")
+#         logging.error(f"An error occurred while processing {msname}: {e}")
 
-logging.info("Imaging process completed for all measurement sets.")
-
-
+# logging.info("Imaging process completed for all measurement sets.")
 
 
 
 
 
-#     def pybdsf(input_image):
 
-#         # The input image is a casa .image that then gets exported to a FITS
-#         imagename = input_image.replace('.image.tt0','')
-#         fitsname = imagename+'.fits'
-#         exportfits(imagename = input_image, fitsimage=fitsname, overwrite=True)
 
-#         img = bdsf.process_image(fitsname,adaptive_rms_box=True, thresh='hard',
-#                                 thresh_isl=True, thresh_pix = detection_threshold, advanced_opts=True,
-#                                 mean_map='map', rms_map =True, group_by_isl=True)
-#         # adaptive_rms_box=False, spline_rank=4, thresh='hard', thresh_isl=True, thresh_pix = detection_threshold
-#         # Write out island mask and FITS catalog -- for the large map
-#         img.export_image(outfile=imagename+'.maskfile.fits',img_type='island_mask',img_format='fits',clobber=True)
-#         img.write_catalog(outfile=imagename+'.cat', format='fits', clobber=True, catalog_type ='gaul')
-        
-#         regionfile = imagename+'.casabox'
-#         ascii_file = imagename+'.ascii'
-#         rmsfile = imagename+'.rmsfile'
 
-#         img.write_catalog(outfile=regionfile,format='casabox',clobber=True,catalog_type='srl')
-#         img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
-#         img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
-
-#         return regionfile
 
 #     #  def get_im_stats(imagename):
         
@@ -773,28 +1014,6 @@ logging.info("Imaging process completed for all measurement sets.")
    
 
 
-
-
-
-# def make_dirty_map():
-
-#     """
-#     Creates an (a large) an image that is used to create a casa region file using pybdsf 
-#     for masking
-#     """
-#     cell = get_imaging_cellsize()
-#     dirty_map = basename + '_first_masking'
-
-#     if not os.path.exists(dirty_map):
-#         print(f"Making {dirty_map}")
-#         tclean(
-#             vis = vis, imagename=dirty_map, imsize=imsize, cell=cell,
-#             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-#             weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
-#             nterms = nterms, pblimit = pblimit
-#         )
-
-#     regionfile = pybdsf(input_image=dirty_map+'.image.tt0')
 
 # class SelfCalibration():
 
