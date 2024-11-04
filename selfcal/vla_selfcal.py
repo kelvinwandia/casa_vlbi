@@ -1,70 +1,25 @@
 
-import os, glob, subprocess
-from casatasks import *
-from casaplotms import *
-import bdsf
-import casalogger
-import casatools
-import numpy as np
+import os, glob, subprocess, time, bdsf, logging
+from typing import Callable, Any
+import casatools, casalogger
 import matplotlib.pyplot as plt
-import time 
+
+import numpy as np
 from radio_beam import Beam
 from astropy.io import fits
 from astropy import units as u
 from astropy.wcs import WCS
 
-import logging
-from typing import Callable, Any
+
+
+from casatasks import *
+from casaplotms import *
+
 msmd = casatools.msmetadata()
 tb = casatools.table()
 ms = casatools.ms()
 
 
-msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
-# msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
-
-
-working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424' # D
-# working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
-
-target = 'K2-18'
-vis = target+'.ms'
-outlierfile = '/home/kelvin/Desktop/Synphly/selfcal/outlier_fields.txt'
-basename = os.path.splitext(os.path.basename(vis))[0]
-
-# target
-
-
-# imaging 
-
-nterms = 2
-gridder = 'standard'
-deconvolver = 'mtmfs'
-weighting='briggs'
-robust = 0.5
-threshold = ['0.05mJy','0.02mJy','0.001mJy'] # in mJy
-wprojplanes = 1
-outlier_file = '/home/kelvin/Desktop/Synphly/selfcal/outlier_fields.txt'
-pblimit = -0.1 # avoid 1,-1 or 0
-
-imsize = [640,640] 
-niter = [1000,10000,100000] # the number of iterations for each loop -- needs to be arbitrarily large
-
-# selfcal
-nloops = 3 # number of selfcal loops
-calmode = ['p','p','ap']
-gaintype= ['G','G','G']
-solint = ['60s','30s','180s']
-minsnr = [1,1,1]
-
-# # pybdsf
-detection_threshold = 5.0
-
-# # final image and peeling
-niter_final = 1000000
-threshold_final = '0.05mJy'
-wsclean_sif= '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
-abs_mem = 128 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -460,8 +415,7 @@ class tclean_Imager:
 
     def __init__(self, msname: str, field:str='', gridder: str = 'standard', deconvolver: str = 'multiscale', 
                  weighting: str = 'natural', robust: float = 0, nterms: int = 1, imsize: int = 640,
-                 niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '',
-                 imagename: str = f"{msname.replace('.ms','_image')}",
+                 niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '', imagename: str = None,
                  usemask: str = 'user', pblimit: float = 0.1,phasecenter: str = '', overwrite:bool = False, 
                  use_pybdsf:bool = True, pybdsf_threshold: int = 5):
         """
@@ -512,7 +466,6 @@ class tclean_Imager:
         self.msname = msname  
         self.field = field
         self.gridder = gridder
-        self.imagename = imagename
         self.deconvolver = deconvolver
         self.weighting = weighting
         self.robust = robust
@@ -529,6 +482,8 @@ class tclean_Imager:
         self.use_pybdsf = use_pybdsf
         self.pybdsf_threshold = pybdsf_threshold
 
+        self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
+
 
     @Utils.time_execution
     def imager(self) -> None:
@@ -542,7 +497,7 @@ class tclean_Imager:
         -------
         None
         """
-        cell = MeasurementSetInfo.get_imaging_cellsize(msname)
+        cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
         self.imagename = self.imagename+'_dirty' if self.niter == 0 else self.imagename
 
     
@@ -668,7 +623,7 @@ class wsclean_Imager:
         -------
         None
         """
-        cell = MeasurementSetInfo.get_imaging_cellsize(msname)
+        cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
         imagename = self.msname.replace('.ms', '_image')
 
         
@@ -711,7 +666,7 @@ class wsclean_Imager:
 
 class SelfCalibration(tclean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, **kwargs):
         """
         Initializes SelfCalibration, inheriting from tclean_Imager.
 
@@ -719,19 +674,27 @@ class SelfCalibration(tclean_Imager):
         - msname: Name of the measurement set.
         - nloops: Number of self-calibration loops.
         - thresholds: List of threshold values for each loop.
+        - calmode: Calibration mode for each loop.
+        - gaintype: Gain type for each loop.
+        - solint: Solution interval for each loop.
+        - minsnr: Minimum SNR for each loop.
         - kwargs: Additional parameters for tclean_Imager.
         """
         super().__init__(msname=msname, **kwargs)  # Call the parent constructor
         self.nloops = nloops
-        self.thresholds = thresholds  
+        self.thresholds = thresholds
+        self.calmode = calmode
+        self.gaintype = gaintype
+        self.solint = solint
+        self.minsnr = minsnr
 
+    @Utils.time_execution
     def selfcal(self) -> None:
         """
         Perform self-calibration on the measurement set.
         """
         Utils.create_plots_directory()
-        regionfile = self.msname + '_first_masking.casabox'
-        # cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
+        
 
         logging.info("Deleting model column before selfcal")
         delmod(vis=self.msname, otf=True)
@@ -739,95 +702,114 @@ class SelfCalibration(tclean_Imager):
         for selfcal_loop in range(self.nloops):
             caltable = f'{self.msname.replace(".ms", "_caltable_loop_")}_{selfcal_loop}.gcal'
             prev_caltables = sorted(glob.glob('*.gcal'))
-            if len(prev_caltables) > 0 and calmode[selfcal_loop] != '':
+
+            # Apply previous calibration tables if they exist
+            if len(prev_caltables) > 0 and self.calmode[selfcal_loop] != '':
                 applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
 
-            # Set niter to 0 for the first loop to create a dirty map and run PYBSDF
+            imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
+
+            # Set niter to 0 for the first loop to create a dirty map and run PYBDSF
             if selfcal_loop == 0:
-                """
-                Set niter to 0 and run PYBDSF
-                """
                 self.niter = 0  # Set niter for dirty map
-                imagename_dirty =  f'{self.msname.replace(".ms", "_dirty")}'
+                imagename_dirty = f'{self.msname.replace(".ms", "_dirty")}'
 
                 if self.deconvolver == 'mtmfs':
                     image_ext = '.image.tt0'
                 else:
                     image_ext = '.image'
-                exportfits(imagename=imagename_dirty+image_ext,fitsimage=imagename_dirty+ image_ext+'.fits',overwrite=True)
+
+                exportfits(imagename=imagename_dirty + image_ext, fitsimage=imagename_dirty + image_ext + '.fits', overwrite=True)
 
                 try:
                     logging.info(f"Running pybdsf on {imagename_dirty}...")
                     if self.use_pybdsf:
-                        Utils.pybdsf(imagename_dirty+image_ext,self.pybdsf_threshold)
+                        Utils.pybdsf(imagename_dirty + image_ext, self.pybdsf_threshold)
+                        regionfile = imagename_dirty + '.casabox'
+                        mask = regionfile
                         logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
                     else:
+                        mask = ''
                         logging.info(f"Masking using PYBDSF not requested")
                 except Exception as e:
                     logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
+                
 
             else:
-                """
-                Set niter to what is set in the imager instance
-                also set PYBDSF to false
-                """
-                self.niter = self.niter 
+                # Set niter for subsequent loops
+                self.niter = self.niter  # Can be modified to set a new value if needed
                 self.use_pybdsf = False
-                imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
-
 
             # Initialize the imager_instance with required parameters
             imager_instance = tclean_Imager(
                 msname=self.msname,
-                imagename = imagename,
-                nterms = self.nterms,
+                imagename=imagename,
+                nterms=self.nterms,
                 imsize=self.imsize,
                 niter=self.niter,
                 deconvolver=self.deconvolver,
                 use_pybdsf=self.use_pybdsf,
                 pybdsf_threshold=self.pybdsf_threshold,
                 threshold=self.thresholds[selfcal_loop],
-                mask=regionfile ,
-                overwrite = self.overwrite
+                mask=mask,
+                overwrite=self.overwrite
             )
-            
-            logging.info("Adding modelcolumn to data")
-            # model images from the MTMFS images,
-            if self.deconvolver == 'mtmfs':
-                ft(vis = msname, model=[imagename+'.model.tt0',imagename+'.model.tt1'], nterms=2,usescratch=True)
-            else:
-                ft(vis = msname, model=imagename+'.model', usescratch=True)
+
+            logging.info("Adding model column to data")
+            try:
+                if self.deconvolver == 'mtmfs':
+                    ft(vis=self.msname, model=[imagename + '.model.tt0', imagename + '.model.tt1'], nterms=2, usescratch=True)
+                else:
+                    ft(vis=self.msname, model=imagename + '.model', usescratch=True)
+            except Exception as e:
+                logging.error(f"Error adding model column: {e}")
 
             logging.info("Plotting the model column")
-            plotms(
-                vis=msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model',avgchannel='64',avgtime='300',
-                showgui=False, plotfile=imagename+'_modelcolumn.png', overwrite=True, width=1500, height=750,
-            )
+            try:
+                plotms(
+                    vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel='64', avgtime='300',
+                    showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
+                )
+            except Exception as e:
+                logging.error(f"Error plotting model column: {e}")
 
-        #         gaincal( vis =vis, caltable = caltable, refant = refant, solint = solint[selfcal_loop],
-        #                 gaintype = gaintype[selfcal_loop], gaintable=prev_caltables,  minsnr = minsnr[selfcal_loop],
-        #                 calmode = calmode[selfcal_loop], append=False, parang=False
-        #                 )
-        #         coloraxis = ['corr','spw']
-        #         for color in coloraxis:
-        #             if calmode[selfcal_loop] =='p':
-        #                 plotms(
-        #                     vis = caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
-        #                     iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
-        #                     plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750,
-        #                 )
-        #             else:
-        #                 plotms(
-        #                         vis = caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
-        #                         iteraxis='antenna', coloraxis = color, showgui=False, overwrite=True,
-        #                         plotfile=caltable.replace('.gcal',f'_{color}.png'), dpi=300, width=1500, height=750
-        #                     )
+            logging.info(f"Running gain calibration. Writing caltable: {caltable}")
+            refant = MeasurementSetInfo.find_refant(self.msname, field='')  
+            try:
+                gaincal(vis=self.msname,
+                        caltable=caltable,
+                        refant=refant,
+                        solint=self.solint[selfcal_loop],
+                        gaintype=self.gaintype[selfcal_loop],
+                        gaintable=prev_caltables,
+                        minsnr=self.minsnr[selfcal_loop],
+                        calmode=self.calmode[selfcal_loop],
+                        append=False,
+                        parang=False)
+            except Exception as e:
+                logging.error(f"Error during gain calibration: {e}")
 
-        #         if selfcal_loop == nloops-1:
-        #             prev_caltables = sorted(glob.glob('*.gcal'))
-        #             print("Applying the caltable derived from last gaincal iteration")
-        #             applycal(vis=vis, gaintable = prev_caltables, parang=False )
-            
+            coloraxis = ['corr', 'spw']
+            for color in coloraxis:
+                if self.calmode[selfcal_loop] == 'p':
+                    plotms(
+                        vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                        iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                        plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                    )
+                else:
+                    plotms(
+                        vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+                        iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                        plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                    )
+
+            if selfcal_loop == self.nloops - 1:
+                prev_caltables = sorted(glob.glob('*.gcal'))
+                logging.info("Applying the caltable derived from last gaincal iteration")
+                applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
+
+
             # ### Get the last imagename from the loop and generate a final mask
             
 #         imagename = basename +f'_{nloops-1}'+'.final'
@@ -842,37 +824,55 @@ class SelfCalibration(tclean_Imager):
         
         
 
-Utils.set_working_dir(working_directory)
-MeasurementSetProcessor.timebin='6s'
-MeasurementSetProcessor.width = 4
-msname_tuple = MeasurementSetProcessor.split_data(msname)
-band_info = MeasurementSetInfo.get_observing_band(msname)
-longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
-refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
 
 def main():
     # Define your parameters here
-    msname = msname_tuple[0]  #
-    print(msname)
+
+    msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+    # msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
+    working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424' # D
+    # working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
+
+    wsclean_sif= '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
+
+
     """First loop is a dirty map for masking """
     nloops = 4
     thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
+    calmode = ['p','p','ap']
+    gaintype= ['G','G','G']
+    solint = ['60s','30s','180s']
+    minsnr = [1,1,1]
+
+    Utils.set_working_dir(working_directory)
+    MeasurementSetProcessor.timebin='6s'
+    MeasurementSetProcessor.width = 4
+    msname_tuple = MeasurementSetProcessor.split_data(msname)
+    print(msname_tuple)
+    # band_info = MeasurementSetInfo.get_observing_band(msname)
+    # longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
 
     # Create an instance of SelfCalibration for the first loop (dirty map)
     self_calibration_instance = SelfCalibration(
-        msname=msname,
+        msname=msname_tuple[2],
         nloops=nloops,
         thresholds=thresholds,
+        calmode=calmode,
+        gaintype=gaintype,
+        solint=solint,
+        minsnr=minsnr,
         imsize=640,
         niter=1000,  
-        nterms = 2,
+        nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
         robust='0.5',
         use_pybdsf=True,
         pybdsf_threshold=5,
-        overwrite = True
+        overwrite=True
+        
     )
+
 
     self_calibration_instance.selfcal()
 
