@@ -591,21 +591,22 @@ class tclean_Imager:
         )
 
         logging.info(f"Finished imaging {self.msname}, created image: {self.imagename}")
-        if self.deconvolver == 'mtmfs':
-            image_ext = '.image.tt0'
-        else:
-            image_ext = '.image'
 
-        exportfits(imagename=self.imagename+image_ext,fitsimage=self.imagename+ image_ext+'.fits',overwrite=True)
-        # try:
-        #     logging.info(f"Running pybdsf on {self.imagename}...")
-        #     if self.use_pybdsf:
-        #         Utils.pybdsf(self.imagename+image_ext,self.pybdsf_threshold)
-        #         logging.info(f"Successfully ran pybdsf on {imagename}.")
-        #     else:
-        #         logging.info(f"Masking using PYBDSF not requested")
-        # except Exception as e:
-        #     logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
+        # if self.deconvolver == 'mtmfs':
+        #     image_ext = '.image.tt0'
+        # else:
+        #     image_ext = '.image'
+
+        # exportfits(imagename=self.imagename+image_ext,fitsimage=self.imagename+ image_ext+'.fits',overwrite=True)
+        # # try:
+        # #     logging.info(f"Running pybdsf on {self.imagename}...")
+        # #     if self.use_pybdsf:
+        # #         Utils.pybdsf(self.imagename+image_ext,self.pybdsf_threshold)
+        # #         logging.info(f"Successfully ran pybdsf on {imagename}.")
+        # #     else:
+        # #         logging.info(f"Masking using PYBDSF not requested")
+        # # except Exception as e:
+        # #     logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
 
 
 class wsclean_Imager:
@@ -781,27 +782,58 @@ class SelfCalibration(tclean_Imager):
             if len(prev_caltables) > 0 and calmode[selfcal_loop] != '':
                 applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
 
-            imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
-            if os.path.exists(imagename):
-                logging.info("Continuing to the next image")
-            else:
-                logging.info(f"Making image {imagename}")
+            # Set niter to 0 for the first loop to create a dirty map and run PYBSDF
+            if selfcal_loop == 0:
+                """
+                Set niter to 0 and run PYBDSF
+                """
+                self.niter = 0  # Set niter for dirty map
+                imagename = self.imagename
 
-                # Initialize the imager_instance with required parameters
-                imager_instance = tclean_Imager(
-                    msname=self.msname,
-                    imagename = imagename,
-                    imsize=self.imsize,
-                    niter=self.niter,
-                    deconvolver=self.deconvolver,
-                    use_pybdsf=self.use_pybdsf,
-                    pybdsf_threshold=self.pybdsf_threshold,
-                    threshold=self.thresholds[selfcal_loop],
-                    mask=regionfile ,
-                )
-                
-                # Call the imager method
-                imager_instance.imager()
+                if self.deconvolver == 'mtmfs':
+                    image_ext = '.image.tt0'
+                else:
+                    image_ext = '.image'
+                exportfits(imagename=self.imagename+image_ext,fitsimage=self.imagename+ image_ext+'.fits',overwrite=True)
+
+                try:
+                    logging.info(f"Running pybdsf on {self.imagename}...")
+                    if self.use_pybdsf:
+                        Utils.pybdsf(self.imagename+image_ext,self.pybdsf_threshold)
+                        logging.info(f"Successfully ran pybdsf on {imagename}.")
+                    else:
+                        logging.info(f"Masking using PYBDSF not requested")
+                except Exception as e:
+                    logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
+
+            else:
+                """
+                Set niter to what is set in the imager instance
+                also set PYBDSF to false
+                """
+                self.niter = self.niter 
+                self.use_pybdsf = False
+                imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
+
+
+            # Initialize the imager_instance with required parameters
+            imager_instance = tclean_Imager(
+                msname=self.msname,
+                imagename = imagename,
+                nterms = self.nterms,
+                imsize=self.imsize,
+                niter=self.niter,
+                deconvolver=self.deconvolver,
+                use_pybdsf=self.use_pybdsf,
+                pybdsf_threshold=self.pybdsf_threshold,
+                threshold=self.thresholds[selfcal_loop],
+                mask=regionfile ,
+                overwrite = self.overwrite
+            )
+            
+            # Call the imager method
+            imager_instance.imager()
+
 
 
         #         ## NB: The problem was niter -- there was a space in the list []
@@ -864,25 +896,27 @@ refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
 
 def main():
     # Define your parameters here
-    msname = msname_tuple[0]  # Replace with your actual measurement set file
-    nloops = 3              # Number of self-calibration loops
-    thresholds = ['0.1mJy', '0.05mJy', '0.01mJy']  # Example thresholds for each loop
+    msname = msname_tuple[0]  #
+    """First loop is a dirty map for masking """
+    nloops = 4
+    thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
 
-    # Create an instance of SelfCalibration
+    # Create an instance of SelfCalibration for the first loop (dirty map)
     self_calibration_instance = SelfCalibration(
         msname=msname,
         nloops=nloops,
         thresholds=thresholds,
         imsize=640,
-        niter=0,
+        niter=1000,  
+        nterms = 2,
         deconvolver='mtmfs',
         weighting='briggs',
         robust='0.5',
         use_pybdsf=True,
-        pybdsf_threshold=5
+        pybdsf_threshold=5,
+        overwrite = True
     )
 
-    # Call the selfcal method to perform self-calibration
     self_calibration_instance.selfcal()
 
 if __name__ == "__main__":
