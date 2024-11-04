@@ -3,6 +3,7 @@ import os, glob, subprocess, time, bdsf, logging
 from typing import Callable, Any
 import casatools, casalogger
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 import numpy as np
 from radio_beam import Beam
@@ -10,19 +11,38 @@ from astropy.io import fits
 from astropy import units as u
 from astropy.wcs import WCS
 
-
-
 from casatasks import *
 from casaplotms import *
+
 
 msmd = casatools.msmetadata()
 tb = casatools.table()
 ms = casatools.ms()
 
 
+print("Creating log dir")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+log_dir = os.path.join(os.getcwd(), 'logs')
+
+if not os.path.exists(log_dir):
+    print(f"Log directory '{log_dir}' does not exist, creating it...")
+    os.makedirs(log_dir, exist_ok=True)
+else:
+    print(f"Log directory '{log_dir}' exists")
+
+try:
+    console
+except:
+    logfile_name = datetime.now().strftime('vla_selfcal_%H:%M:%S_%d:%m:%Y.log')
+    filename = os.path.join(log_dir, logfile_name)
+    
+    logging.basicConfig(filename=filename, level=logging.DEBUG)
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 class Utils():
 
@@ -201,6 +221,7 @@ class MeasurementSetProcessor:
                     logging.info(f"Splitting {msname} to {outputvis}")
                     split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin=MeasurementSetProcessor.timebin,
                         width=MeasurementSetProcessor.width,field=field)
+                    listobs(vis=outputvis,listfile=msname.replace('.ms','_listobs.txt',overwrite=True))
                     logging.info(f"Finished splitting")
                 else:
                     logging.info(f"Split measurement set {outputvis} exists")
@@ -273,7 +294,7 @@ class MeasurementSetInfo:
             float: Longest baseline in units of wavelength.
         """
         # Open measurement set and retrieve uvw data
-        ms.open(vis)
+        ms.open(msname)
         ms.selectinit(datadescid=0)
         uvw = ms.getdata('uvw')['uvw']
         ms.close()
@@ -498,7 +519,7 @@ class tclean_Imager:
         None
         """
         cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
-        self.imagename = self.imagename+'_dirty' if self.niter == 0 else self.imagename
+        self.imagename = self.imagename
 
     
         matching_files = glob.glob(f"{self.imagename}.*")
@@ -667,20 +688,7 @@ class wsclean_Imager:
 class SelfCalibration(tclean_Imager):
 
     def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, **kwargs):
-        """
-        Initializes SelfCalibration, inheriting from tclean_Imager.
-
-        Parameters:
-        - msname: Name of the measurement set.
-        - nloops: Number of self-calibration loops.
-        - thresholds: List of threshold values for each loop.
-        - calmode: Calibration mode for each loop.
-        - gaintype: Gain type for each loop.
-        - solint: Solution interval for each loop.
-        - minsnr: Minimum SNR for each loop.
-        - kwargs: Additional parameters for tclean_Imager.
-        """
-        super().__init__(msname=msname, **kwargs)  # Call the parent constructor
+        super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
         self.calmode = calmode
@@ -690,12 +698,8 @@ class SelfCalibration(tclean_Imager):
 
     @Utils.time_execution
     def selfcal(self) -> None:
-        """
-        Perform self-calibration on the measurement set.
-        """
         Utils.create_plots_directory()
         
-
         logging.info("Deleting model column before selfcal")
         delmod(vis=self.msname, otf=True)
 
@@ -703,126 +707,176 @@ class SelfCalibration(tclean_Imager):
             caltable = f'{self.msname.replace(".ms", "_caltable_loop_")}_{selfcal_loop}.gcal'
             prev_caltables = sorted(glob.glob('*.gcal'))
 
-            # Apply previous calibration tables if they exist
-            if len(prev_caltables) > 0 and self.calmode[selfcal_loop] != '':
+            # Apply previous calibration tables if they exist and if it's not the dirty map loop
+            if selfcal_loop > 0 and len(prev_caltables) > 0 and self.calmode[selfcal_loop] != '':
                 applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
 
             imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
 
             # Set niter to 0 for the first loop to create a dirty map and run PYBDSF
             if selfcal_loop == 0:
-                self.niter = 0  # Set niter for dirty map
-                imagename_dirty = f'{self.msname.replace(".ms", "_dirty")}'
+                self.niter = 0
+                imagename_dirty = self.imagename+'_dirty'
 
-                if self.deconvolver == 'mtmfs':
-                    image_ext = '.image.tt0'
-                else:
-                    image_ext = '.image'
+                mask = ''
 
-                exportfits(imagename=imagename_dirty + image_ext, fitsimage=imagename_dirty + image_ext + '.fits', overwrite=True)
+                # Run tclean to generate the dirty map
+                imager_instance = tclean_Imager(
+                    msname=self.msname,
+                    imagename=imagename_dirty, # imagename for dirty defined in imagr class
+                    nterms=self.nterms,
+                    imsize=self.imsize,
+                    niter=self.niter,
+                    deconvolver=self.deconvolver,
+                    threshold=self.thresholds[selfcal_loop],
+                    mask=mask,
+                    weighting = self.weighting,
+                    robust = self.robust,
+                    overwrite=self.overwrite
+                )
+                logging.info(f"Imaging {self.msname} to make: {self.imagename}")
+                imager_instance.imager()
 
+                # Export dirty map to FITS after it has been created
+                image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
+                exportfits(imagename=imagename_dirty + image_ext, fitsimage=imagename_dirty+ image_ext + '.fits', overwrite=True)
+
+                # Run PYBDSF if requested
                 try:
                     logging.info(f"Running pybdsf on {imagename_dirty}...")
                     if self.use_pybdsf:
-                        Utils.pybdsf(imagename_dirty + image_ext, self.pybdsf_threshold)
-                        regionfile = imagename_dirty + '.casabox'
-                        mask = regionfile
+                        Utils.pybdsf(imagename_dirty+ image_ext, self.pybdsf_threshold)
+                        mask = imagename_dirty+ image_ext + '.casabox'
                         logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
                     else:
-                        mask = ''
                         logging.info(f"Masking using PYBDSF not requested")
+                        mask = ''
                 except Exception as e:
                     logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
-                
 
             else:
-                # Set niter for subsequent loops
+                # Set niter for subsequent loops and disable pybdsf
                 self.niter = self.niter  # Can be modified to set a new value if needed
                 self.use_pybdsf = False
 
-            # Initialize the imager_instance with required parameters
-            imager_instance = tclean_Imager(
-                msname=self.msname,
-                imagename=imagename,
-                nterms=self.nterms,
-                imsize=self.imsize,
-                niter=self.niter,
-                deconvolver=self.deconvolver,
-                use_pybdsf=self.use_pybdsf,
-                pybdsf_threshold=self.pybdsf_threshold,
-                threshold=self.thresholds[selfcal_loop],
-                mask=mask,
-                overwrite=self.overwrite
-            )
-
-            logging.info("Adding model column to data")
-            try:
-                if self.deconvolver == 'mtmfs':
-                    ft(vis=self.msname, model=[imagename + '.model.tt0', imagename + '.model.tt1'], nterms=2, usescratch=True)
-                else:
-                    ft(vis=self.msname, model=imagename + '.model', usescratch=True)
-            except Exception as e:
-                logging.error(f"Error adding model column: {e}")
-
-            logging.info("Plotting the model column")
-            try:
-                plotms(
-                    vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel='64', avgtime='300',
-                    showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
+                # Initialize imager_instance with required parameters for self-calibration
+                imager_instance = tclean_Imager(
+                    msname=self.msname,
+                    imagename=imagename,
+                    nterms=self.nterms,
+                    imsize=self.imsize,
+                    niter=self.niter,
+                    deconvolver=self.deconvolver,
+                    threshold=self.thresholds[selfcal_loop],
+                    weighting = self.weighting,
+                    robust = self.robust,
+                    mask=mask,
+                    overwrite=self.overwrite
                 )
-            except Exception as e:
-                logging.error(f"Error plotting model column: {e}")
+                imager_instance.imager()
 
-            logging.info(f"Running gain calibration. Writing caltable: {caltable}")
-            refant = MeasurementSetInfo.find_refant(self.msname, field='')  
-            try:
-                gaincal(vis=self.msname,
-                        caltable=caltable,
-                        refant=refant,
-                        solint=self.solint[selfcal_loop],
-                        gaintype=self.gaintype[selfcal_loop],
-                        gaintable=prev_caltables,
-                        minsnr=self.minsnr[selfcal_loop],
-                        calmode=self.calmode[selfcal_loop],
-                        append=False,
-                        parang=False)
-            except Exception as e:
-                logging.error(f"Error during gain calibration: {e}")
+                # Perform gain calibration only if this is not the dirty map loop
+                logging.info("Adding model column to data")
+                try:
+                    if self.deconvolver == 'mtmfs':
+                        ft(vis=self.msname, model=[imagename + '.model.tt0', imagename + '.model.tt1'], nterms=2, usescratch=True)
+                    else:
+                        ft(vis=self.msname, model=imagename + '.model', usescratch=True)
+                except Exception as e:
+                    logging.error(f"Error adding model column: {e}")
 
-            coloraxis = ['corr', 'spw']
-            for color in coloraxis:
-                if self.calmode[selfcal_loop] == 'p':
+                logging.info("Plotting the model column")
+                try:
                     plotms(
-                        vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
-                        iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                        plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel='64', avgtime='300',
+                        showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
                     )
-                else:
-                    plotms(
-                        vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
-                        iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                        plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
-                    )
+                except Exception as e:
+                    logging.error(f"Error plotting model column: {e}")
 
-            if selfcal_loop == self.nloops - 1:
-                prev_caltables = sorted(glob.glob('*.gcal'))
-                logging.info("Applying the caltable derived from last gaincal iteration")
-                applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
+                # Perform gain calibration
+                logging.info(f"Running gain calibration. Writing caltable: {caltable}")
+                refant = MeasurementSetInfo.find_refant(self.msname, field='')  
+                try:
+                    gaincal(vis=self.msname,
+                            caltable=caltable,
+                            refant=refant,
+                            solint=self.solint[selfcal_loop],
+                            gaintype=self.gaintype[selfcal_loop],
+                            gaintable=prev_caltables,
+                            minsnr=self.minsnr[selfcal_loop],
+                            calmode=self.calmode[selfcal_loop],
+                            weighting = self.weighting,
+                            robust = self.robust,
+                            append=False,
+                            parang=False)
+                except Exception as e:
+                    logging.error(f"Error during gain calibration: {e}")
 
+                # Plot gain calibration results
+                coloraxis = ['corr', 'spw']
+                for color in coloraxis:
+                    if self.calmode[selfcal_loop] == 'p':
+                        plotms(
+                            vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                        )
+                    else:
+                        plotms(
+                            vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                        )
 
-            # ### Get the last imagename from the loop and generate a final mask
-            
-#         imagename = basename +f'_{nloops-1}'+'.final'
-#         ##  tclean here to make the final image
-#         print("Make final image with all selfcal corrections applied")
-#         tclean(
-#             vis = vis, imagename = imagename, imsize=imsize, cell=cell, gridder=gridder,
-#             wprojplanes = wprojplanes, deconvolver = deconvolver, weighting = weighting,
-#             robust = robust, niter=niter_final, threshold = threshold_final, nterms=nterms,
-#             pblimit=pblimit, interactive=False, usemask = 'user', mask=regionfile,
-#         )
+                # Apply calibration tables after the last self-calibration loop
+                if selfcal_loop == self.nloops - 1:
+                    prev_caltables = sorted(glob.glob('*.gcal'))
+                    logging.info("Applying the caltable derived from last gaincal iteration")
+                    applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
+
+        ## Generate a final mask of sources to peel -- optional
+        imagename_final = self.imagename+'_final_clean'
+        logging.info("Maki final image with all selfcal corrections applied")
         
-        
+        self.niter = 1000000  # Can be modified to set a new value if needed
+        self.threshold = '0.001mJy'
+        self.use_pybdsf = False
+
+        # Initialize imager_instance with required parameters for self-calibration
+        imager_instance = tclean_Imager(
+            msname=self.msname,
+            imagename=imagename_final,
+            nterms=self.nterms,
+            imsize=self.imsize,
+            niter=self.niter,
+            deconvolver=self.deconvolver,
+            threshold=self.thresholds[selfcal_loop],
+            mask=mask,
+            weighting = self.weighting,
+            robust = self.robust,
+            overwrite=self.overwrite
+        )
+        imager_instance.imager()
+
+        # Export dirty map to FITS after it has been created
+        image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
+        exportfits(imagename=imagename_final + image_ext, fitsimage=imagename_final+ image_ext + '.fits', overwrite=True)
+
+        # Run PYBDSF if requested
+        try:
+            logging.info(f"Running pybdsf on {imagename_final}...")
+            if self.use_pybdsf:
+                Utils.pybdsf(imagename_final+ image_ext, self.pybdsf_threshold)
+                mask = imagename_final+ image_ext+ '.casabox'
+                logging.info(f"Successfully ran pybdsf on {imagename_final}.")
+            else:
+                logging.info(f"Masking using PYBDSF not requested")
+                mask = ''
+        except Exception as e:
+            logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
+
+
 
 
 def main():
@@ -839,10 +893,10 @@ def main():
     """First loop is a dirty map for masking """
     nloops = 4
     thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
-    calmode = ['p','p','ap']
-    gaintype= ['G','G','G']
-    solint = ['60s','30s','180s']
-    minsnr = [1,1,1]
+    calmode = ['','p','p','ap']
+    gaintype= ['','G','G','G']
+    solint = ['','60s','30s','180s']
+    minsnr = ['',1,1,1]
 
     Utils.set_working_dir(working_directory)
     MeasurementSetProcessor.timebin='6s'
@@ -861,12 +915,12 @@ def main():
         gaintype=gaintype,
         solint=solint,
         minsnr=minsnr,
-        imsize=640,
-        niter=1000,  
+        imsize=320,
+        niter=0,  
         nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
-        robust='0.5',
+        robust=0.5,
         use_pybdsf=True,
         pybdsf_threshold=5,
         overwrite=True
