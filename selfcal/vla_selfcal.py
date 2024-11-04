@@ -450,7 +450,8 @@ class tclean_Imager:
     def __init__(self, msname: str, field:str='', gridder: str = 'standard', deconvolver: str = 'multiscale', 
                  weighting: str = 'natural', robust: float = 0.5, nterms: int = 1, imsize: int = 640,
                  niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '', 
-                 usemask: str = 'user', pblimit: float = 0.1,phasecenter: str = '', overwrite:bool = False):
+                 usemask: str = 'user', pblimit: float = 0.1,phasecenter: str = '', overwrite:bool = False, 
+                 use_pybdsf:bool = True, pybdsf_threshold: int = 5):
         """
         Initializes the tclean_Imager instance with specified parameters.
 
@@ -488,6 +489,10 @@ class tclean_Imager:
             The field phase center (default is an empty string).
         overwrite: bool, optional
             If True, deletes existing images and creates new ones (default is False).
+        use_pybdsf: bool, optional
+            Calls pybdsf and uses it for masking
+        pybdsf_threshold: int, optional
+            Masking threshold
 
         """
         self.msname = msname  
@@ -506,6 +511,8 @@ class tclean_Imager:
         self.pblimit = pblimit
         self.phasecenter = phasecenter
         self.overwrite = overwrite
+        self.use_pybdsf = use_pybdsf
+        self.pybdsf_threshold = pybdsf_threshold
 
     def get_imaging_cellsize(self) -> str:
         """
@@ -536,22 +543,34 @@ class tclean_Imager:
         """
         cell = self.get_imaging_cellsize() 
         imagename = self.msname.replace('.ms', '_dirty') if self.niter == 0 else self.msname.replace('.ms', '_image') 
-        logging.debug(f"Checking for existing image: {imagename}")
 
-        if os.path.exists(imagename):
-            logging.info(f"Image exists: {imagename}")
+        
+        imagename_matching_files = glob.glob(f"{imagename}.*")
+    
+        matching_files = glob.glob(f"{imagename}.*")
 
-        if os.path.exists(imagename) and self.overwrite:
-            try:
-                command = f"rm -rf {imagename}.*"  
-                subprocess.run(command, shell=True, check=True)  # Use shell=True for command strings
-                logging.info(f"Overwriting requested. Deleted existing image: {imagename}")
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Error deleting existing image {imagename}: {e}")
-            except Exception as e:
-                logging.error(f"Unexpected error: {e}")
+        # Check if any matching files exist
+        if matching_files:
+            logging.info(f"Image exists: {matching_files}")
 
+            # If the image exists and overwrite is requested, proceed with deletion
+            if self.overwrite:
+                try:
+                    for file in matching_files:
+                        command = f"rm -rf {file}" 
+                        subprocess.run(command, shell=True, check=True)  
+                    # logging.info(f"Overwriting requested. Deleted existing image files: {matching_files}")
+                    logging.info(f"Overwriting requested. Deleted existing image files")
+
+                except OSError as e:
+                    logging.error(f"Error deleting existing images: {e}")
+                except Exception as e:
+                    logging.error(f"Unexpected error: {e}")
+        
+            
+        
         logging.info(f"Imaging {self.msname}")
+
         tclean(
             vis=self.msname,
             imagename=imagename,
@@ -571,9 +590,23 @@ class tclean_Imager:
             field = self.field,
             interactive=False,
         )
-        logging.info(f"Finished imaging {self.msname}, created image: {imagename}")
 
-        Utils.pybdsf(imagename)
+        logging.info(f"Finished imaging {self.msname}, created image: {imagename}")
+        if self.deconvolver == 'mtmfs':
+            image_ext = '.image.tt0'
+        else:
+            image_ext = '.image'
+
+        exportfits(imagename=imagename+image_ext,fitsimage=imagename+ image_ext+'.fits',overwrite=True)
+        try:
+            logging.info(f"Running pybdsf on {imagename}...")
+            if self.use_pybdsf:
+                Utils.pybdsf(imagename+image_ext,self.pybdsf_threshold)
+                logging.info(f"Successfully ran pybdsf on {imagename}.")
+            else:
+                logging.info(f"Masking using PYBDSF not requested")
+        except Exception as e:
+            logging.error(f"Failed to run pybdsf on {imagename}: {e}")
 
 Utils.set_working_dir(working_directory)
 MeasurementSetProcessor.timebin='6s'
@@ -583,34 +616,35 @@ band_info = MeasurementSetInfo.get_observing_band(msname)
 longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
 refant = MeasurementSetInfo.find_refant(msname_tuple,field=target)
 
-first_msname = msname_tuple[0]
-logging.info(f"First measurement set: {first_msname}")
+
 for msname in msname_tuple:
-    logging.info(f"Processing measurement set {msname}")
+    # logging.info(f"Processing measurement set {msname}")
     try:
         imager = tclean_Imager(
-            msname=first_msname,
-            gridder='mtmfs',  # optional
-            deconvolver='multiscale',  # optional
-            weighting='natural',  # optional
-            robust=0.5,  # optional
-            nterms=2,  # optional
-            imsize=640,  # optional
-            niter=1,  # optional (set to 0 for dirty image)
-            threshold='0.1mJy',  # optional
-            wprojplanes=1,  # optional
-            pblimit=0.1,  # optional
-            phasecenter='',  # optional
-            overwrite=True  # set to True to overwrite existing images
+            msname=msname_tuple[0],
+            gridder='standard',  
+            deconvolver='mtmfs', 
+            weighting='briggs',  
+            robust=0.5,  
+            nterms=2,  
+            imsize=640,  
+            niter=0,  
+            threshold='0.1mJy',  
+            wprojplanes=1,  
+            pblimit=0.1,  
+            phasecenter='',  
+            overwrite=True, 
+            use_pybdsf = False,
+            pybdsf_threshold=5 
         )
         imager.imager()  # Call the imaging process
 
     
 
     except Exception as e:
-        pass
-        # print(f"An error occurred while processing {msname}: {e}")
-        # logging.error(f"An error occurred while processing {msname}: {e}")
+        
+        print(f"An error occurred while processing {msname}: {e}")
+        logging.error(f"An error occurred while processing {msname}: {e}")
 
 logging.info("Imaging process completed for all measurement sets.")
 
