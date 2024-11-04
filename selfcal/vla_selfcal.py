@@ -18,14 +18,15 @@ tb = casatools.table()
 ms = casatools.ms()
 
 
-# msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
-msname ='/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307/pipeline.60615.3586805556/23B-307.sb44616223.eb44945938.60299.34304871528.ms'
+msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+# msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
+
+
+working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424' # D
+# working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
+
 target = 'K2-18'
 vis = target+'.ms'
-
-
-# working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424'
-working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44616223.eb44945938.60299.34304871528'
 outlierfile = '/home/kelvin/Desktop/Synphly/selfcal/outlier_fields.txt'
 basename = os.path.splitext(os.path.basename(vis))[0]
 
@@ -44,7 +45,7 @@ wprojplanes = 1
 outlier_file = '/home/kelvin/Desktop/Synphly/selfcal/outlier_fields.txt'
 pblimit = -0.1 # avoid 1,-1 or 0
 
-imsize = [512,512] 
+imsize = [640,640] 
 niter = [1000,10000,100000] # the number of iterations for each loop -- needs to be arbitrarily large
 
 # selfcal
@@ -61,11 +62,11 @@ detection_threshold = 5.0
 # # final image and peeling
 niter_final = 1000000
 threshold_final = '0.05mJy'
-wsclean_sif= '/share/nas/kelvinw/singularity_images/wsclean_working.simg'
-singularity_bind = '/share/nas/kelvinw/'
+wsclean_sif= '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
+# singularity_bind = '/share/nas/kelvinw/'
 
 # spw = 17 # wsclean chan out
-# abs_mem = 4 # mem to use in GB
+abs_mem = 128 # mem to use in GB
 
 def set_working_dir():
 
@@ -158,7 +159,9 @@ def check_band():
         tuple: Band name, mean frequency, maximum frequency, and minimum frequency (in GHz).
     """
     band_name = None
-    freq_ranges = {(1, 2): "L",(2, 4): "S",(4, 8): "C",(8, 12): "X",(12, 18): "U",(18, 26.5): "K",(26.5, 40): "A",(40, 50): "Q",
+    freq_ranges = {(1, 2): "L",(2, 4): "S",(4, 8): "C",(8, 12): 
+                   "X",(12, 18): "U",(18, 26.5): "K", (26.5, 
+                    40): "A",(40, 50): "Q",
                             }
     
     # Open measurement set metadata
@@ -503,9 +506,7 @@ def run_wsclean(command):
     """
 
     container = wsclean_sif
-    if os.path.exists(container):
-        singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
-
+    singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
     command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
     try:
         print("Executing: %s", ' '.join(command_to_execute))
@@ -525,36 +526,36 @@ def run_wsclean(command):
 
 
 
-def peeling():
+# def peeling():
 
-    """
-    Subtract the bright sources in the field so you are left with the emission from the star
+#     """
+#     Subtract the bright sources in the field so you are left with the emission from the star
 
-    Use pybsdf casa region file -- you can change the threshold to only select the bright sources you want
+#     Use pybsdf casa region file -- you can change the threshold to only select the bright sources you want
 
-    Run pybsdf on the final image
+#     Run pybsdf on the final image
     
-    """
+#     """
 
-    # Using the final imagename 
+#     # Using the final imagename 
 
-    imagename = basename +f'_{nloops-1}'+'.final'
-    # region_to_peel = pybdsf(input_image=imagename+'.image.tt0')
+#     imagename = basename +f'_{nloops-1}'+'.final'
+#     # region_to_peel = pybdsf(input_image=imagename+'.image.tt0')
 
-    ## NB: You had masked the bright source from the dirty map -- so you can just subtract
-    uvsub(vis=vis)
+#     ## NB: You had masked the bright source from the dirty map -- so you can just subtract
+#     uvsub(vis=vis)
 
-    ## Make a final map without the sources
-    cell = get_imaging_cellsize()
-    peeled_map = basename+'_peeled_map'
-    if not os.path.exists(peeled_map):
-        print(f"Making {peeled_map}")
-        tclean(
-            vis = vis, imagename=peeled_map, imsize=imsize, cell=cell,
-            gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-            weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
-            nterms = nterms, pblimit = pblimit
-        )
+#     ## Make a final map without the sources
+#     cell = get_imaging_cellsize()
+#     peeled_map = basename+'_peeled_map'
+#     if not os.path.exists(peeled_map):
+#         print(f"Making {peeled_map}")
+#         tclean(
+#             vis = vis, imagename=peeled_map, imsize=imsize, cell=cell,
+#             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
+#             weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
+#             nterms = nterms, pblimit = pblimit
+#         )
 
 
 
@@ -565,46 +566,48 @@ def peeling():
 
     # delete model column to be d
 
-# def peeling():
+def peeling():
 
-#     """
-#     Subtract all the sources in the field such that you are left with a blank
+    """
+    Subtract all the sources in the field such that you are left with a blank
 
-#     Use wsclean and pybdsf casa region from the final iterations 
+    Use wsclean and pybdsf casa region from the final iterations 
 
-#     Then perform uvsub in CASA
+    Then perform uvsub in CASA
 
-#     """
+    """
 
-#     # Make a region file of the final self calibrated image and use it to peel the sources
-#     imagename = basename +f'_{nloops-1}'+'.final.image.tt0'
-#     regionfile_to_peel = pybdsf(input_image=imagename)
-#     fitsmask = imagename.replace('.image.tt0','')+'.maskfile.fits'
-#     model_fits = imagename.replace('.final.image.tt0','.final.image.tt0-model.fits')
-#     os.rename(fitsmask,model_fits )
+    # Make a region file of the final self calibrated image and use it to peel the sources
+    imagename = basename +f'_{nloops-1}'+'.final.image.tt0'
+    regionfile_to_peel = pybdsf(input_image=imagename)
+    fitsmask = imagename.replace('.image.tt0','')+'.maskfile.fits'
+    model_fits = imagename.replace('.final.image.tt0','.final.image.tt0-model.fits')
+    os.rename(fitsmask,model_fits )
+
+    cell = get_imaging_cellsize()
 
 
-#     threshold_cmd = ['wsclean', '-auto-threshold','3', '-size', f'{imsize[0]}', f'{imsize[1]}','-scale', f'{cell}',\
-#                     '-mgain', '0.8', '-niter', '0',f'{vis}']
+    threshold_cmd = ['wsclean', '-auto-threshold','3', '-size', f'{imsize[0]}', f'{imsize[1]}','-scale', f'{cell}',\
+                    '-mgain', '0.8', '-niter', '0',f'{vis}']
     
-#     predict_cmd = ['wsclean', '-log-time', '-predict', '-field', '', '-reorder' ,'-name', f'{imagename}', '-abs-mem',f'{abs_mem}', vis]
+    predict_cmd = ['wsclean', '-log-time', '-predict', '-field', '', '-reorder' ,'-name', f'{imagename}', '-abs-mem',f'{abs_mem}', vis]
 
 
-    # run_wsclean(predict_cmd)
+    run_wsclean(predict_cmd)
 
-    # ## NB: wsclean needs to find an image named my-image-model.fits or reg 
-    # ## works by replacing model column with model for the problem sources using
+    ## NB: wsclean needs to find an image named my-image-model.fits or reg 
+    ## works by replacing model column with model for the problem sources using
 
     
     
-    # ## Subtract the models put in the model column from the data and make an image
+    ## Subtract the models put in the model column from the data and make an image
         
-    # print("Running uvsub")
-    # uvsub(vis=vis)
+    print("Running uvsub")
+    uvsub(vis=vis)
 
-    # ## Run wsclean to check if the subtraction has been successful -- make dirty map
+    ## Run wsclean to check if the subtraction has been successful -- make dirty map
 
-    # run_wsclean(threshold_cmd)
+    run_wsclean(threshold_cmd)
 
 
 def main():
@@ -617,7 +620,7 @@ def main():
     make_dirty_map()
     selfcal()
     # applycal_target()
-    # peeling()
+    peeling()
 
     # imagename = 'K2-18_dirty'
     # plot_fits(imagename)
