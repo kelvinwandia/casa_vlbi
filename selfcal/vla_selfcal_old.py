@@ -430,11 +430,16 @@ def selfcal():
         prev_caltables = sorted(glob.glob('*.gcal'))
         if len(prev_caltables) >0 and calmode[selfcal_loop] !='':
             applycal(vis=vis, gaintable = prev_caltables, parang=False )
-    
+
+        if calmode[selfcal_loop] == 'p':
+            minblperant = 3
+        else:
+            minblperant = 4
+        
         imagename = f'target_selfcal_{selfcal_loop}'
         if os.path.exists(imagename):
             print("Continuing to the next image")
-        
+
         else:
             # imagename = f'target_selfcal_{selfcal_loop}'
             print(f"Making image {imagename}")
