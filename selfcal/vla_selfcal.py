@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 import numpy as np
-from radio_beam import Beam
+# from radio_beam import Beam
 from astropy.io import fits
 from astropy import units as u
 from astropy.wcs import WCS
@@ -342,7 +342,7 @@ class MeasurementSetInfo:
     
     @staticmethod
     # @Utils.time_execution
-    def find_refant(msname_tuple:tuple, field:str):
+    def find_refant(msname):
 
         """
         
@@ -350,31 +350,28 @@ class MeasurementSetInfo:
         The function will find the tuple with the same name as the field and use that
 
         Parameters
-            msname_tuple (tuple): A tuple of the measuremet set files from split_data
-
+            msname: Measurement set file
             field (str): The field to self calibrate
 
         """
+        msmd = casatools.msmetadata()
+        msmd.open(msname)
+        field_names = msmd.fieldnames()
+        field = msname.replace('.ms', '')
+        if field in field_names:
+            logging.info(f"Phase solutions for {field} will be used to select the reference antenna.")
+        else:
+            logging.warning(f"Field '{field}' not found in field names. Available fields: {field_names}")
+        msmd.close()
 
-        vis = None
-        for msname in msname_tuple:
-            if field in msname:  # Check if the field name is in the measurement set name
-                vis = msname
-                break
-        
-        if vis is None:
-            logging.error(f"No measurement set found for the field: {field}")
-            return None
-
-        tablename = field + '.refant'
+        tablename = field+'.refant'
         if not os.path.exists(tablename):
-            gaincal(vis=vis, caltable=tablename, field=field, refantmode='flex',
+            gaincal(vis= msname, caltable=tablename, field=field, refantmode='flex',
                      solint='inf', minblperant=3, gaintype='G', calmode='p')
-            logging.info(f"Gain calibration completed for field: {field}")
+            logging.info(f"Phase solutions to select refant generated")
 
         # Read solutions (phases):
         tb = casatools.table()
-        
         try:
             tb.open(tablename + '/ANTENNA')
             antenna_names = tb.getcol('NAME')
@@ -528,6 +525,11 @@ class tclean_Imager:
         if matching_files:
             logging.info(f"Image exists: {matching_files}")
 
+                # Skip the function if overwrite is False
+            if not self.overwrite:
+                logging.info(f"Overwrite is set to False. Skipping imaging for {self.imagename}")
+                return  # Exit the function without proceeding
+
             # If the image exists and overwrite is requested, proceed with deletion
             if self.overwrite:
                 try:
@@ -541,10 +543,8 @@ class tclean_Imager:
                     logging.error(f"Error deleting existing images: {e}")
                 except Exception as e:
                     logging.error(f"Unexpected error: {e}")
-        
-            
-        
-        logging.info(f"Imaging {self.msname}")
+    
+        logging.info(f"Imaging {self.msname} to make: {self.imagename}")
 
         tclean(
             vis=self.msname,
@@ -796,7 +796,7 @@ class SelfCalibration(tclean_Imager):
 
                 # Perform gain calibration
                 logging.info(f"Running gain calibration. Writing caltable: {caltable}")
-                refant = MeasurementSetInfo.find_refant(self.msname, field='')  
+                refant = MeasurementSetInfo.find_refant(self.msname)  
                 try:
                     gaincal(vis=self.msname,
                             caltable=caltable,
@@ -806,7 +806,6 @@ class SelfCalibration(tclean_Imager):
                             gaintable=prev_caltables,
                             minsnr=self.minsnr[selfcal_loop],
                             calmode=self.calmode[selfcal_loop],
-                            weighting = self.weighting,
                             robust = self.robust,
                             append=False,
                             parang=False)
@@ -837,7 +836,7 @@ class SelfCalibration(tclean_Imager):
 
         ## Generate a final mask of sources to peel -- optional
         imagename_final = self.imagename+'_final_clean'
-        logging.info("Maki final image with all selfcal corrections applied")
+        logging.info("Making final image with all selfcal corrections applied")
         
         self.niter = 1000000  # Can be modified to set a new value if needed
         self.threshold = '0.001mJy'
@@ -877,8 +876,6 @@ class SelfCalibration(tclean_Imager):
             logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
 
 
-
-
 def main():
     # Define your parameters here
 
@@ -887,10 +884,13 @@ def main():
     working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424' # D
     # working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
 
+    ### The WSclean imager has been implemented, however its not working properly -- DO NOT USE !
     wsclean_sif= '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
 
 
-    """First loop is a dirty map for masking """
+    ### Use loop+1 ie if you wish to do 3 rounds, assign 4 to the nloops variable 
+    ### the first loop will be used to produce a dirty map for masking using PYBDSF
+
     nloops = 4
     thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
     calmode = ['','p','p','ap']
@@ -898,17 +898,17 @@ def main():
     solint = ['','60s','30s','180s']
     minsnr = ['',1,1,1]
 
+    ### Data averaging -- if you have an measurement set with multiple fields and you wish to split and average
+    ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
+    ### in msname
     Utils.set_working_dir(working_directory)
     MeasurementSetProcessor.timebin='6s'
     MeasurementSetProcessor.width = 4
     msname_tuple = MeasurementSetProcessor.split_data(msname)
-    print(msname_tuple)
-    # band_info = MeasurementSetInfo.get_observing_band(msname)
-    # longest_baseline = MeasurementSetInfo.get_longest_baseline(msname)
-
+    refant = MeasurementSetInfo.find_refant(msname_tuple[2])  
     # Create an instance of SelfCalibration for the first loop (dirty map)
     self_calibration_instance = SelfCalibration(
-        msname=msname_tuple[2],
+        msname=msname_tuple[2], 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
@@ -916,19 +916,18 @@ def main():
         solint=solint,
         minsnr=minsnr,
         imsize=320,
-        niter=0,  
+        niter=1,  
         nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
         robust=0.5,
         use_pybdsf=True,
         pybdsf_threshold=5,
-        overwrite=True
+        overwrite=False
         
     )
 
-
-    self_calibration_instance.selfcal()
+    # self_calibration_instance.selfcal()
 
 if __name__ == "__main__":
     main()
