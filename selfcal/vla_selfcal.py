@@ -170,8 +170,8 @@ class MeasurementSetProcessor:
 
 
     # Default values if split data called without timebin and width
-    timebin: str = '10s'
-    width: int = 4
+    timebin: str = '2s'
+    width: int = 1
 
     @staticmethod
     @Utils.time_execution
@@ -200,7 +200,7 @@ class MeasurementSetProcessor:
                     logging.info(f"Splitting {msname} to {outputvis}")
                     split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin=MeasurementSetProcessor.timebin,
                         width=MeasurementSetProcessor.width,field=field)
-                    listobs(vis=outputvis,listfile=msname.replace('.ms','_listobs.txt'),overwrite=True)
+                    listobs(vis=outputvis,listfile=outputvis.replace('.ms','_listobs.txt'),overwrite=True)
                     logging.info(f"Finished splitting")
                 else:
                     logging.info(f"Split measurement set {outputvis} exists")
@@ -776,16 +776,16 @@ class SelfCalibration(tclean_Imager):
                 # Perform gain calibration
                 logging.info(f"Running gain calibration. Writing caltable: {caltable}")
                 refant = MeasurementSetInfo.find_refant(self.msname)  
+                
                 try:
                     gaincal(vis=self.msname,
                             caltable=caltable,
-                            refant=refant,
+                            refant=str(refant),
                             solint=self.solint[selfcal_loop],
                             gaintype=self.gaintype[selfcal_loop],
                             gaintable=prev_caltables,
                             minsnr=self.minsnr[selfcal_loop],
                             calmode=self.calmode[selfcal_loop],
-                            robust = self.robust,
                             append=False,
                             parang=False)
                 except Exception as e:
@@ -881,8 +881,8 @@ def main():
     ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
     ### in msname
     Utils.set_working_dir(working_directory)
-    MeasurementSetProcessor.timebin='6s'
-    MeasurementSetProcessor.width = 4
+    MeasurementSetProcessor.timebin='2s'
+    MeasurementSetProcessor.width = 1
     msname_tuple = MeasurementSetProcessor.split_data(msname)
 
 
@@ -896,14 +896,14 @@ def main():
         solint=solint,
         minsnr=minsnr,
         imsize=320,
-        niter=1,  
+        niter=10,  
         nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
         robust=0.5,
         use_pybdsf=True,
         pybdsf_threshold=5,
-        overwrite=True
+        overwrite=False
         
     )
 
