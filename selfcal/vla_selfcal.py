@@ -170,7 +170,7 @@ class MeasurementSetProcessor:
 
 
     # Default values if split data called without timebin and width
-    timebin: str = '2s'
+    timebin: str = ''
     width: int = 1
 
     @staticmethod
@@ -735,9 +735,10 @@ class SelfCalibration(tclean_Imager):
 
             else:
                 # Set niter for subsequent loops and disable pybdsf
-                self.niter = self.niter  # Can be modified to set a new value if needed
+                # self.niter = self.niter  # Can be modified to set a new value if needed
+                self.niter = 1
                 self.use_pybdsf = False
-
+                logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
                 # Initialize imager_instance with required parameters for self-calibration
                 imager_instance = tclean_Imager(
                     msname=self.msname,
@@ -773,23 +774,29 @@ class SelfCalibration(tclean_Imager):
                 except Exception as e:
                     logging.error(f"Error plotting model column: {e}")
 
+                refant = MeasurementSetInfo.find_refant(self.msname)  
+
                 # Perform gain calibration
                 logging.info(f"Running gain calibration. Writing caltable: {caltable}")
-                refant = MeasurementSetInfo.find_refant(self.msname)  
                 
-                try:
-                    gaincal(vis=self.msname,
-                            caltable=caltable,
-                            refant=str(refant),
-                            solint=self.solint[selfcal_loop],
-                            gaintype=self.gaintype[selfcal_loop],
-                            gaintable=prev_caltables,
-                            minsnr=self.minsnr[selfcal_loop],
-                            calmode=self.calmode[selfcal_loop],
-                            append=False,
-                            parang=False)
-                except Exception as e:
-                    logging.error(f"Error during gain calibration: {e}")
+                if self.calmode[selfcal_loop] == 'p':
+                    minblperant = 3
+                else:
+                    minblperant = 4
+                # try:
+                gaincal(vis=self.msname,
+                        caltable=caltable,
+                        refant=str(refant),
+                        solint=self.solint[selfcal_loop],
+                        gaintype=self.gaintype[selfcal_loop],
+                        gaintable=prev_caltables,
+                        minsnr=self.minsnr[selfcal_loop],
+                        calmode=self.calmode[selfcal_loop],
+                        minblperant = minblperant,
+                        append=False,
+                        parang=False)
+                # except Exception as e:
+                #     logging.error(f"Error during gain calibration: {e}")
 
                 # Plot gain calibration results
                 coloraxis = ['corr', 'spw']
@@ -858,9 +865,9 @@ class SelfCalibration(tclean_Imager):
 def main():
     # Define your parameters here
 
-    msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
     # msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
-    working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424' # D
+    working_directory = '/home/kelvin/Desktop/vla_working_dir_class/' # D
     # working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
 
     ### The WSclean imager has been implemented, however its not working properly -- DO NOT USE !
@@ -882,13 +889,14 @@ def main():
     ### in msname
     Utils.set_working_dir(working_directory)
     MeasurementSetProcessor.timebin='2s'
-    MeasurementSetProcessor.width = 1
+    MeasurementSetProcessor.width = 4
     msname_tuple = MeasurementSetProcessor.split_data(msname)
+    # refant = MeasurementSetInfo.find_refant(msname_tuple[1])
 
 
     # Create an instance of SelfCalibration for the first loop (dirty map)
     self_calibration_instance = SelfCalibration(
-        msname=msname_tuple[3], 
+        msname=msname_tuple[1], 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
