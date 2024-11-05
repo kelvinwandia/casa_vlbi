@@ -20,29 +20,8 @@ tb = casatools.table()
 ms = casatools.ms()
 
 
-print("Creating log dir")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-log_dir = os.path.join(os.getcwd(), 'logs')
-
-if not os.path.exists(log_dir):
-    print(f"Log directory '{log_dir}' does not exist, creating it...")
-    os.makedirs(log_dir, exist_ok=True)
-else:
-    print(f"Log directory '{log_dir}' exists")
-
-try:
-    console
-except:
-    logfile_name = datetime.now().strftime('vla_selfcal_%H:%M:%S_%d:%m:%Y.log')
-    filename = os.path.join(log_dir, logfile_name)
-    
-    logging.basicConfig(filename=filename, level=logging.DEBUG)
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    logging.getLogger('').addHandler(console)
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 class Utils():
 
@@ -221,7 +200,7 @@ class MeasurementSetProcessor:
                     logging.info(f"Splitting {msname} to {outputvis}")
                     split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin=MeasurementSetProcessor.timebin,
                         width=MeasurementSetProcessor.width,field=field)
-                    listobs(vis=outputvis,listfile=msname.replace('.ms','_listobs.txt',overwrite=True))
+                    listobs(vis=outputvis,listfile=msname.replace('.ms','_listobs.txt'),overwrite=True)
                     logging.info(f"Finished splitting")
                 else:
                     logging.info(f"Split measurement set {outputvis} exists")
@@ -905,10 +884,11 @@ def main():
     MeasurementSetProcessor.timebin='6s'
     MeasurementSetProcessor.width = 4
     msname_tuple = MeasurementSetProcessor.split_data(msname)
-    refant = MeasurementSetInfo.find_refant(msname_tuple[2])  
+
+
     # Create an instance of SelfCalibration for the first loop (dirty map)
     self_calibration_instance = SelfCalibration(
-        msname=msname_tuple[2], 
+        msname=msname_tuple[3], 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
@@ -923,11 +903,11 @@ def main():
         robust=0.5,
         use_pybdsf=True,
         pybdsf_threshold=5,
-        overwrite=False
+        overwrite=True
         
     )
 
-    # self_calibration_instance.selfcal()
+    self_calibration_instance.selfcal()
 
 if __name__ == "__main__":
     main()
