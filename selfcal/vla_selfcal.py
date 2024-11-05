@@ -694,7 +694,7 @@ class SelfCalibration(tclean_Imager):
 
             # Set niter to 0 for the first loop to create a dirty map and run PYBDSF
             if selfcal_loop == 0:
-                self.niter = 0
+                # self.niter = 0
                 imagename_dirty = self.imagename+'_dirty'
 
                 mask = ''
@@ -705,7 +705,8 @@ class SelfCalibration(tclean_Imager):
                     imagename=imagename_dirty, # imagename for dirty defined in imagr class
                     nterms=self.nterms,
                     imsize=self.imsize,
-                    niter=self.niter,
+                    # niter=self.niter,
+                    niter=0,
                     deconvolver=self.deconvolver,
                     threshold=self.thresholds[selfcal_loop],
                     mask=mask,
@@ -735,8 +736,8 @@ class SelfCalibration(tclean_Imager):
 
             else:
                 # Set niter for subsequent loops and disable pybdsf
-                # self.niter = self.niter  # Can be modified to set a new value if needed
-                self.niter = 1
+                self.niter = self.niter  # Can be modified to set a new value if needed
+                # self.niter = 1 # the issue is that this was not getting initialised properly
                 self.use_pybdsf = False
                 logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
                 # Initialize imager_instance with required parameters for self-calibration
@@ -904,7 +905,7 @@ def main():
         solint=solint,
         minsnr=minsnr,
         imsize=320,
-        niter=10,  
+        niter=1,  
         nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
