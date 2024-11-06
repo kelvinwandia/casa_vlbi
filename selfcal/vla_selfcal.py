@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 import numpy as np
-# from radio_beam import Beam
+from radio_beam import Beam
 from astropy.io import fits
 from astropy import units as u
 from astropy.wcs import WCS
@@ -136,6 +136,33 @@ class Utils():
 
             except Exception as e:
                 logging.exception("An error occurred during wsclean execution: %s", e)
+
+
+    @staticmethod
+    def get_im_stats(imagename):
+        
+        #### Not properly integrated into the code yet -- this is useful for EVN images
+
+        """
+        Gets the statistics for either a 256x256 pix image and writes
+        them to a logfile
+        """
+
+
+        rms=imstat(imagename=imagename,box='60,60,580,240')['rms'][0]  # for 640x640 px
+        peak=imstat(imagename=imagename,box='300,300,340,340')['max'][0]
+        print('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+                    (imagename, peak*1e3, rms*1e3, peak/rms))
+        
+        logfile = 'imstat.txt'
+        casa_imstat = imstat(imagename)
+        with open(logfile,"a") as txt_file:
+            txt_file.write('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+                        (imagename, peak*1e3, rms*1e3, peak/rms))
+
+            txt_file.write(f"For {imagename}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
+
+
 
 
     @staticmethod
@@ -324,6 +351,8 @@ class MeasurementSetInfo:
         str
             The size of the imaging cell in arcseconds.
         """
+        ### TODO: This needs to respect the flags e.g if the longest baseline is flagged !
+
         longest_baseline_lambda = MeasurementSetInfo.get_longest_baseline(msname)
         cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
         cell = f'{cell_float:.2f} arcsec'
@@ -426,7 +455,7 @@ class tclean_Imager:
                  weighting: str = 'natural', robust: float = 0, nterms: int = 1, imsize: int = 640,
                  niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '', imagename: str = None,
                  usemask: str = 'user', pblimit: float = 0.1,phasecenter: str = '', overwrite:bool = False, 
-                 use_pybdsf:bool = True, pybdsf_threshold: int = 5):
+                 use_pybdsf:bool = True, pybdsf_threshold: int = 5,cell:list = None):
         """
         Initializes the tclean_Imager instance with specified parameters.
 
@@ -494,6 +523,14 @@ class tclean_Imager:
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
         
 
+        if cell is not None:
+            self.cell = cell
+            logging.info(f"Manually supplied imaging cell size: {self.cell}")
+        else:
+            self.cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
+            logging.info(f"Calculated imaging cell size based on MS: {self.cell}")
+
+
     @Utils.time_execution
     def imager(self) -> None:
         """
@@ -541,7 +578,7 @@ class tclean_Imager:
             vis=self.msname,
             imagename=self.imagename,
             imsize=[self.imsize, self.imsize], 
-            cell=cell,
+            cell=self.cell,
             gridder=self.gridder,
             deconvolver=self.deconvolver,
             weighting=self.weighting,
@@ -592,7 +629,7 @@ class WSClean_Imager:
 
     def __init__(self, msname: str, imsize: int = 640, niter: int = 0, threshold: str = 0.0, deconvolution:str = None,
                  overwrite: bool = False, use_pybdsf: bool = True, pybdsf_threshold: int = 5, mgain: float = 0.8,
-                imagename: str = None, wsclean_sif: str = None, maskfile: str = ''):
+                imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None):
         """
         Initializes the wsclean_Imager instance with specified parameters.
 
@@ -628,6 +665,10 @@ class WSClean_Imager:
 
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
 
+         # Use the manually supplied cell or calculate it if not provided
+        self.cell = cell if cell is not None else MeasurementSetInfo.get_imaging_cellsize(self.msname)
+        logging.info(f"Using an imaging cell size: {cell}")
+
     @Utils.time_execution
     def imager(self) -> None:
         """
@@ -637,17 +678,14 @@ class WSClean_Imager:
         -------
         None
         """
-        cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
-        # imagename = self.msname.replace('.ms', '_image')
-
-        
+                
         command = [
             "wsclean",
             "-log-time",
             "-size", str(self.imsize), str(self.imsize),
             "-reorder",      
             "-name", self.imagename,
-            "-scale", cell,
+            "-scale", self.cell,
             "-mgain", str(self.mgain),
             "-niter", str(self.niter),
             "-threshold", str(self.threshold),
@@ -662,12 +700,11 @@ class WSClean_Imager:
 
         command.append(self.msname)
         
-        # Run the WSClean command
-        # try:
-        Utils.run_wsclean(command)
-        logging.info(f"Finished imaging {self.msname}, created image: {self.imagename}")
-    # except subprocess.CalledProcessError as e:
-        # logging.error(f"Error during WSClean imaging: {e}")
+        try:
+            Utils.run_wsclean(command)
+            logging.info(f"Finished imaging {self.msname}, created image: {self.imagename}")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error during WSClean imaging: {e}")
 
     @Utils.time_execution
     def predict(self) -> None:
@@ -701,7 +738,7 @@ class WSClean_Imager:
 
 class SelfCalibrationWSClean(WSClean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, final_image: bool = False, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -709,6 +746,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
         self.gaintype = gaintype
         self.solint = solint
         self.minsnr = minsnr
+        self.final_image = final_image
 
     @Utils.time_execution
     def selfcal(self) -> None:
@@ -725,7 +763,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
             if selfcal_loop > 0 and len(prev_caltables) > 0 and self.calmode[selfcal_loop] != '':
                 applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
             
-
+            
             imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
 
             # Set niter to 0 for the first loop to create a dirty map and run PYBDSF
@@ -742,6 +780,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
                     mgain = self.mgain,
+                    cell = self.cell,
                     niter = 1, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                     )
                 imager_instance.imager()
@@ -775,6 +814,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
                     mgain = self.mgain,
+                    cell = self.cell,
                     maskfile = self.maskfile
                     )
                 imager_instance.imager()
@@ -847,28 +887,30 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     logging.info("Applying the caltable derived from last gaincal iteration")
                     applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
 
-        ## Generate a final mask of sources to peel -- optional
-        imagename_final = self.imagename+'_final_clean'
-        logging.info("Making final image with all selfcal corrections applied")
-        
-        # self.niter = 1000000  # Can be modified to set a new value if needed
-        # self.threshold = '0.001mJy'
-        self.use_pybdsf = False
+        if self.final_image:
+            ## Generate a final mask of sources to peel -- optional
+            imagename_final = self.imagename+'_final_clean'
+            logging.info("Making final image with all selfcal corrections applied")
+            
+            # self.niter = 1000000  # Can be modified to set a new value if needed
+            # self.threshold = '0.001mJy'
+            self.use_pybdsf = False
 
-        imager_instance = WSClean_Imager(
-            msname = self.msname, 
-            imagename = imagename_final,
-            imsize = self.imsize,  
-            niter = self.niter,
-            threshold = self.threshold, # attempt to go to 0.0
-            overwrite = self.overwrite,
-            use_pybdsf = self.use_pybdsf,
-            pybdsf_threshold = self.pybdsf_threshold,
-            mgain = self.mgain,
-            maskfile = self.maskfile,
-            )
-        
-        imager_instance.imager()
+            imager_instance = WSClean_Imager(
+                msname = self.msname, 
+                imagename = imagename_final,
+                imsize = self.imsize,  
+                niter = self.niter,
+                threshold = self.threshold, # attempt to go to 0.0
+                overwrite = self.overwrite,
+                use_pybdsf = self.use_pybdsf,
+                pybdsf_threshold = self.pybdsf_threshold,
+                mgain = self.mgain,
+                maskfile = self.maskfile,
+                cell = self.cell,
+                )
+            
+            imager_instance.imager()
 
 
 class SelfCalibration(tclean_Imager):
@@ -912,7 +954,7 @@ class SelfCalibration(tclean_Imager):
                     imagename=imagename_dirty, # imagename for dirty defined in imagr class
                     nterms=self.nterms,
                     imsize=self.imsize,
-                    # niter=self.niter,
+                    cell=self.cell,
                     niter=0,
                     deconvolver=self.deconvolver,
                     threshold=self.thresholds[selfcal_loop],
@@ -954,6 +996,7 @@ class SelfCalibration(tclean_Imager):
                     nterms=self.nterms,
                     imsize=self.imsize,
                     niter=self.niter,
+                    cell=self.cell,
                     deconvolver=self.deconvolver,
                     threshold=self.thresholds[selfcal_loop],
                     weighting = self.weighting,
@@ -1046,6 +1089,7 @@ class SelfCalibration(tclean_Imager):
             deconvolver=self.deconvolver,
             threshold=self.thresholds[selfcal_loop],
             mask=mask,
+            cell = self.cell,
             weighting = self.weighting,
             robust = self.robust,
             overwrite=self.overwrite
@@ -1070,6 +1114,81 @@ class SelfCalibration(tclean_Imager):
             logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
 
 
+
+
+class PlottingRoutines():
+
+    @staticmethod
+    def plot_fits(imagename,fig_width =8,fig_height=6):
+        """
+        Plots fitsfiles using astropy
+        """
+
+        fitsname = imagename+'.fits'
+        exportfits(imagename=imagename+'.image.tt0',fitsimage=fitsname,overwrite=True)
+
+        plt.figure(figsize=(fig_width, fig_height))  
+        hdul = fits.open(fitsname)
+        w = WCS(hdul[0].header, naxis=2)
+        w.wcs.ctype = ['RA---SIN', 'DEC--SIN']
+        ax = plt.subplot(projection=w)
+
+        # Disable automatic labelling
+        ax.coords[0].set_auto_axislabel(True) 
+        ax.coords[1].set_auto_axislabel(True) 
+
+        # Extract image data
+        
+        image_data = hdul[0].data[0,0,:,:]
+
+        # Display the image with a color map
+        im = ax.imshow(image_data, cmap=plt.get_cmap('cividis'))
+
+        # Automatically set pixel scale based on WCS header information
+        pixscale = abs(w.wcs.cdelt[0]) * u.deg.to(u.arcsec) * u.arcsec  # Convert from degrees to arcseconds
+
+        # Define and add the beam ellipse
+        # possible_beam_files = [imagename + '.psf.tt0', imagename + '.psf', imagename + '.beam']
+        array_beam = imhead(imagename+'.psf.tt0')['restoringbeam']
+        major_axis = array_beam['major']['value']
+        minor_axis = array_beam['minor']['value']
+        pos_angle = array_beam['positionangle']['value']
+
+        major_axis = major_axis*u.arcsec  # Convert to arcseconds if needed 
+        minor_axis = minor_axis*u.arcsec  # Convert to arcseconds if needed
+        pos_angle = pos_angle*u.deg
+
+        my_beam = Beam(major_axis, minor_axis, pos_angle)
+        ycen_pix, xcen_pix = 15, 15
+        ellipse_artist = my_beam.ellipse_to_plot(xcen_pix, ycen_pix, pixscale)
+        _ = ax.add_artist(ellipse_artist)
+
+        ax.set_xlabel('RA (J2000)',size=14)
+        ax.set_ylabel('Dec (J2000)',size=14)  
+
+        ax.tick_params(axis = "x", which = "both", bottom = True, top = False)
+        ax.tick_params(axis = "y", which = "both", right = False, left = True)
+
+        # ra = ax.coords[0]
+        # dec = ax.coords[1]
+
+        # ra.set_ticklabel(size=12)
+        # dec.set_ticklabel(size=12)
+
+        cbar = plt.colorbar(im,extend='both')
+        cbar.ax.tick_params(labelsize=16)
+        cbar.set_label('Jy/beam',rotation=90, labelpad=12,size=18)
+
+        # ax.contour(image_data,levels=[-3*0.136e-3,3*0.136e-3,5*0.136e-3,10*0.136e-3,15*0.136e-3], colors='white',
+        #         linewidths=0.5)
+
+        plt.savefig(fitsname.replace('.fits','_1.pdf'),dpi=300)
+
+   
+
+
+
+
 def main():
     # Define your parameters here
 
@@ -1086,6 +1205,9 @@ def main():
     ### Use loop+1 ie if you wish to do 3 rounds, assign 4 to the nloops variable 
     ### the first loop will be used to produce a dirty map for masking using PYBDSF
 
+    # CASA <2>: flagdata(vis='K2-18.ms/',antenna='ea02,ea19,ea27,ea04,ea25,ea03,ea21') for A->D
+
+
     nloops = 4
     thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
     calmode = ['','p','p','ap']
@@ -1095,39 +1217,42 @@ def main():
 
     ### Data averaging -- if you have an measurement set with multiple fields and you wish to split and average
     ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
-    ### in msname
+    ### in msname in the class instance
     Utils.set_working_dir(working_directory)
     MeasurementSetProcessor.timebin='2s'
     MeasurementSetProcessor.width = 4
-    msname_tuple = MeasurementSetProcessor.split_data(msname)
+    # msname_tuple = MeasurementSetProcessor.split_data(msname)
     # refant = MeasurementSetInfo.find_refant(msname_tuple[1])
 
+    ### I have included the option to manually specify the cell size although if you wish,
+    ### the code will automatically select the cell size for you
+    ### note that the calculation will not respect flagged baselines (the cell size will change if you wish to flag the longest baseline)
 
-    # Create an instance of SelfCalibration for the first loop (dirty map)
-    self_calibration_instance = SelfCalibration(
-        msname=msname_tuple[1], 
-        nloops=nloops,
-        thresholds=thresholds,
-        calmode=calmode,
-        gaintype=gaintype,
-        solint=solint,
-        minsnr=minsnr,
-        imsize=320,
-        niter=1,  
-        nterms=2,
-        deconvolver='mtmfs',
-        weighting='briggs',
-        robust=0.5,
-        use_pybdsf=True,
-        pybdsf_threshold=5,
-        overwrite=False
+    # # Create an instance of SelfCalibration for the first loop (dirty map)
+    # self_calibration_instance = SelfCalibration(
+    #     msname=msname_tuple[1], 
+    #     nloops=nloops,
+    #     thresholds=thresholds,
+    #     calmode=calmode,
+    #     gaintype=gaintype,
+    #     solint=solint,
+    #     minsnr=minsnr,
+    #     imsize=320,
+    #     niter=1,  
+    #     nterms=2,
+    #     deconvolver='mtmfs',
+    #     weighting='briggs',
+    #     robust=0.5,
+    #     use_pybdsf=True,
+    #     pybdsf_threshold=5,
+    #     overwrite=False
         
-    )
+    # )
 
     # self_calibration_instance.selfcal()
 
     self_calibration_wsclean = SelfCalibrationWSClean(
-        msname=msname_tuple[1], 
+        msname='/home/kelvin/Desktop/vla_working_dir/K2-18.ms', 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
@@ -1139,7 +1264,8 @@ def main():
         use_pybdsf=True,
         pybdsf_threshold=5,
         overwrite=False,
-        
+        final_image = True,
+        cell = '4.6arcsec' ## use for A to D
     )
     self_calibration_wsclean.selfcal()
 
@@ -1197,205 +1323,8 @@ if __name__ == "__main__":
 
 
 
-
-
-
-#     #  def get_im_stats(imagename):
-        
-#     #     """
-#     #     Gets the statistics for either a 256x256 pix image and writes
-#     #     them to a logfile
-#     #     """
-
-
-#     #     rms=imstat(imagename=imagename,box='60,60,580,240')['rms'][0]  # for 640x640 px
-#     #     peak=imstat(imagename=imagename,box='300,300,340,340')['max'][0]
-#     #     print('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
-#     #                 (imagename, peak*1e3, rms*1e3, peak/rms))
-        
-#     #     logfile = 'imstat.txt'
-#     #     casa_imstat = imstat(imagename)
-#     #     with open(logfile,"a") as txt_file:
-#     #         txt_file.write('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
-#     #                     (imagename, peak*1e3, rms*1e3, peak/rms))
-
-#     #         txt_file.write(f"For {imagename}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
-
-
-
-
-
-# class PlottingRoutines():
-
-#     def plot_fits(imagename,fig_width =8,fig_height=6):
-#         """
-#         Plots fitsfiles using astropy
-#         """
-
-#         fitsname = imagename+'.fits'
-#         exportfits(imagename=imagename+'.image.tt0',fitsimage=fitsname,overwrite=True)
-
-#         plt.figure(figsize=(fig_width, fig_height))  
-#         hdul = fits.open(fitsname)
-#         w = WCS(hdul[0].header, naxis=2)
-#         w.wcs.ctype = ['RA---SIN', 'DEC--SIN']
-#         ax = plt.subplot(projection=w)
-
-#         # Disable automatic labelling
-#         ax.coords[0].set_auto_axislabel(True) 
-#         ax.coords[1].set_auto_axislabel(True) 
-
-#         # Extract image data
-        
-#         image_data = hdul[0].data[0,0,:,:]
-
-#         # Display the image with a color map
-#         im = ax.imshow(image_data, cmap=plt.get_cmap('cividis'))
-
-#         # Automatically set pixel scale based on WCS header information
-#         pixscale = abs(w.wcs.cdelt[0]) * u.deg.to(u.arcsec) * u.arcsec  # Convert from degrees to arcseconds
-
-#         # Define and add the beam ellipse
-#         array_beam = imhead(imagename+'.psf.tt0')['restoringbeam']
-#         major_axis = array_beam['major']['value']
-#         minor_axis = array_beam['minor']['value']
-#         pos_angle = array_beam['positionangle']['value']
-
-#         major_axis = major_axis*u.arcsec  # Convert to arcseconds if needed 
-#         minor_axis = minor_axis*u.arcsec  # Convert to arcseconds if needed
-#         pos_angle = pos_angle*u.deg
-
-#         my_beam = Beam(major_axis, minor_axis, pos_angle)
-#         ycen_pix, xcen_pix = 15, 15
-#         ellipse_artist = my_beam.ellipse_to_plot(xcen_pix, ycen_pix, pixscale)
-#         _ = ax.add_artist(ellipse_artist)
-
-#         ax.set_xlabel('RA (J2000)',size=14)
-#         ax.set_ylabel('Dec (J2000)',size=14)  
-
-#         ax.tick_params(axis = "x", which = "both", bottom = True, top = False)
-#         ax.tick_params(axis = "y", which = "both", right = False, left = True)
-
-#         # ra = ax.coords[0]
-#         # dec = ax.coords[1]
-
-#         # ra.set_ticklabel(size=12)
-#         # dec.set_ticklabel(size=12)
-
-#         cbar = plt.colorbar(im,extend='both')
-#         cbar.ax.tick_params(labelsize=16)
-#         cbar.set_label('Jy/beam',rotation=90, labelpad=12,size=18)
-
-#         # ax.contour(image_data,levels=[-3*0.136e-3,3*0.136e-3,5*0.136e-3,10*0.136e-3,15*0.136e-3], colors='white',
-#         #         linewidths=0.5)
-
-#         plt.savefig(fitsname.replace('.fits','_1.pdf'),dpi=300)
-
-   
-
-
-
-
         
         
 
 
-#     # def applycal_target():
 
-#     #     """
-#     #     Applies cal to the target field
-#     #     """
-#     #     prev_caltables = sorted(glob.glob('*.gcal'))
-#     #     applycal(
-#     #         vis = vis_tocal, gaintable = prev_caltables, parang=False
-#     #     )
-
-
-
-#     # def peeling():
-
-#     #     """
-#     #     Subtract the bright sources in the field so you are left with the emission from the star
-
-#     #     Use pybsdf casa region file -- you can change the threshold to only select the bright sources you want
-
-#     #     Run pybsdf on the final image
-        
-#     #     """
-
-#     #     # Using the final imagename 
-
-#     #     imagename = basename +f'_{nloops-1}'+'.final'
-#     #     # region_to_peel = pybdsf(input_image=imagename+'.image.tt0')
-
-#     #     ## NB: You had masked the bright source from the dirty map -- so you can just subtract
-#     #     uvsub(vis=vis)
-
-#     #     ## Make a final map without the sources
-#     #     cell = get_imaging_cellsize()
-#     #     peeled_map = basename+'_peeled_map'
-#     #     if not os.path.exists(peeled_map):
-#     #         print(f"Making {peeled_map}")
-#     #         tclean(
-#     #             vis = vis, imagename=peeled_map, imsize=imsize, cell=cell,
-#     #             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-#     #             weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
-#     #             nterms = nterms, pblimit = pblimit
-#     #         )
-
-
-
-
-
-
-
-
-#     # delete model column to be d
-
-#     def peeling():
-
-#         """
-#         Subtract all the sources in the field such that you are left with a blank
-
-#         Use wsclean and pybdsf casa region from the final iterations 
-
-#         Then perform uvsub in CASA
-
-#         """
-
-#         # Make a region file of the final self calibrated image and use it to peel the sources
-#         imagename = basename +f'_{nloops-1}'+'.final.image.tt0'
-#         regionfile_to_peel = pybdsf(input_image=imagename)
-#         fitsmask = imagename.replace('.image.tt0','')+'.maskfile.fits'
-#         model_fits = imagename.replace('.final.image.tt0','.final.image.tt0-model.fits')
-#         os.rename(fitsmask,model_fits )
-
-#         cell = get_imaging_cellsize()
-
-
-#         threshold_cmd = ['wsclean', '-auto-threshold','3', '-size', f'{imsize[0]}', f'{imsize[1]}','-scale', f'{cell}',\
-#                         '-mgain', '0.8', '-niter', '0',f'{vis}']
-        
-#         predict_cmd = ['wsclean', '-log-time', '-predict', '-field', '', '-reorder' ,'-name', f'{imagename}', '-abs-mem',f'{abs_mem}', vis]
-
-
-#         run_wsclean(predict_cmd)
-
-#         ## NB: wsclean needs to find an image named my-image-model.fits or reg 
-#         ## works by replacing model column with model for the problem sources using
-
-        
-        
-#         ## Subtract the models put in the model column from the data and make an image
-            
-#         print("Running uvsub")
-#         uvsub(vis=vis)
-
-#         ## Run wsclean to check if the subtraction has been successful -- make dirty map
-
-#         run_wsclean(threshold_cmd)
-
-
-
-
-        
