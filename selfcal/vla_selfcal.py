@@ -400,6 +400,7 @@ class MeasurementSetInfo:
             tb.close()
             tb.open(tablename)
             antenna_ids = tb.getcol('ANTENNA1')
+            num_antennas = len(antenna_ids)
             flags = tb.getcol('FLAG')
             phases = np.angle(tb.getcol('CPARAM'))
             snrs = tb.getcol('SNR')
@@ -434,7 +435,8 @@ class MeasurementSetInfo:
         pref_ant = antenna_names[sort_idx]
         pref_ant_list = list(pref_ant)
         logging.info(f"The following antennas will be used as the reference antennas: {', '.join(pref_ant_list[:truncation])}")
-        return pref_ant_list
+
+        return num_antennas, pref_ant_list
 
     @staticmethod
     def get_msinfo(msname):
@@ -851,7 +853,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 logging.info("Plotting the model column")
                 try:
                     plotms(
-                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nspw), avgtime='300',
+                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nchan), avgtime='300',
                         showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
                     )
                 except Exception as e:
@@ -859,7 +861,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 
                 ## Run gaincal
-                refant = MeasurementSetInfo.find_refant(self.msname)  
+                num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
 
                 if self.calmode[selfcal_loop] == 'p':
                     minblperant = 3
@@ -887,11 +889,6 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
 
-                        tb = casatools.table()
-                        tb.open(caltable + '/ANTENNA')
-                        antenna_ids = tb.getcol('ANTENNA1')
-                        tb.close()
-                        num_antennas = len(antenna_ids)
                         gridcols = math.ceil(math.sqrt(num_antennas))   # Columns
                         gridrows = math.ceil(num_antennas / gridcols)   # Rows
 
@@ -1041,17 +1038,17 @@ class SelfCalibration(tclean_Imager):
                         ft(vis=self.msname, model=imagename + '.model', usescratch=True)
                 except Exception as e:
                     logging.error(f"Error adding model column: {e}")
-                nspw,_ = MeasurementSetInfo.get_msinfo(self.msname)
+                nspw,nchan = MeasurementSetInfo.get_msinfo(self.msname)
                 logging.info("Plotting the model column")
                 try:
                     plotms(
-                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nspw), avgtime='300',
+                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nchan), avgtime='300',
                         showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
                     )
                 except Exception as e:
                     logging.error(f"Error plotting model column: {e}")
 
-                refant = MeasurementSetInfo.find_refant(self.msname)  
+                num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
 
                 # Perform gain calibration
                 logging.info(f"Running gain calibration. Writing caltable: {caltable}")
@@ -1080,11 +1077,6 @@ class SelfCalibration(tclean_Imager):
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
 
-                        tb = casatools.table()
-                        tb.open(caltable + '/ANTENNA')
-                        antenna_ids = tb.getcol('ANTENNA1')
-                        tb.close()
-                        num_antennas = len(antenna_ids)
                         gridcols = math.ceil(math.sqrt(num_antennas))   # Columns
                         gridrows = math.ceil(num_antennas / gridcols)   # Rows
 
@@ -1228,7 +1220,7 @@ def main():
     # Define your parameters here
 
     # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98809027765/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
-    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
+    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
     # msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
     working_directory = '/home/kelvin/Desktop/vla_working_dir/' # D
     # working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
@@ -1280,13 +1272,14 @@ def main():
     #     use_pybdsf=True,
     #     pybdsf_threshold=5,
     #     overwrite=False
+        ## cell = '4.6arcsec' ## use for A to D
         
     # )
 
     # self_calibration_instance.selfcal()
 
     self_calibration_wsclean = SelfCalibrationWSClean(
-        msname=msname_tuple[2], 
+        msname=msname_tuple[1], 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
@@ -1299,7 +1292,7 @@ def main():
         pybdsf_threshold=5,
         overwrite=False,
         final_image = True,
-        cell = '4.6arcsec' ## use for A to D
+        # cell = '4.6arcsec' ## use for A to D
     )
     self_calibration_wsclean.selfcal()
 
