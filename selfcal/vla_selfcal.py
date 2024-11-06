@@ -1294,6 +1294,77 @@ if __name__ == "__main__":
     main()
 
 
+# def peel(imagename, box_size=10):  # box_size defines half-width of the box around the peak
+#     # Ensure the correct FITS file is used
+
+#     # imagename = imagename +'.image.tt0.fits'
+#     imagename = imagename + '-image.fits'
+    
+#     x = casatasks.imstat(imagename)
+    
+#     # Extract peak position from imstat
+#     max_x, max_y = x['maxpos'][0], x['maxpos'][1]
+#     # print(max_x,max_y)
+
+#     # Define the box around the peak position
+#     xmin = max(0, max_x - box_size)
+#     xmax = max(0, max_x + box_size)
+#     ymin = max(0, max_y - box_size)
+#     ymax = max(0, max_y + box_size)
+
+#     imfit_box = f"{xmin},{ymin},{xmax},{ymax}"
+ 
+#     print(f"Automatically determined imfit box: {imfit_box}")
+
+
+#     ## Use imfit to fit a Gaussian and extract the coordinates and flux
+
+#     image_data = imfit(imagename, box=imfit_box)
+#     peak_flux = image_data['results']['component0']['peak']['value']
+#     ra = image_data['deconvolved']['component0']['shape']['direction']['m0']['value']
+#     dec = image_data['deconvolved']['component0']['shape']['direction']['m1']['value']
+
+#     print(peak_flux)
+
+#     sky_coord = SkyCoord(ra=ra * u.rad, dec=dec * u.rad, frame='icrs')
+
+#     ra_hms = sky_coord.ra.to_string(unit=u.hour, sep=':')
+#     dec_dms = sky_coord.dec.to_string(unit=u.deg, sep='.',pad=True)
+
+#     print(f"Right Ascension (HMS): {ra_hms}")
+#     print(f"Declination (DMS): {dec_dms}")
+
+#     # Define the component list filename using the RA and Dec
+#     clname = f"{ra_hms}_{dec_dms}.cl"
+
+#     # Initialize componentlist tool
+#     cl =casatools.componentlist()
+
+#     # Remove the existing component list file if it exists (to avoid overwrite issues)
+#     if os.path.exists(clname):
+#         os.system(f"rm -r {clname}")
+
+#     # Add a new component to the list at the provided RA and Dec with the specified flux
+#     cl.addcomponent(flux=peak_flux, fluxunit='Jy', shape='point', dir=f"J2000 {ra_hms} {dec_dms}")
+
+#     # Rename and save the component list with the specified filename
+#     cl.rename(clname)
+#     cl.done()
+#     # Optionally: Print confirmation of added component
+#     print(f"Made component with flux {peak_flux} Jy at coordinates J2000 {ra_hms} {dec_dms}")
+
+
+#     ## Delete the original model column 
+#     print("Deleting model column")
+#     delmod(vis=vis,otf=True)
+#     plotms(vis=vis,xaxis='frequency',yaxis='amp',ydatacolumn='model',plotfile='empty_model.png',showgui=False,overwrite=True)
+#     ## Add model to the MODEL column and subtract
+#     ft(vis = vis, complist=clname,incremental=False, usescratch=True)
+#     plotms(vis=vis,xaxis='frequency',yaxis='amp',ydatacolumn='model',plotfile='added_model.png',showgui=False,overwrite=True)
+
+#     print("Perfoming UVSUB")
+#     uvsub(vis=vis,reverse=False)
+
 #     # def applycal_target():
 
 #     #     """
