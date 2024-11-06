@@ -20,6 +20,8 @@ tb = casatools.table()
 ms = casatools.ms()
 
 
+wsclean_sif = '/home/kelvin/Desktop/singularity/wsclean-v3.3-no-cuda.sif'
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -103,35 +105,45 @@ class Utils():
         return wrapper
     
     @staticmethod
-    def run_wsclean(wsclean_sif, command):
-        """
-        Runs wsclean commands.
-        """
-        singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
-        command_to_execute = ['singularity', 'exec', '-B', singularity_bind, wsclean_sif] + command
+    def run_wsclean(command):
+            """
+            Runs wsclean commands and logs the output and errors in real-time.
+            """
+            # Get the path to bind the singularity container
+            singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
+            # Form the command to execute with Singularity
+            command_to_execute = ['singularity', 'exec', '-B', singularity_bind, wsclean_sif] + command
+            print(f"Executing: {' '.join(command_to_execute)}")
+            try:
+                # logging.info(f"Executing: {' '.join(command_to_execute)}")
+                process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 
-        try:
-            logging.info(f"Executing: {' '.join(command_to_execute)}")
-            process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            stdout, stderr = process.communicate()
-            logging.info(f"stdout: {stdout}")
-            logging.error(f"stderr: {stderr}")
+                # Read stdout and stderr as they are produced
+                for stdout_line in iter(process.stdout.readline, ""):
+                    # Log stdout in real time
+                    logging.info(stdout_line.strip())
+                for stderr_line in iter(process.stderr.readline, ""):
+                    # Log stderr in real time
+                    logging.error(stderr_line.strip())
 
-            return_code = process.returncode
-            if return_code == 0:
-                logging.info(f"Strategy executed successfully. Output:\n{stdout}")
-            else:
-                logging.error(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
+                # Wait for the process to finish and get the return code
+                return_code = process.wait()
 
-        except Exception as e:
-            logging.exception("An error occurred during wsclean execution: %s", e)
+                if return_code == 0:
+                    logging.info("Strategy executed successfully.")
+                else:
+                    logging.error(f"Error executing strategy. Return code: {return_code}")
+
+            except Exception as e:
+                logging.exception("An error occurred during wsclean execution: %s", e)
+
 
     @staticmethod
     def pybdsf(input_image, detection_threshold):
 
         # Check if the input image is a FITS file; if not, add .fits
         if not input_image.endswith('.fits'):
-            imagename = input_image
+            input_image = input_image
             fitsname =input_image + '.fits'
         else:
             # If it is already a FITS file, use it directly
@@ -144,12 +156,12 @@ class Utils():
                                 group_by_isl=True)
 
         # Write out island mask and FITS catalog
-        img.export_image(outfile=imagename + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
-        img.write_catalog(outfile=imagename + '.cat', format='fits', clobber=True, catalog_type='gaul')
+        img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
+        img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
 
-        regionfile = imagename + '.casabox'
-        ascii_file = imagename + '.ascii'
-        rmsfile = imagename + '.rmsfile'
+        regionfile = input_image + '.casabox'
+        ascii_file = input_image + '.ascii'
+        rmsfile = input_image + '.rmsfile'
 
         img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
         img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
@@ -480,7 +492,7 @@ class tclean_Imager:
         self.pybdsf_threshold = pybdsf_threshold
 
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
-
+        
 
     @Utils.time_execution
     def imager(self) -> None:
@@ -564,7 +576,7 @@ class tclean_Imager:
         # #     logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
 
 
-class wsclean_Imager:
+class WSClean_Imager:
     """
     A class for performing imaging on measurement sets using the WSClean algorithm.
 
@@ -579,7 +591,8 @@ class wsclean_Imager:
     """
 
     def __init__(self, msname: str, imsize: int = 640, niter: int = 0, threshold: str = None, deconvolution:str = None,
-                 overwrite: bool = False, use_pybdsf: bool = True, pybdsf_threshold: int = 5, mgain: float = 0.8):
+                 overwrite: bool = False, use_pybdsf: bool = True, pybdsf_threshold: int = 5, mgain: float = 0.8,
+                imagename: str = None, wsclean_sif: str = None, maskfile: str = ''):
         """
         Initializes the wsclean_Imager instance with specified parameters.
 
@@ -611,9 +624,10 @@ class wsclean_Imager:
         self.use_pybdsf = use_pybdsf
         self.pybdsf_threshold = pybdsf_threshold
         self.mgain = mgain
+        self.maskfile = maskfile
 
-    
-    
+        self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
+
     @Utils.time_execution
     def imager(self) -> None:
         """
@@ -624,7 +638,7 @@ class wsclean_Imager:
         None
         """
         cell = MeasurementSetInfo.get_imaging_cellsize(self.msname)
-        imagename = self.msname.replace('.ms', '_image')
+        # imagename = self.msname.replace('.ms', '_image')
 
         
         command = [
@@ -632,34 +646,197 @@ class wsclean_Imager:
             "-log-time",
             "-size", str(self.imsize), str(self.imsize),
             "-reorder",      
-            "-name", imagename,
+            "-name", self.imagename,
             "-scale", cell,
             "-mgain", str(self.mgain),
             "-niter", str(self.niter),
+            "-fits-mask", str(self.maskfile),
         ]
-
+        if self.maskfile == '':
+            logging.info(f"Masking not requested.")
+        else:
+            logging.info(f"Using maskfile: {self.maskfile}")
         if self.deconvolution == "multiscale":
             command.append("-multiscale")
 
         command.append(self.msname)
         
         # Run the WSClean command
-        try:
-            Utils.run_wsclean(wsclean_sif,command)
-            logging.info(f"Finished imaging {self.msname}, created image: {imagename}")
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Error during WSClean imaging: {e}")
+        # try:
+        Utils.run_wsclean(command)
+        logging.info(f"Finished imaging {self.msname}, created image: {self.imagename}")
+    # except subprocess.CalledProcessError as e:
+        # logging.error(f"Error during WSClean imaging: {e}")
 
-        # If using PYBDSF for masking, call it here
-        # if self.use_pybdsf:
-        #     try:
-        #         logging.info(f"Running pybdsf on {imagename}...")
-        #         Utils.pybdsf(imagename + '-image.fits', self.pybdsf_threshold)
-        #         logging.info(f"Successfully ran pybdsf on {imagename}.")
-        #     except Exception as e:
-        #         logging.error(f"Failed to run pybdsf on {imagename}: {e}")
-        # else:
-        #     logging.info("Masking using PYBDSF not requested.")
+    @Utils.time_execution
+    def predict(self) -> None:
+        """
+        Perform the prediction process using the WSClean algorithm.
+
+        Parameters:
+        ----------
+        phasecal_ms : str
+            The path to the measurement set for the prediction process.
+        """
+        predict_cmd = [
+            'wsclean',
+            '-log-time',
+            '-predict',
+            '-reorder',
+            '-name', self.imagename,
+            self.msname
+        ]
+
+        # Run the WSClean prediction command
+        try:
+            Utils.run_wsclean(predict_cmd)
+            logging.info(f"Prediction completed successfully with imagename: {self.imagename}")
+        except Exception as e:
+            logging.error(f"Error during prediction: {e}")
+
+
+
+
+
+class SelfCalibrationWSClean(WSClean_Imager):
+
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, **kwargs):
+        super().__init__(msname=msname, **kwargs)
+        self.nloops = nloops
+        self.thresholds = thresholds
+        self.calmode = calmode
+        self.gaintype = gaintype
+        self.solint = solint
+        self.minsnr = minsnr
+
+    @Utils.time_execution
+    def selfcal(self) -> None:
+        Utils.create_plots_directory()
+        
+        logging.info("Deleting model column before selfcal")
+        delmod(vis=self.msname, otf=True)
+
+        for selfcal_loop in range(self.nloops):
+            caltable = f'{self.msname.replace(".ms", "_caltable_loop_")}_{selfcal_loop}.gcal'
+            prev_caltables = sorted(glob.glob('*.gcal'))
+
+            # Apply previous calibration tables if they exist and if it's not the dirty map loop
+            # if selfcal_loop > 0 and len(prev_caltables) > 0 and self.calmode[selfcal_loop] != '':
+                # applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
+            
+
+            imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
+
+            # Set niter to 0 for the first loop to create a dirty map and run PYBDSF
+            if selfcal_loop == 0:
+                # self.niter = 0
+                imagename_dirty = self.imagename+'_dirty'
+
+
+                imager_instance = WSClean_Imager(
+                    msname = self.msname, 
+                    imagename = imagename_dirty,
+                    imsize = self.imsize,  
+                    niter = 1,
+                    threshold = self.threshold,
+                    overwrite = self.overwrite,
+                    use_pybdsf = self.use_pybdsf,
+                    pybdsf_threshold = self.pybdsf_threshold,
+                    mgain = self.mgain,
+                    )
+                imager_instance.imager()
+
+                # If using PYBDSF for masking, call it here
+                if self.use_pybdsf:
+                    try:
+                        logging.info(f"Running pybdsf on {imagename_dirty}...")
+                        Utils.pybdsf(imagename_dirty + '-image.fits', self.pybdsf_threshold)
+                        self.maskfile = imagename_dirty + '-image.fits.maskfile.fits'
+                        self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
+                        logging.info(f"PYBDSF output file: {self.maskfile} will be used for masking")
+                        logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
+                    except Exception as e:
+                        logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
+                else:
+                    logging.info("Masking using PYBDSF not requested.")
+                    self.maskfile = ''
+
+            else:
+                # Set niter for subsequent loops and disable pybdsf
+                self.niter = self.niter  # Can be modified to set a new value if needed
+                self.use_pybdsf = False
+                
+                imager_instance = WSClean_Imager(
+                    msname = self.msname, 
+                    imagename = imagename,
+                    imsize = self.imsize,  
+                    niter = self.niter,
+                    threshold = self.threshold,
+                    overwrite = self.overwrite,
+                    use_pybdsf = self.use_pybdsf,
+                    pybdsf_threshold = self.pybdsf_threshold,
+                    mgain = self.mgain,
+                    maskfile = self.maskfile
+                    )
+                imager_instance.imager()
+
+                ### Put image model in measurement set  MODEL COLUMN -- similar to ft in CASA
+                logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
+                ## WSClean must find an image named --model.fits (IN CWD) in order to predict !
+                model_fits = imagename.replace('-image.fits','-model.fits')
+                logging.info(f"======>>>Adding modelcolumn to data. Using {model_fits} to predict")
+
+                imager_instance.predict()
+
+                ## Run gaincal
+                refant = MeasurementSetInfo.find_refant(self.msname)  
+
+                if self.calmode[selfcal_loop] == 'p':
+                    minblperant = 3
+                else:
+                    minblperant = 4
+
+                # try:
+                gaincal(vis=self.msname,
+                        caltable=caltable,
+                        refant=str(refant),
+                        solint=self.solint[selfcal_loop],
+                        gaintype=self.gaintype[selfcal_loop],
+                        gaintable=prev_caltables,
+                        minsnr=self.minsnr[selfcal_loop],
+                        calmode=self.calmode[selfcal_loop],
+                        minblperant = minblperant,
+                        append=False,
+                        parang=False)
+                # except Exception as e:
+                #     logging.error(f"Error during gain calibration: {e}")
+
+                # Plot gain calibration results
+                coloraxis = ['corr', 'spw']
+                for color in coloraxis:
+                    if self.calmode[selfcal_loop] == 'p':
+                        plotms(
+                            vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                        )
+                    else:
+                        plotms(
+                            vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                        )
+
+                # Apply calibration tables after the last self-calibration loop
+                if selfcal_loop == self.nloops - 1:
+                    prev_caltables = sorted(glob.glob('*.gcal'))
+                    logging.info("Applying the caltable derived from last gaincal iteration")
+                    applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
+
+
+
+
+
 
 
 
@@ -866,9 +1043,10 @@ class SelfCalibration(tclean_Imager):
 def main():
     # Define your parameters here
 
-    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
+    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98809027765/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
+
     # msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
-    working_directory = '/home/kelvin/Desktop/vla_working_dir_class/' # D
+    working_directory = '/home/kelvin/Desktop/vla_working_dir/' # D
     # working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
 
     ### The WSclean imager has been implemented, however its not working properly -- DO NOT USE !
@@ -916,7 +1094,24 @@ def main():
         
     )
 
-    self_calibration_instance.selfcal()
+    # self_calibration_instance.selfcal()
+
+    self_calibration_wsclean = SelfCalibrationWSClean(
+        msname=msname_tuple[1], 
+        nloops=nloops,
+        thresholds=thresholds,
+        calmode=calmode,
+        gaintype=gaintype,
+        solint=solint,
+        minsnr=minsnr,
+        imsize=320,
+        niter=2,
+        use_pybdsf=True,
+        pybdsf_threshold=5,
+        overwrite=False,
+        
+    )
+    self_calibration_wsclean.selfcal()
 
 if __name__ == "__main__":
     main()
