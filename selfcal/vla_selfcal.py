@@ -1214,18 +1214,11 @@ class PlottingRoutines():
 def main():
     # Define your parameters here
 
-    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98809027765/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
-    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
-    # msname='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
-    # msname = '/home/kelvin/Desktop/geferson/NGC6670.calibrated.avg12s32c.ms'
-    msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
-    working_directory = '/home/kelvin/Desktop/vla_working_dir/' # D
-    # working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
 
-    ### The WSclean imager has been implemented, however its not working properly -- DO NOT USE !
-    wsclean_sif= '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
+    msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
+    working_directory = '/home/kelvin/Desktop/vla_working_dir' # D
 
-
+  
     ### Use loop+1 ie if you wish to do 3 rounds, assign 4 to the nloops variable 
     ### the first loop will be used to produce a dirty map for masking using PYBDSF
 
@@ -1289,7 +1282,7 @@ def main():
         pybdsf_threshold=5,
         overwrite=False,
         final_image = True,
-        # cell = '4.6arcsec' ## use for A to D
+        cell = '4.6arcsec' ## use for A to D
     )
     self_calibration_wsclean.selfcal()
 
