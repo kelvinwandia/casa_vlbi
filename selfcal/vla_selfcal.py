@@ -251,7 +251,7 @@ class MeasurementSetProcessor:
 
         finally:
             msmd.close()
-
+       
         return tuple(outputvis_list)
 
 class MeasurementSetInfo:
@@ -1239,34 +1239,38 @@ def main():
     MeasurementSetProcessor.timebin='2s'
     MeasurementSetProcessor.width = 4
     msname_tuple = MeasurementSetProcessor.split_data(msname)
+    print(f"msname_tuple after split: {msname_tuple[2]}")
+
 
     ### I have included the option to manually specify the cell size although if you wish,
     ### the code will automatically select the cell size for you
     ### note that the calculation will not respect flagged baselines (the cell size will change if you wish to flag the longest baseline)
 
-    # Create an instance of SelfCalibration for the first loop (dirty map)
-    self_calibration_instance = SelfCalibration(
-        msname=msname[2], 
-        nloops=nloops,
-        thresholds=thresholds,
-        calmode=calmode,
-        gaintype=gaintype,
-        solint=solint,
-        minsnr=minsnr,
-        imsize=320,
-        niter=1,  
-        nterms=2,
-        deconvolver='mtmfs',
-        weighting='briggs',
-        robust=0.5,
-        use_pybdsf=True,
-        pybdsf_threshold=5,
-        overwrite=False
-        # cell = '4.6arcsec' ## use for A to D
+    # # Create an instance of SelfCalibration for the first loop (dirty map)
+    # self_calibration_instance = SelfCalibration(
+    #     msname=msname_tuple[2], 
+    #     nloops=nloops,
+    #     thresholds=thresholds,
+    #     calmode=calmode,
+    #     gaintype=gaintype,
+    #     solint=solint,
+    #     minsnr=minsnr,
+    #     imsize=320,
+    #     niter=1,  
+    #     nterms=2,
+    #     deconvolver='mtmfs',
+    #     weighting='briggs',
+    #     robust=0.5,
+    #     use_pybdsf=True,
+    #     pybdsf_threshold=5,
+    #     overwrite=False
+    #     # cell = '4.6arcsec' ## use for A to D
         
-    )
+    # )
 
     # self_calibration_instance.selfcal()
+    print(f"msname before SelfCalibration: {msname_tuple[2]}")
+
 
     self_calibration_wsclean = SelfCalibrationWSClean(
         msname=msname_tuple[2], 
