@@ -1,5 +1,5 @@
 
-import os, glob, subprocess, time, bdsf, logging
+import os, glob, subprocess, time, bdsf, logging, math
 from typing import Callable, Any
 import casatools, casalogger
 import matplotlib.pyplot as plt
@@ -195,6 +195,8 @@ class Utils():
         img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
 
         return regionfile
+    
+
 
 class MeasurementSetProcessor:
 
@@ -434,6 +436,19 @@ class MeasurementSetInfo:
         logging.info(f"The following antennas will be used as the reference antennas: {', '.join(pref_ant_list[:truncation])}")
         return pref_ant_list
 
+    @staticmethod
+    def get_msinfo(msname):
+
+        nchan = []
+        msmd = casatools.msmetadata()
+        msmd.open(msname)
+        bandwidth = msmd.bandwidths()
+        nspw = len(bandwidth)
+        for spw in range(nspw):
+            nchan.append(msmd.nchan(spw))
+        msmd.close()
+
+        return nspw,nchan
 
 
 
@@ -832,10 +847,11 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 imager_instance.predict()
 
                 ### Make plot to verify that predict is working
+                nspw,nchan = MeasurementSetInfo.get_msinfo(self.msname)
                 logging.info("Plotting the model column")
                 try:
                     plotms(
-                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel='64', avgtime='300',
+                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nspw), avgtime='300',
                         showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
                     )
                 except Exception as e:
@@ -866,17 +882,27 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 #     logging.error(f"Error during gain calibration: {e}")
 
                 # Plot gain calibration results
+                ### TODO: this should be a function in the plotting routines
                 coloraxis = ['corr', 'spw']
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
+
+                        tb = casatools.table()
+                        tb.open(caltable + '/ANTENNA')
+                        antenna_ids = tb.getcol('ANTENNA1')
+                        tb.close()
+                        num_antennas = len(antenna_ids)
+                        gridcols = math.ceil(math.sqrt(num_antennas))   # Columns
+                        gridrows = math.ceil(num_antennas / gridcols)   # Rows
+
                         plotms(
-                            vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                            vis=caltable, xaxis='time', yaxis='phase', gridcols=gridcols, gridrows=gridrows,
                             iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
                             plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
                         )
                     else:
                         plotms(
-                            vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+                            vis=caltable, xaxis='time', yaxis='amp', gridcols=gridcols, gridrows=gridrows,
                             iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
                             plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
                         )
@@ -1015,11 +1041,11 @@ class SelfCalibration(tclean_Imager):
                         ft(vis=self.msname, model=imagename + '.model', usescratch=True)
                 except Exception as e:
                     logging.error(f"Error adding model column: {e}")
-
+                nspw,_ = MeasurementSetInfo.get_msinfo(self.msname)
                 logging.info("Plotting the model column")
                 try:
                     plotms(
-                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel='64', avgtime='300',
+                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nspw), avgtime='300',
                         showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
                     )
                 except Exception as e:
@@ -1053,14 +1079,23 @@ class SelfCalibration(tclean_Imager):
                 coloraxis = ['corr', 'spw']
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
+
+                        tb = casatools.table()
+                        tb.open(caltable + '/ANTENNA')
+                        antenna_ids = tb.getcol('ANTENNA1')
+                        tb.close()
+                        num_antennas = len(antenna_ids)
+                        gridcols = math.ceil(math.sqrt(num_antennas))   # Columns
+                        gridrows = math.ceil(num_antennas / gridcols)   # Rows
+
                         plotms(
-                            vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                            vis=caltable, xaxis='time', yaxis='phase', gridcols=gridcols, gridrows=gridrows,
                             iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
                             plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
                         )
                     else:
                         plotms(
-                            vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+                            vis=caltable, xaxis='time', yaxis='amp', gridcols=gridcols, gridrows=gridrows,
                             iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
                             plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
                         )
@@ -1217,12 +1252,11 @@ def main():
 
     ### Data averaging -- if you have an measurement set with multiple fields and you wish to split and average
     ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
-    ### in msname in the class instance
+    ### in msname in the class instance -- that doesnt work; provide the measurement set to split
     Utils.set_working_dir(working_directory)
     MeasurementSetProcessor.timebin='2s'
     MeasurementSetProcessor.width = 4
-    # msname_tuple = MeasurementSetProcessor.split_data(msname)
-    # refant = MeasurementSetInfo.find_refant(msname_tuple[1])
+    msname_tuple = MeasurementSetProcessor.split_data(msname)
 
     ### I have included the option to manually specify the cell size although if you wish,
     ### the code will automatically select the cell size for you
@@ -1252,7 +1286,7 @@ def main():
     # self_calibration_instance.selfcal()
 
     self_calibration_wsclean = SelfCalibrationWSClean(
-        msname='/home/kelvin/Desktop/vla_working_dir/K2-18.ms', 
+        msname=msname_tuple[2], 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
