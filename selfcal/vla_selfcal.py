@@ -853,7 +853,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 logging.info("Plotting the model column")
                 try:
                     plotms(
-                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nchan), avgtime='300',
+                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nspw), avgtime='300',
                         showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
                     )
                 except Exception as e:
@@ -883,27 +883,23 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 # except Exception as e:
                 #     logging.error(f"Error during gain calibration: {e}")
 
-                # Plot gain calibration results
-                ### TODO: this should be a function in the plotting routines
+                gridcols = 7
+                gridrows = 4  
+                # Loop over the coloraxis values (corr and spw)
                 coloraxis = ['corr', 'spw']
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
-
-                        gridcols = math.ceil(math.sqrt(num_antennas))   # Columns
-                        gridrows = math.ceil(num_antennas / gridcols)   # Rows
-
                         plotms(
-                            vis=caltable, xaxis='time', yaxis='phase', gridcols=gridcols, gridrows=gridrows,
+                            vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
                             iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
                             plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
                         )
                     else:
                         plotms(
-                            vis=caltable, xaxis='time', yaxis='amp', gridcols=gridcols, gridrows=gridrows,
+                            vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
                             iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
                             plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
                         )
-
                 # Apply calibration tables after the last self-calibration loop
                 if selfcal_loop == self.nloops - 1:
                     prev_caltables = sorted(glob.glob('*.gcal'))
@@ -1042,7 +1038,7 @@ class SelfCalibration(tclean_Imager):
                 logging.info("Plotting the model column")
                 try:
                     plotms(
-                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nchan), avgtime='300',
+                        vis=self.msname, xaxis='UVwave', yaxis='amp', ydatacolumn='model', avgchannel=str(nspw), avgtime='300',
                         showgui=False, plotfile=imagename + '_modelcolumn.png', overwrite=True, width=1500, height=750,
                     )
                 except Exception as e:
@@ -1072,25 +1068,24 @@ class SelfCalibration(tclean_Imager):
                 # except Exception as e:
                 #     logging.error(f"Error during gain calibration: {e}")
 
-                # Plot gain calibration results
+                gridcols = 7
+                gridrows = 4  
+                # Loop over the coloraxis values (corr and spw)
                 coloraxis = ['corr', 'spw']
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
+                            plotms(
+                                vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                                iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                                plotfile=caltable.replace('.gcal', f'_phase_{color}_.png'), dpi=300, width=3000, height=1500,
+                            )
 
-                        gridcols = math.ceil(math.sqrt(num_antennas))   # Columns
-                        gridrows = math.ceil(num_antennas / gridcols)   # Rows
-
-                        plotms(
-                            vis=caltable, xaxis='time', yaxis='phase', gridcols=gridcols, gridrows=gridrows,
-                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
-                        )
                     else:
-                        plotms(
-                            vis=caltable, xaxis='time', yaxis='amp', gridcols=gridcols, gridrows=gridrows,
-                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
-                        )
+                          plotms(
+                                    vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                                    iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                                    plotfile=caltable.replace('.gcal', f'_amp_{color}_.png'), dpi=300, width=3000, height=1500,
+                                )
 
                 # Apply calibration tables after the last self-calibration loop
                 if selfcal_loop == self.nloops - 1:
@@ -1220,8 +1215,10 @@ def main():
     # Define your parameters here
 
     # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98809027765/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
-    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
-    # msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
+    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
+    # msname='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
+    # msname = '/home/kelvin/Desktop/geferson/NGC6670.calibrated.avg12s32c.ms'
+    msname = '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
     working_directory = '/home/kelvin/Desktop/vla_working_dir/' # D
     # working_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44691528.60230.613198356485' # A to D
 
@@ -1254,32 +1251,32 @@ def main():
     ### the code will automatically select the cell size for you
     ### note that the calculation will not respect flagged baselines (the cell size will change if you wish to flag the longest baseline)
 
-    # # Create an instance of SelfCalibration for the first loop (dirty map)
-    # self_calibration_instance = SelfCalibration(
-    #     msname=msname_tuple[1], 
-    #     nloops=nloops,
-    #     thresholds=thresholds,
-    #     calmode=calmode,
-    #     gaintype=gaintype,
-    #     solint=solint,
-    #     minsnr=minsnr,
-    #     imsize=320,
-    #     niter=1,  
-    #     nterms=2,
-    #     deconvolver='mtmfs',
-    #     weighting='briggs',
-    #     robust=0.5,
-    #     use_pybdsf=True,
-    #     pybdsf_threshold=5,
-    #     overwrite=False
-        ## cell = '4.6arcsec' ## use for A to D
+    # Create an instance of SelfCalibration for the first loop (dirty map)
+    self_calibration_instance = SelfCalibration(
+        msname=msname[2], 
+        nloops=nloops,
+        thresholds=thresholds,
+        calmode=calmode,
+        gaintype=gaintype,
+        solint=solint,
+        minsnr=minsnr,
+        imsize=320,
+        niter=1,  
+        nterms=2,
+        deconvolver='mtmfs',
+        weighting='briggs',
+        robust=0.5,
+        use_pybdsf=True,
+        pybdsf_threshold=5,
+        overwrite=False
+        # cell = '4.6arcsec' ## use for A to D
         
-    # )
+    )
 
     # self_calibration_instance.selfcal()
 
     self_calibration_wsclean = SelfCalibrationWSClean(
-        msname=msname_tuple[1], 
+        msname=msname_tuple[2], 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
