@@ -1313,6 +1313,8 @@ class ImageProcessor:
     def peel_sources(self):
         """
         Main function to peel sources iteratively.
+
+        ## NB: To run more than one iteration, you need to create an image for each iteration
         """
         # Get initial noise level from the image statistics
         stats = imstat(self.imagename)
@@ -1339,7 +1341,6 @@ class ImageProcessor:
             # Get image statistics for max flux
             image_data = imstat(self.imagename)
             max_flux = image_data['max'][0]
-            print(f"Max flux: {max_flux}")  # Debug print
             max_x, max_y = image_data['maxpos'][0], image_data['maxpos'][1]
 
             # If flux is below the threshold, exit the loop
@@ -1411,9 +1412,25 @@ class ImageProcessor:
 
             print(f"Finished peeling source at {ra_hms}, {dec_dms} with flux {peak_flux} Jy.\n")
 
-  
+            print(f"Making new image to use for peeling")
+            # Re-image to update `self.imagename`
+            new_imagename = f"{self.imagename}_iteration_{iteration + 1}"
+            WSClean_Imager(
+                msname=self.msname, 
+                imsize=320,
+                niter=1, # requires at least one to get a clean beam
+                use_pybdsf=False,
+                pybdsf_threshold=5,
+                overwrite=False,
+                imagename=new_imagename,
+                cell='4.6arcsec'
+            ).imager()
 
+            # Update `self.imagename` to the new image name
+            self.imagename = new_imagename + "-image.fits"
+            print(f"Updated imagename to {self.imagename}")
 
+    
 
 
 def main():
@@ -1504,7 +1521,7 @@ def main():
         print(f"Image to peel is {imagename}")
     
     ### Initialize ImageProcessor
-    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=3)
+    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=2)
     processor.peel_sources()
     peeled_image = imagename.replace('-image.fits','_peeled')
 
