@@ -4,16 +4,20 @@ from typing import Callable, Any
 import casatools, casalogger
 import matplotlib.pyplot as plt
 from datetime import datetime
+import matplotlib.patches as patches
+from matplotlib.ticker import ScalarFormatter
 
 import numpy as np
 from radio_beam import Beam
 from astropy.io import fits
 from astropy import units as u
 from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
+from radio_beam import Beam
 
 from casatasks import *
 from casaplotms import *
-
+from casatools import componentlist
 
 msmd = casatools.msmetadata()
 tb = casatools.table()
@@ -931,6 +935,20 @@ class SelfCalibrationWSClean(WSClean_Imager):
             
             imager_instance.imager()
 
+        
+
+    # def applycal_target():
+
+    #     """
+    #     Applies cal to the target field
+    #     """
+    #     prev_caltables = sorted(glob.glob('*.gcal'))
+    #     applycal(
+    #         vis = vis_tocal, gaintable = prev_caltables, parang=False
+    #     )
+
+
+
 
 class SelfCalibration(tclean_Imager):
 
@@ -1082,7 +1100,7 @@ class SelfCalibration(tclean_Imager):
 
                     else:
                           plotms(
-                                    vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                                    vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
                                     iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
                                     plotfile=caltable.replace('.gcal', f'_amp_{color}_.png'), dpi=300, width=3000, height=1500,
                                 )
@@ -1134,6 +1152,17 @@ class SelfCalibration(tclean_Imager):
                 mask = ''
         except Exception as e:
             logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
+
+
+    # def applycal_target():
+
+    #     """
+    #     Applies cal to the target field
+    #     """
+    #     prev_caltables = sorted(glob.glob('*.gcal'))
+    #     applycal(
+    #         vis = vis_tocal, gaintable = prev_caltables, parang=False
+    #     )
 
 
 
@@ -1209,13 +1238,218 @@ class PlottingRoutines():
    
 
 
+class ImageProcessor:
 
+    def __init__(self, imagename, msname, box_size=10, threshold_factor=5, max_iterations=None):
+        """
+        Initialize the ImageProcessor class.
+
+        :param imagename: Name of the FITS file for the image (excluding file extension).
+        :param msname: Name of the measurement set (visibility dataset) file.
+        :param box_size: Half-width of the box around the peak for fitting.
+        :param threshold_factor: Factor of the noise level to set as the source threshold.
+        :param max_iterations: Maximum number of iterations to peel sources. 
+                                If None, the peeling will stop when the flux falls below the threshold.
+        """
+        self.imagename = imagename
+        self.msname = msname  # Set the measurement set name
+        self.box_size = box_size
+        self.threshold_factor = threshold_factor
+        self.max_iterations = max_iterations  # Max iterations or None
+        self.cl = casatools.componentlist()
+    
+
+    @property
+    def imagename(self):
+        """Getter for the imagename property."""
+        return self._imagename
+    
+    @imagename.setter
+    def imagename(self, new_imagename):
+        """Setter for the imagename property."""
+
+        if not isinstance(new_imagename, str):
+            raise ValueError("Imagename must be a string")
+        self._imagename = new_imagename
+        print(f"Imagename updated to: {self._imagename}")
+
+    def get_beam(self):
+        """
+        Get the beam in arcsec.
+        """
+        imagename_header = fits.getheader(self.imagename)
+        imaging_beam = Beam.from_fits_header(imagename_header)
+        
+        ## beam in arcsec
+        bmaj = imaging_beam.major.to(u.arcsec).value
+        bmin = imaging_beam.minor.to(u.arcsec).value
+        pa = imaging_beam.pa.to(u.deg).value  
+
+        return (bmaj, bmin, pa)
+    def peel_sources(self):
+        """
+        Main function to peel sources iteratively.
+        """
+        # Get initial noise level from the image statistics
+        stats = imstat(self.imagename)
+        noise_level = stats['rms'][0]
+        threshold = 5 * noise_level  # Threshold set to 5 times the RMS
+
+        print(f"Using threshold: {threshold} Jy")  # Debug print
+
+        # Ignore central region -- a few beam factors
+        bmaj, _, _ = self.get_beam()
+        ignore_radius = 2 * bmaj
+
+        # Get max_iterations value
+        max_iterations = self.max_iterations
+        print(f"Max iterations: {max_iterations}")  # Debug print
+
+        # Iterate using a for loop
+        for iteration in range(max_iterations):
+            print(f"Starting iteration {iteration + 1}")  # Debug print
+
+            # Get image statistics for max flux
+            x = imstat(self.imagename)
+            max_flux = x['max'][0]
+            print(f"Max flux: {max_flux}")  # Debug print
+
+            max_x, max_y = x['maxpos'][0], x['maxpos'][1]
+
+            # If flux is below the threshold, exit the loop
+            if max_flux < threshold:
+                print(f"Flux is below threshold {threshold} Jy. Stopping after {iteration + 1} iterations.")
+                break
+
+            # Ignore the center of the image (a few beam factors)
+            header = imhead(self.imagename)
+            shape = header['shape']
+            center_x, center_y = shape[0] / 2, shape[1] / 2
+
+            if ((max_x - center_x) ** 2 + (max_y - center_y) ** 2) ** 0.5 < ignore_radius:
+                print("Skipping central region of the image.")
+                break
+
+            # Define the box around the peak position
+            xmin = max(0, max_x - self.box_size)
+            xmax = min(shape[0] - 1, max_x + self.box_size)
+            ymin = max(0, max_y - self.box_size)
+            ymax = min(shape[1] - 1, max_y + self.box_size)
+            imfit_box = f"{xmin},{ymin},{xmax},{ymax}"
+            print(f"Processing source at box: {imfit_box}")
+
+            # Fit a Gaussian to the source and extract position and flux
+            fit_result = imfit(self.imagename, box=imfit_box)
+            if 'component0' not in fit_result['results']:
+                print("No fit found for this source, skipping.")
+                break
+
+            peak_flux = fit_result['results']['component0']['peak']['value']
+            ra = fit_result['deconvolved']['component0']['shape']['direction']['m0']['value']
+            dec = fit_result['deconvolved']['component0']['shape']['direction']['m1']['value']
+
+            # Convert RA and Dec to standard strings
+            sky_coord = SkyCoord(ra=ra * u.rad, dec=dec * u.rad, frame='icrs')
+            ra_hms = sky_coord.ra.to_string(unit=u.hour, sep=':')
+            dec_dms = sky_coord.dec.to_string(unit=u.deg, sep='.', pad=True)
+
+            print(f"Right Ascension (HMS): {ra_hms}")
+            print(f"Declination (DMS): {dec_dms}")
+            print(f"Peak flux: {peak_flux} Jy")
+
+            # Define the component list filename using RA and Dec
+            clname = f"{ra_hms}_{dec_dms}.cl"
+            if os.path.exists(clname):
+                os.system(f"rm -r {clname}")
+
+            # Add component to the list with extracted RA, Dec, and flux
+            self.cl.addcomponent(flux=peak_flux, fluxunit='Jy', shape='point', dir=f"J2000 {ra_hms} {dec_dms}")
+            self.cl.rename(clname)
+            self.cl.done()
+            print(f"Component with flux {peak_flux} Jy at J2000 {ra_hms} {dec_dms} saved to {clname}")
+
+            # Delete the original model column
+            print("Deleting model column.")
+            delmod(vis=self.msname, otf=True)
+            plotms(vis=self.msname, xaxis='frequency', yaxis='amp', ydatacolumn='model', plotfile='empty_model.png', showgui=False, overwrite=True)
+
+            # Add model to the MODEL column and subtract
+            ft(vis=self.msname, complist=clname, incremental=False, usescratch=True)
+            plotms(vis=self.msname, xaxis='frequency', yaxis='amp', ydatacolumn='model', plotfile='added_model.png', showgui=False, overwrite=True)
+
+            # Perform UV subtraction
+            print("Performing UVSUB to remove the source.")
+            uvsub(vis=self.msname, reverse=False)
+
+            print(f"Finished peeling source at {ra_hms}, {dec_dms} with flux {peak_flux} Jy.\n")
+
+  
+    
+    
+    def plot_image_with_beam(self):
+        """
+        Plot the FITS image and place the beam at the bottom-left corner.
+        """
+        # Read the FITS file data
+        hdu = fits.open(self.imagename)
+        image_data = hdu[0].data[0, 0, :, :]  # Assuming single-channel, adjust if necessary
+        header = hdu[0].header
+
+        # Extract image size from the header
+        shape = header['NAXIS1'], header['NAXIS2']
+
+        # Get the beam dimensions
+        bmaj, bmin, pa = self.get_beam()
+
+        # Set up the figure and axis
+        fig, ax = plt.subplots(figsize=(8, 8))
+
+        # Plot the image
+        im = ax.imshow(image_data, cmap='viridis', origin='lower', extent=[0, shape[0], 0, shape[1]])
+
+        # Define a fixed relative position in the image (e.g., 15, 15 on a 320x320 image)
+        relative_x = 15
+        relative_y = 15
+
+        # Calculate absolute position based on image size
+        x_pos = (relative_x / 320) * shape[0]  # Scale x based on width
+        y_pos = (relative_y / 320) * shape[1]  # Scale y based on height
+
+        beam_ellipse = patches.Ellipse(
+            (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor='white', facecolor='none', lw=2)
+        
+        ax.add_patch(beam_ellipse)
+
+
+        # Set axis labels
+        ax.set_xlabel('RA (J2000)', size=14)
+        ax.set_ylabel('Dec (J2000)', size=14)
+
+        # Customize ticks
+        ax.tick_params(axis="x", which="both", bottom=True, top=False)
+        ax.tick_params(axis="y", which="both", right=False, left=True)
+
+        # Add a colorbar with scientific notation and matching size to the image
+        cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, extend='both')
+        cbar.ax.tick_params(labelsize=16)
+        cbar.set_label('Jy/beam', rotation=90, labelpad=12, size=18)
+        
+        # Set the colorbar label to scientific notation
+        cbar.formatter = ScalarFormatter()
+        cbar.formatter.set_powerlimits((-3, 3))
+        cbar.update_ticks()
+
+
+        # Display the plot
+        # plt.show()
+        plt.savefig(self.imagename.replace('.fits','.pdf'),dpi=300)
 
 def main():
     # Define your parameters here
 
 
-    msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
+    # msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
+    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
     working_directory = '/home/kelvin/Desktop/vla_working_dir' # D
 
   
@@ -1229,17 +1463,16 @@ def main():
     thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
     calmode = ['','p','p','ap']
     gaintype= ['','G','G','G']
-    solint = ['','60s','30s','180s']
+    solint = ['','24s','12s','96s']
     minsnr = ['',1,1,1]
 
     ### Data averaging -- if you have an measurement set with multiple fields and you wish to split and average
     ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
     ### in msname in the class instance -- that doesnt work; provide the measurement set to split
     Utils.set_working_dir(working_directory)
-    MeasurementSetProcessor.timebin='2s'
+    MeasurementSetProcessor.timebin='6s'
     MeasurementSetProcessor.width = 4
     msname_tuple = MeasurementSetProcessor.split_data(msname)
-    print(f"msname_tuple after split: {msname_tuple[2]}")
 
 
     ### I have included the option to manually specify the cell size although if you wish,
@@ -1256,24 +1489,23 @@ def main():
     #     solint=solint,
     #     minsnr=minsnr,
     #     imsize=320,
-    #     niter=1,  
+    #     niter=1000,  
     #     nterms=2,
     #     deconvolver='mtmfs',
     #     weighting='briggs',
     #     robust=0.5,
     #     use_pybdsf=True,
     #     pybdsf_threshold=5,
-    #     overwrite=False
-    #     # cell = '4.6arcsec' ## use for A to D
+    #     overwrite=False,
+    #     cell = '4.6arcsec' ## use for A to D
         
     # )
 
     # self_calibration_instance.selfcal()
-    print(f"msname before SelfCalibration: {msname_tuple[2]}")
 
-
+    vis = msname_tuple[1]
     self_calibration_wsclean = SelfCalibrationWSClean(
-        msname=msname_tuple[2], 
+        msname=vis, 
         nloops=nloops,
         thresholds=thresholds,
         calmode=calmode,
@@ -1286,127 +1518,45 @@ def main():
         pybdsf_threshold=5,
         overwrite=False,
         final_image = True,
-        cell = '4.6arcsec' ## use for A to D
+        # cell = '4.6arcsec' ## use for A to D
     )
-    self_calibration_wsclean.selfcal()
+    # self_calibration_wsclean.selfcal()
+
+    ## Set imagename with full path
+    imagename = f"{vis.replace('.ms','')}_selfcal_loop_2"
+    imagename = f"{working_directory}/{imagename}-image.fits"  # Replace with actual image name
+    if not os.path.exists(imagename ):
+        print(f"Image {imagename} not found.")
+        return
+    else:
+        print(f"Image to peel is {imagename}")
+    
+    # Initialize ImageProcessor
+
+
+    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=3)
+    processor.peel_sources()
+    peeled_image = imagename.replace('-image.fits','_peeled')
+
+    ## Image the peeled measurement set
+    peeled_source_image = WSClean_Imager(
+        msname=vis, 
+        imsize=320,
+        niter=0,
+        use_pybdsf=False,
+        pybdsf_threshold=5,
+        overwrite=False,
+        imagename = peeled_image
+        # cell = '4.6arcsec' ## use for A to D
+    )
+    peeled_source_image.imager()
+    processor.imagename = peeled_image+'-image.fits'  # This automatically triggers the setter
+    processor.plot_image_with_beam()
+
 
 if __name__ == "__main__":
     main()
 
-
-# def peel(imagename, box_size=10):  # box_size defines half-width of the box around the peak
-#     # Ensure the correct FITS file is used
-
-#     # imagename = imagename +'.image.tt0.fits'
-#     imagename = imagename + '-image.fits'
-    
-#     x = casatasks.imstat(imagename)
-    
-#     # Extract peak position from imstat
-#     max_x, max_y = x['maxpos'][0], x['maxpos'][1]
-#     # print(max_x,max_y)
-
-#     # Define the box around the peak position
-#     xmin = max(0, max_x - box_size)
-#     xmax = max(0, max_x + box_size)
-#     ymin = max(0, max_y - box_size)
-#     ymax = max(0, max_y + box_size)
-
-#     imfit_box = f"{xmin},{ymin},{xmax},{ymax}"
- 
-#     print(f"Automatically determined imfit box: {imfit_box}")
-
-
-#     ## Use imfit to fit a Gaussian and extract the coordinates and flux
-
-#     image_data = imfit(imagename, box=imfit_box)
-#     peak_flux = image_data['results']['component0']['peak']['value']
-#     ra = image_data['deconvolved']['component0']['shape']['direction']['m0']['value']
-#     dec = image_data['deconvolved']['component0']['shape']['direction']['m1']['value']
-
-#     print(peak_flux)
-
-#     sky_coord = SkyCoord(ra=ra * u.rad, dec=dec * u.rad, frame='icrs')
-
-#     ra_hms = sky_coord.ra.to_string(unit=u.hour, sep=':')
-#     dec_dms = sky_coord.dec.to_string(unit=u.deg, sep='.',pad=True)
-
-#     print(f"Right Ascension (HMS): {ra_hms}")
-#     print(f"Declination (DMS): {dec_dms}")
-
-#     # Define the component list filename using the RA and Dec
-#     clname = f"{ra_hms}_{dec_dms}.cl"
-
-#     # Initialize componentlist tool
-#     cl =casatools.componentlist()
-
-#     # Remove the existing component list file if it exists (to avoid overwrite issues)
-#     if os.path.exists(clname):
-#         os.system(f"rm -r {clname}")
-
-#     # Add a new component to the list at the provided RA and Dec with the specified flux
-#     cl.addcomponent(flux=peak_flux, fluxunit='Jy', shape='point', dir=f"J2000 {ra_hms} {dec_dms}")
-
-#     # Rename and save the component list with the specified filename
-#     cl.rename(clname)
-#     cl.done()
-#     # Optionally: Print confirmation of added component
-#     print(f"Made component with flux {peak_flux} Jy at coordinates J2000 {ra_hms} {dec_dms}")
-
-
-#     ## Delete the original model column 
-#     print("Deleting model column")
-#     delmod(vis=vis,otf=True)
-#     plotms(vis=vis,xaxis='frequency',yaxis='amp',ydatacolumn='model',plotfile='empty_model.png',showgui=False,overwrite=True)
-#     ## Add model to the MODEL column and subtract
-#     ft(vis = vis, complist=clname,incremental=False, usescratch=True)
-#     plotms(vis=vis,xaxis='frequency',yaxis='amp',ydatacolumn='model',plotfile='added_model.png',showgui=False,overwrite=True)
-
-#     print("Perfoming UVSUB")
-#     uvsub(vis=vis,reverse=False)
-
-#     # def applycal_target():
-
-#     #     """
-#     #     Applies cal to the target field
-#     #     """
-#     #     prev_caltables = sorted(glob.glob('*.gcal'))
-#     #     applycal(
-#     #         vis = vis_tocal, gaintable = prev_caltables, parang=False
-#     #     )
-
-
-
-#     # def peeling():
-
-#     #     """
-#     #     Subtract the bright sources in the field so you are left with the emission from the star
-
-#     #     Use pybsdf casa region file -- you can change the threshold to only select the bright sources you want
-
-#     #     Run pybsdf on the final image
-        
-#     #     """
-
-#     #     # Using the final imagename 
-
-#     #     imagename = basename +f'_{nloops-1}'+'.final'
-#     #     # region_to_peel = pybdsf(input_image=imagename+'.image.tt0')
-
-#     #     ## NB: You had masked the bright source from the dirty map -- so you can just subtract
-#     #     uvsub(vis=vis)
-
-#     #     ## Make a final map without the sources
-#     #     cell = get_imaging_cellsize()
-#     #     peeled_map = basename+'_peeled_map'
-#     #     if not os.path.exists(peeled_map):
-#     #         print(f"Making {peeled_map}")
-#     #         tclean(
-#     #             vis = vis, imagename=peeled_map, imsize=imsize, cell=cell,
-#     #             gridder = gridder, wprojplanes = wprojplanes, deconvolver = deconvolver,
-#     #             weighting = weighting, robust = robust, niter=0, # threshold = '0.5mJy',
-#     #             nterms = nterms, pblimit = pblimit
-#     #         )
 
 
 
