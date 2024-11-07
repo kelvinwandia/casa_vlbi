@@ -880,10 +880,13 @@ class SelfCalibrationWSClean(WSClean_Imager):
         self.minsnr = minsnr
         self.final_image = final_image
 
+        
+
     @Utils.time_execution
     def selfcal(self) -> None:
         Utils.create_plots_directory()
-        
+        num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
+
         logging.info("Deleting model column before selfcal")
         delmod(vis=self.msname, otf=True)
 
@@ -982,8 +985,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 
                 ## Run gaincal
-                num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
-
+                
                 if self.calmode[selfcal_loop] == 'p':
                     minblperant = 3
                 else:
@@ -1084,6 +1086,7 @@ class SelfCalibration(tclean_Imager):
     @Utils.time_execution
     def selfcal(self) -> None:
         Utils.create_plots_directory()
+        num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
         
         logging.info("Deleting model column before selfcal")
         delmod(vis=self.msname, otf=True)
@@ -1182,7 +1185,7 @@ class SelfCalibration(tclean_Imager):
                 except Exception as e:
                     logging.error(f"Error plotting model column: {e}")
 
-                num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
+                
 
                 # Perform gain calibration
                 logging.info(f"Running gain calibration. Writing caltable: {caltable}")
@@ -1417,8 +1420,8 @@ def main():
     # Define your parameters here
 
 
-    # msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
-    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
+    msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
+    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
     working_directory = '/home/kelvin/Desktop/vla_working_dir_x' # D
 
   
@@ -1433,7 +1436,7 @@ def main():
     calmode = ['','p','p','ap']
     gaintype= ['','G','G','G']
     solint = ['','60s','30','180s']
-    minsnr = ['',1,1,1]
+    minsnr = ['',3,3,3]
 
     ### Data averaging -- if you have an measurement set with multiple fields and you wish to split and average
     ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
@@ -1472,7 +1475,7 @@ def main():
 
     # self_calibration_instance.selfcal()
     
-    vis = msname_tuple[1]
+    vis = msname_tuple[2]
     self_calibration_wsclean = SelfCalibrationWSClean(
         msname=vis, 
         nloops=nloops,
@@ -1487,12 +1490,12 @@ def main():
         pybdsf_threshold=5,
         overwrite=False,
         final_image = True,
-        # cell = '4.6arcsec' ## use for A to D
+        cell = '4.6arcsec' ## use for A to D
     )
     # self_calibration_wsclean.selfcal()
 
     ## Set imagename with full path
-    imagename = f"{vis.replace('.ms','')}_selfcal_loop_2"
+    imagename = f"{vis.replace('.ms','')}_selfcal_loop_3"
     imagename = f"{working_directory}/{imagename}-image.fits"  # Replace with actual image name
     if not os.path.exists(imagename ):
         print(f"Image {imagename} not found.")
@@ -1501,20 +1504,20 @@ def main():
         print(f"Image to peel is {imagename}")
     
     ### Initialize ImageProcessor
-    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=1)
+    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=3)
     processor.peel_sources()
     peeled_image = imagename.replace('-image.fits','_peeled')
 
     ## Image the peeled measurement set
     peeled_source_image = WSClean_Imager(
         msname=vis, 
-        imsize=640,
+        imsize=320,
         niter=0,
         use_pybdsf=False,
         pybdsf_threshold=5,
         overwrite=False,
         imagename = peeled_image,
-        # cell = '4.6arcsec' ## use for A to D
+        cell = '4.6arcsec' ## use for A to D
     )
     peeled_source_image.imager()
     processor.imagename = peeled_image+'-image.fits'  # This automatically triggers the setter
