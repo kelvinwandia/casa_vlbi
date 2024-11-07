@@ -1165,79 +1165,6 @@ class SelfCalibration(tclean_Imager):
     #     )
 
 
-
-
-class PlottingRoutines():
-
-    @staticmethod
-    def plot_fits(imagename,fig_width =8,fig_height=6):
-        """
-        Plots fitsfiles using astropy
-        """
-
-        fitsname = imagename+'.fits'
-        exportfits(imagename=imagename+'.image.tt0',fitsimage=fitsname,overwrite=True)
-
-        plt.figure(figsize=(fig_width, fig_height))  
-        hdul = fits.open(fitsname)
-        w = WCS(hdul[0].header, naxis=2)
-        w.wcs.ctype = ['RA---SIN', 'DEC--SIN']
-        ax = plt.subplot(projection=w)
-
-        # Disable automatic labelling
-        ax.coords[0].set_auto_axislabel(True) 
-        ax.coords[1].set_auto_axislabel(True) 
-
-        # Extract image data
-        
-        image_data = hdul[0].data[0,0,:,:]
-
-        # Display the image with a color map
-        im = ax.imshow(image_data, cmap=plt.get_cmap('cividis'))
-
-        # Automatically set pixel scale based on WCS header information
-        pixscale = abs(w.wcs.cdelt[0]) * u.deg.to(u.arcsec) * u.arcsec  # Convert from degrees to arcseconds
-
-        # Define and add the beam ellipse
-        # possible_beam_files = [imagename + '.psf.tt0', imagename + '.psf', imagename + '.beam']
-        array_beam = imhead(imagename+'.psf.tt0')['restoringbeam']
-        major_axis = array_beam['major']['value']
-        minor_axis = array_beam['minor']['value']
-        pos_angle = array_beam['positionangle']['value']
-
-        major_axis = major_axis*u.arcsec  # Convert to arcseconds if needed 
-        minor_axis = minor_axis*u.arcsec  # Convert to arcseconds if needed
-        pos_angle = pos_angle*u.deg
-
-        my_beam = Beam(major_axis, minor_axis, pos_angle)
-        ycen_pix, xcen_pix = 15, 15
-        ellipse_artist = my_beam.ellipse_to_plot(xcen_pix, ycen_pix, pixscale)
-        _ = ax.add_artist(ellipse_artist)
-
-        ax.set_xlabel('RA (J2000)',size=14)
-        ax.set_ylabel('Dec (J2000)',size=14)  
-
-        ax.tick_params(axis = "x", which = "both", bottom = True, top = False)
-        ax.tick_params(axis = "y", which = "both", right = False, left = True)
-
-        # ra = ax.coords[0]
-        # dec = ax.coords[1]
-
-        # ra.set_ticklabel(size=12)
-        # dec.set_ticklabel(size=12)
-
-        cbar = plt.colorbar(im,extend='both')
-        cbar.ax.tick_params(labelsize=16)
-        cbar.set_label('Jy/beam',rotation=90, labelpad=12,size=18)
-
-        # ax.contour(image_data,levels=[-3*0.136e-3,3*0.136e-3,5*0.136e-3,10*0.136e-3,15*0.136e-3], colors='white',
-        #         linewidths=0.5)
-
-        plt.savefig(fitsname.replace('.fits','_1.pdf'),dpi=300)
-
-   
-
-
 class ImageProcessor:
 
     def __init__(self, imagename, msname, box_size=10, threshold_factor=5, max_iterations=None):
@@ -1286,6 +1213,7 @@ class ImageProcessor:
         pa = imaging_beam.pa.to(u.deg).value  
 
         return (bmaj, bmin, pa)
+    
     def peel_sources(self):
         """
         Main function to peel sources iteratively.
@@ -1384,72 +1312,79 @@ class ImageProcessor:
             print(f"Finished peeling source at {ra_hms}, {dec_dms} with flux {peak_flux} Jy.\n")
 
   
-    
-    
+        
+        
     def plot_image_with_beam(self):
-        """
-        Plot the FITS image and place the beam at the bottom-left corner.
-        """
-        # Read the FITS file data
-        hdu = fits.open(self.imagename)
-        image_data = hdu[0].data[0, 0, :, :]  # Assuming single-channel, adjust if necessary
-        header = hdu[0].header
+            """
+            Plot the FITS image and place the beam at the bottom-left corner.
+            """
+            # Read the FITS file data
+            hdu = fits.open(self.imagename)
+            image_data = hdu[0].data[0, 0, :, :]  # Assuming single-channel, adjust if necessary
+            header = hdu[0].header
 
-        # Extract image size from the header
-        shape = header['NAXIS1'], header['NAXIS2']
+            # Set up WCS from the FITS header
+            w = WCS(header, naxis=2)
+            
+            # Create the figure and axis with WCS projection
+            fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={'projection': w})
 
-        # Get the beam dimensions
-        bmaj, bmin, pa = self.get_beam()
+            # Plot the image
+            im = ax.imshow(image_data, cmap='magma', origin='lower', interpolation='none')
+            # Disable automatic labelling
+            ax.coords[0].set_auto_axislabel(True) 
+            ax.coords[1].set_auto_axislabel(True) 
 
-        # Set up the figure and axis
-        fig, ax = plt.subplots(figsize=(8, 8))
+            # Get image shape from header
+            shape = header['NAXIS1'], header['NAXIS2']
 
-        # Plot the image
-        im = ax.imshow(image_data, cmap='viridis', origin='lower', extent=[0, shape[0], 0, shape[1]])
+            # Get the beam dimensions (BMAJ, BMIN, BPA)
+            bmaj, bmin, pa = self.get_beam()
+           
+            # Define a fixed relative position in the image (e.g., 15, 15 on a 320x320 image)
+            relative_x = 15
+            relative_y = 15
 
-        # Define a fixed relative position in the image (e.g., 15, 15 on a 320x320 image)
-        relative_x = 15
-        relative_y = 15
+            # Calculate absolute position based on image size
+            x_pos = (relative_x / 320) * shape[0]  
+            y_pos = (relative_y / 320) * shape[1]  
 
-        # Calculate absolute position based on image size
-        x_pos = (relative_x / 320) * shape[0]  # Scale x based on width
-        y_pos = (relative_y / 320) * shape[1]  # Scale y based on height
+            # Define the beam ellipse in world coordinates
+            beam_ellipse = patches.Ellipse(
+                (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor='white', facecolor='none', lw=2)
+            
+            
+            ax.add_patch(beam_ellipse)
+            
+            # Set axis labels
+            ax.set_xlabel('RA (J2000)', size=14)
+            ax.set_ylabel('Dec (J2000)', size=14)
 
-        beam_ellipse = patches.Ellipse(
-            (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor='white', facecolor='none', lw=2)
-        
-        ax.add_patch(beam_ellipse)
+    
+            # Customize ticks and make them consistent with WCS
+            ax.tick_params(axis="x", which="both", bottom=True, top=False)
+            ax.tick_params(axis="y", which="both", right=False, left=True)
 
+            # Add a colorbar with scientific notation and matching size to the image
+            cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cbar.ax.tick_params(labelsize=16)
+            cbar.set_label('Jy/beam', rotation=90, labelpad=12, size=18)
 
-        # Set axis labels
-        ax.set_xlabel('RA (J2000)', size=14)
-        ax.set_ylabel('Dec (J2000)', size=14)
+            # Set the colorbar label to scientific notation
+            cbar.formatter = ScalarFormatter()
+            cbar.formatter.set_powerlimits((-3, 3))
+            cbar.update_ticks()
 
-        # Customize ticks
-        ax.tick_params(axis="x", which="both", bottom=True, top=False)
-        ax.tick_params(axis="y", which="both", right=False, left=True)
-
-        # Add a colorbar with scientific notation and matching size to the image
-        cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04, extend='both')
-        cbar.ax.tick_params(labelsize=16)
-        cbar.set_label('Jy/beam', rotation=90, labelpad=12, size=18)
-        
-        # Set the colorbar label to scientific notation
-        cbar.formatter = ScalarFormatter()
-        cbar.formatter.set_powerlimits((-3, 3))
-        cbar.update_ticks()
-
-
-        # Display the plot
-        # plt.show()
-        plt.savefig(self.imagename.replace('.fits','.pdf'),dpi=300)
+            # Display the plot
+            # plt.show()
+            plt.savefig(self.imagename.replace('.fits','.pdf'),dpi=300)
 
 def main():
     # Define your parameters here
 
 
-    # msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
-    msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
+    msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
+    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
     working_directory = '/home/kelvin/Desktop/vla_working_dir' # D
 
   
@@ -1503,7 +1438,8 @@ def main():
 
     # self_calibration_instance.selfcal()
 
-    vis = msname_tuple[1]
+    vis = msname_tuple[2]
+
     self_calibration_wsclean = SelfCalibrationWSClean(
         msname=vis, 
         nloops=nloops,
@@ -1532,10 +1468,8 @@ def main():
         print(f"Image to peel is {imagename}")
     
     # Initialize ImageProcessor
-
-
     processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=3)
-    processor.peel_sources()
+    # processor.peel_sources()
     peeled_image = imagename.replace('-image.fits','_peeled')
 
     ## Image the peeled measurement set
@@ -1546,10 +1480,10 @@ def main():
         use_pybdsf=False,
         pybdsf_threshold=5,
         overwrite=False,
-        imagename = peeled_image
+        imagename = peeled_image,
         # cell = '4.6arcsec' ## use for A to D
     )
-    peeled_source_image.imager()
+    # peeled_source_image.imager()
     processor.imagename = peeled_image+'-image.fits'  # This automatically triggers the setter
     processor.plot_image_with_beam()
 
