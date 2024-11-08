@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import matplotlib.patches as patches
 from matplotlib.ticker import ScalarFormatter
+from typing import Union, Tuple, List
 
 import numpy as np
 from radio_beam import Beam
@@ -214,49 +215,76 @@ class MeasurementSetProcessor:
     """
 
 
-    # Default values if split data called without timebin and width
-    timebin: str = ''
-    width: int = 1
+    # Default values if no specific `avgtime` or `width` is provided
+    default_timebin: str = '10s'
+    default_width: int = 4
 
     @staticmethod
     @Utils.time_execution
-    def split_data(msname: str) -> tuple:
-
+    def prepare_measurement_set(msname: str, split_required: bool = True, avgtime: str = None, width: int = None) -> Union[Tuple[str], Tuple[List[str]]]:
         """
-        Splits the measurement set into individual fields
+        Prepares the measurement set by splitting it into individual fields if necessary.
 
         Parameters:
-        - msname (str): Name of the measurement set file
+        - msname (str): Path to the measurement set file. Can be a full path or a relative path.
+        - split_required (bool): Whether to split the measurement set into individual fields.
+                                 Defaults to True.
+        - avgtime (str, optional): Custom time averaging interval for splitting.
+                                   Uses `default_timebin` if not provided.
+        - width (int, optional): Custom channel averaging width for splitting.
+                                 Uses `default_width` if not provided.
 
         Returns:
-        - tuple: A tuple of the output measurement set names.
+        - tuple: If splitting is not required, returns a single-item tuple with msname.
+                 Otherwise, returns a tuple of the output measurement set names.
         """
-
         msmd = casatools.msmetadata()
         outputvis_list = []
+
         try:
-            listobs(vis=msname, listfile='listobs.txt',overwrite=True)
+            # Ensure msname is a full path for consistent processing
+            msname = os.path.abspath(msname)
+            listobs(vis=msname, listfile='listobs.txt', overwrite=True)
             msmd.open(msname)
             field_names = msmd.fieldnames()
+            num_fields = len(field_names)
             logging.info(f"Field names: {field_names} found in {msname}")
+
+            # If splitting is not required, return msname directly
+            if not split_required:
+                logging.info("Splitting not required.")
+                return msname  # Return as a single-item tuple
+
+            # Otherwise, proceed with splitting even if only one field exists
+            timebin = avgtime if avgtime is not None else MeasurementSetProcessor.default_timebin
+            split_width = width if width is not None else MeasurementSetProcessor.default_width
+
+            current_working_dir = os.getcwd()
+            # Split each field in the measurement set
             for field in field_names:
-                outputvis = field+'.ms'
+                outputvis = os.path.join(current_working_dir, f"{field}_split_{timebin}_{split_width}.ms")
                 if not os.path.exists(outputvis):
-                    logging.info(f"Splitting {msname} to {outputvis}")
-                    split(vis=msname,outputvis=outputvis,datacolumn='corrected',timebin=MeasurementSetProcessor.timebin,
-                        width=MeasurementSetProcessor.width,field=field)
-                    listobs(vis=outputvis,listfile=outputvis.replace('.ms','_listobs.txt'),overwrite=True)
-                    logging.info(f"Finished splitting")
+                    logging.info(f"Splitting {msname} to {outputvis} with timebin={timebin} and width={split_width}")
+                    split(vis=msname, outputvis=outputvis, datacolumn='corrected',
+                          timebin=timebin, width=split_width, field=field)
+                    listobs(vis=outputvis, listfile=outputvis.replace('.ms', '_listobs.txt'), overwrite=True)
+                    logging.info("Finished splitting")
                 else:
                     logging.info(f"Split measurement set {outputvis} exists")
+               
                 outputvis_list.append(outputvis)
+
         except Exception as e:
-            logging.error(f"Error in split_data: {e}")
+            logging.error(f"Error in prepare_measurement_set: {e}")
 
         finally:
             msmd.close()
-       
-        return tuple(outputvis_list)
+
+        if num_fields ==1:
+            return outputvis
+        else:
+            return tuple(outputvis_list)  
+
 
 class MeasurementSetInfo:
 
@@ -383,7 +411,8 @@ class MeasurementSetInfo:
         msmd = casatools.msmetadata()
         msmd.open(msname)
         field_names = msmd.fieldnames()
-        field = msname.replace('.ms', '')
+        # field = msname.replace('.ms', '')
+        field = field_names[0]
         if field in field_names:
             logging.info(f"Phase solutions for {field} will be used to select the reference antenna.")
         else:
@@ -1403,6 +1432,7 @@ class ImageProcessor:
             plotms(vis=self.msname, xaxis='frequency', yaxis='amp', ydatacolumn='model', plotfile='empty_model.png', showgui=False, overwrite=True)
 
             # Add model to the MODEL column and subtract
+            print(f"Adding {clname} to model column using ft")
             ft(vis=self.msname, complist=clname, incremental=False, usescratch=True)
             plotms(vis=self.msname, xaxis='frequency', yaxis='amp', ydatacolumn='model', plotfile='added_model.png', showgui=False, overwrite=True)
 
@@ -1423,7 +1453,7 @@ class ImageProcessor:
                 pybdsf_threshold=5,
                 overwrite=False,
                 imagename=new_imagename,
-                cell='4.6arcsec'
+                # cell='4.6arcsec'
             ).imager()
 
             # Update `self.imagename` to the new image name
@@ -1432,15 +1462,17 @@ class ImageProcessor:
 
     
 
-
 def main():
     # Define your parameters here
 
 
-    msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
+ 
+    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60621.56114583323/23B-307.sb44594812.eb44725045.60239.588568113424.ms' ## D
+    # msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
     # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
-    working_directory = '/home/kelvin/Desktop/vla_working_dir_x' # D
+    # working_directory = '/home/kelvin/Desktop/vla_working_dir' # D
 
+    working_directory = '/home/kelvin/Desktop/vla_working_dir'
   
     ### Use loop+1 ie if you wish to do 3 rounds, assign 4 to the nloops variable 
     ### the first loop will be used to produce a dirty map for masking using PYBDSF
@@ -1452,16 +1484,21 @@ def main():
     thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
     calmode = ['','p','p','ap']
     gaintype= ['','G','G','G']
-    solint = ['','60s','30','180s']
-    minsnr = ['',3,3,3]
+    solint = ['','90s','60s','180s']
+    minsnr = ['',1,1,1]
 
     ### Data averaging -- if you have an measurement set with multiple fields and you wish to split and average
     ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
     ### in msname in the class instance -- that doesnt work; provide the measurement set to split
+    
     Utils.set_working_dir(working_directory)
-    MeasurementSetProcessor.timebin='6s'
-    MeasurementSetProcessor.width = 4
-    msname_tuple = MeasurementSetProcessor.split_data(msname)
+
+    msname = MeasurementSetProcessor.prepare_measurement_set(
+        msname='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60621.56114583323/23B-307.sb44594812.eb44725045.60239.588568113424.ms', 
+        split_required=True, 
+        avgtime="6s", 
+        width=4
+        )
 
 
     ### I have included the option to manually specify the cell size although if you wish,
@@ -1470,7 +1507,7 @@ def main():
 
     # # Create an instance of SelfCalibration for the first loop (dirty map)
     # self_calibration_instance = SelfCalibration(
-    #     msname=msname_tuple[2], 
+    #     msname=msname, 
     #     nloops=nloops,
     #     thresholds=thresholds,
     #     calmode=calmode,
@@ -1486,13 +1523,13 @@ def main():
     #     use_pybdsf=True,
     #     pybdsf_threshold=5,
     #     overwrite=False,
-    #     cell = '4.6arcsec' ## use for A to D
+    #     # cell = '4.6arcsec' ## use for A to D
         
     # )
 
     # self_calibration_instance.selfcal()
     
-    vis = msname_tuple[2]
+    vis = msname[2]
     self_calibration_wsclean = SelfCalibrationWSClean(
         msname=vis, 
         nloops=nloops,
@@ -1504,12 +1541,12 @@ def main():
         imsize=320,
         niter=10000000,
         use_pybdsf=True,
-        pybdsf_threshold=5,
+        pybdsf_threshold=3,
         overwrite=False,
         final_image = True,
-        cell = '4.6arcsec' ## use for A to D
+        # cell = '4.6arcsec' ## use for A to D
     )
-    # self_calibration_wsclean.selfcal()
+    self_calibration_wsclean.selfcal()
 
     ## Set imagename with full path
     imagename = f"{vis.replace('.ms','')}_selfcal_loop_3"
@@ -1521,7 +1558,7 @@ def main():
         print(f"Image to peel is {imagename}")
     
     ### Initialize ImageProcessor
-    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=2)
+    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=1)
     processor.peel_sources()
     peeled_image = imagename.replace('-image.fits','_peeled')
 
@@ -1529,12 +1566,12 @@ def main():
     peeled_source_image = WSClean_Imager(
         msname=vis, 
         imsize=320,
-        niter=0,
+        niter=1,
         use_pybdsf=False,
         pybdsf_threshold=5,
         overwrite=False,
         imagename = peeled_image,
-        cell = '4.6arcsec' ## use for A to D
+        # cell = '4.6arcsec' ## use for A to D
     )
     peeled_source_image.imager()
     processor.imagename = peeled_image+'-image.fits'  # This automatically triggers the setter
