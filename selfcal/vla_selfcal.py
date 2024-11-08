@@ -7,6 +7,7 @@ from datetime import datetime
 import matplotlib.patches as patches
 from matplotlib.ticker import ScalarFormatter
 from typing import Union, Tuple, List
+from pathlib import Path
 
 import numpy as np
 from radio_beam import Beam
@@ -28,7 +29,6 @@ ms = casatools.ms()
 wsclean_sif = '/home/kelvin/Desktop/singularity/wsclean-v3.3-no-cuda.sif'
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class Utils():
 
@@ -221,7 +221,7 @@ class MeasurementSetProcessor:
 
     @staticmethod
     @Utils.time_execution
-    def prepare_measurement_set(msname: str, split_required: bool = True, avgtime: str = None, width: int = None) -> Union[Tuple[str], Tuple[List[str]]]:
+    def prepare_measurement_set(msname: str, fieldname: str = None, split_required: bool = True, avgtime: str = None, width: int = None) -> Union[Tuple[str], Tuple[List[str]]]:
         """
         Prepares the measurement set by splitting it into individual fields if necessary.
 
@@ -233,10 +233,12 @@ class MeasurementSetProcessor:
                                    Uses `default_timebin` if not provided.
         - width (int, optional): Custom channel averaging width for splitting.
                                  Uses `default_width` if not provided.
+        - fieldname (str, optional): Specific fieldname to check and split (if desired).
 
         Returns:
-        - tuple: If splitting is not required, returns a single-item tuple with msname.
-                 Otherwise, returns a tuple of the output measurement set names.
+        - tuple: If splitting is not required, returns msname directly.
+                If splitting is required and a fieldname is provided, splits by that field.
+                Otherwise, returns a tuple of the output measurement set names.
         """
         msmd = casatools.msmetadata()
         outputvis_list = []
@@ -260,19 +262,39 @@ class MeasurementSetProcessor:
             split_width = width if width is not None else MeasurementSetProcessor.default_width
 
             current_working_dir = os.getcwd()
-            # Split each field in the measurement set
-            for field in field_names:
-                outputvis = os.path.join(current_working_dir, f"{field}_split_{timebin}_{split_width}.ms")
-                if not os.path.exists(outputvis):
-                    logging.info(f"Splitting {msname} to {outputvis} with timebin={timebin} and width={split_width}")
-                    split(vis=msname, outputvis=outputvis, datacolumn='corrected',
-                          timebin=timebin, width=split_width, field=field)
-                    listobs(vis=outputvis, listfile=outputvis.replace('.ms', '_listobs.txt'), overwrite=True)
-                    logging.info("Finished splitting")
-                else:
-                    logging.info(f"Split measurement set {outputvis} exists")
-               
-                outputvis_list.append(outputvis)
+            if isinstance(fieldname, str):
+                fieldname = [fieldname]  
+            if fieldname:
+                # Split the specified fields (target, phasecalibrator, etc.)
+                for field in fieldname:
+                   
+                    if field in field_names:
+                        outputvis = os.path.join(current_working_dir, f"{field}_split_{timebin}_{split_width}.ms")
+                        if not os.path.exists(outputvis):
+                            logging.info(f"Splitting {msname} to {outputvis} with timebin={timebin} and width={split_width}")
+                            split(vis=msname, outputvis=outputvis, datacolumn='corrected',
+                                timebin=timebin, width=split_width, field=field)
+                            listobs(vis=outputvis, listfile=outputvis.replace('.ms', '_listobs.txt'), overwrite=True)
+                            logging.info("Finished splitting")
+                        else:
+                            logging.info(f"Split measurement set {outputvis} exists")
+                        outputvis_list.append(outputvis)
+                    else:
+                        logging.warning(f"Field {field} not found in measurement set.")
+                
+            else:
+                # If no specific field is given, split all fields
+                for field in field_names:
+                    outputvis = os.path.join(current_working_dir, f"{field}_split_{timebin}_{split_width}.ms")
+                    if not os.path.exists(outputvis):
+                        logging.info(f"Splitting {msname} to {outputvis} with timebin={timebin} and width={split_width}")
+                        split(vis=msname, outputvis=outputvis, datacolumn='corrected',
+                            timebin=timebin, width=split_width, field=field)
+                        listobs(vis=outputvis, listfile=outputvis.replace('.ms', '_listobs.txt'), overwrite=True)
+                        logging.info("Finished splitting")
+                    else:
+                        logging.info(f"Split measurement set {outputvis} exists")
+                    outputvis_list.append(outputvis)
 
         except Exception as e:
             logging.error(f"Error in prepare_measurement_set: {e}")
@@ -280,10 +302,7 @@ class MeasurementSetProcessor:
         finally:
             msmd.close()
 
-        if num_fields ==1:
-            return outputvis
-        else:
-            return tuple(outputvis_list)  
+        return outputvis
 
 
 class MeasurementSetInfo:
@@ -1101,7 +1120,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 
 
-class SelfCalibration(tclean_Imager):
+class SelfCalibrationTclean(tclean_Imager):
 
     def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, **kwargs):
         super().__init__(msname=msname, **kwargs)
@@ -1442,127 +1461,145 @@ class ImageProcessor:
 
             print(f"Finished peeling source at {ra_hms}, {dec_dms} with flux {peak_flux} Jy.\n")
 
-            print(f"Making new image to use for peeling")
-            # Re-image to update `self.imagename`
-            new_imagename = f"{self.imagename}_iteration_{iteration + 1}"
-            WSClean_Imager(
-                msname=self.msname, 
-                imsize=320,
-                niter=1, # requires at least one to get a clean beam
-                use_pybdsf=False,
-                pybdsf_threshold=5,
-                overwrite=False,
-                imagename=new_imagename,
-                # cell='4.6arcsec'
-            ).imager()
+            # print(f"Making new image to use for peeling")
+            # # Re-image to update `self.imagename`
+            # new_imagename = f"{self.imagename}_iteration_{iteration + 1}"
+            # WSClean_Imager(
+            #     msname=self.msname, 
+            #     imsize=320,
+            #     niter=1, # requires at least one to get a clean beam
+            #     use_pybdsf=False,
+            #     pybdsf_threshold=5,
+            #     overwrite=False,
+            #     imagename=new_imagename,
+            #     # cell='4.6arcsec'
+            # ).imager()
 
             # Update `self.imagename` to the new image name
-            self.imagename = new_imagename + "-image.fits"
-            print(f"Updated imagename to {self.imagename}")
-
-    
-
-def main():
-    # Define your parameters here
+            # self.imagename = new_imagename + "-image.fits"
+            # print(f"Updated imagename to {self.imagename}")
 
 
- 
-    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60621.56114583323/23B-307.sb44594812.eb44725045.60239.588568113424.ms' ## D
-    # msname ='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60619.635185185354/23B-307.sb44594812.eb44691528.60230.613198356485.ms' # A to D
-    # msname = '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60617.98905092571/23B-307.sb44672076.eb44870465.60286.40963834491.ms'
-    # working_directory = '/home/kelvin/Desktop/vla_working_dir' # D
-
-    working_directory = '/home/kelvin/Desktop/vla_working_dir'
-  
-    ### Use loop+1 ie if you wish to do 3 rounds, assign 4 to the nloops variable 
-    ### the first loop will be used to produce a dirty map for masking using PYBDSF
-
-    # CASA <2>: flagdata(vis='K2-18.ms/',antenna='ea02,ea19,ea27,ea04,ea25,ea03,ea21') for A->D
 
 
-    nloops = 4
-    thresholds = ['', '0.05mJy', '0.01mJy', '0.005mJy']  # Example thresholds for each loop
-    calmode = ['','p','p','ap']
-    gaintype= ['','G','G','G']
-    solint = ['','90s','60s','180s']
-    minsnr = ['',1,1,1]
 
-    ### Data averaging -- if you have an measurement set with multiple fields and you wish to split and average
-    ### However, its not neccessary. If you have a measurement set with a single source, just provide the path
-    ### in msname in the class instance -- that doesnt work; provide the measurement set to split
-    
+
+
+def setup_logging():
+    """Set up logging configuration."""
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+def configure_parameters():
+
+    target = 'K2-18'
+    phase_calibrator =''
+
+    fieldnames = [name for name in [target, phase_calibrator] if name]
+
+    """Configure the parameters for self-calibration."""
+    return {
+        'working_directory': Path('/home/kelvin/Desktop/vla_working_dir'),
+        'nloops': 5,
+        'thresholds': ['', '0.05', '0.05mJy', '0.01mJy', '0.005mJy'],
+        'calmode': ['', 'p', 'p', 'p', 'ap'],
+        'gaintype': ['', 'G', 'G', 'G', 'G'],
+        'solint': ['', 'inf', '90s', '60s', '300s'],
+        'minsnr': ['', 1, 1, 1, 1],
+        'avgtime': '6s',
+        'width': 4,
+        'fieldname':fieldnames,
+        'msname': '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60621.56114583323/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+    }
+
+
+def prepare_data(working_directory, msname, avgtime, width,fieldname):
+    """Set the working directory and prepare the measurement set for multiple fields."""
     Utils.set_working_dir(working_directory)
+    msnames = []  # To store the processed measurement sets for each field
 
-    msname = MeasurementSetProcessor.prepare_measurement_set(
-        msname='/home/kelvin/Desktop/vla_data/23B-307/pipeline.60621.56114583323/23B-307.sb44594812.eb44725045.60239.588568113424.ms', 
-        split_required=True, 
-        avgtime="6s", 
-        width=4
+    for field in fieldname:
+        msname_split = MeasurementSetProcessor.prepare_measurement_set(
+            msname=msname, 
+            fieldname=field, 
+            split_required=True, 
+            avgtime=avgtime, 
+            width=width
         )
+        msnames.append(msname_split)
 
+    return msnames
 
-    ### I have included the option to manually specify the cell size although if you wish,
-    ### the code will automatically select the cell size for you
-    ### note that the calculation will not respect flagged baselines (the cell size will change if you wish to flag the longest baseline)
+def perform_selfcalibration(vis, parameters):
 
-    # # Create an instance of SelfCalibration for the first loop (dirty map)
-    # self_calibration_instance = SelfCalibration(
-    #     msname=msname, 
-    #     nloops=nloops,
-    #     thresholds=thresholds,
-    #     calmode=calmode,
-    #     gaintype=gaintype,
-    #     solint=solint,
-    #     minsnr=minsnr,
-    #     imsize=320,
-    #     niter=1000,  
-    #     nterms=2,
-    #     deconvolver='mtmfs',
-    #     weighting='briggs',
-    #     robust=0.5,
-    #     use_pybdsf=True,
-    #     pybdsf_threshold=5,
-    #     overwrite=False,
-    #     # cell = '4.6arcsec' ## use for A to D
-        
-    # )
-
-    # self_calibration_instance.selfcal()
-    
-    vis = msname[2]
+    """Perform self-calibration with WSClean."""
     self_calibration_wsclean = SelfCalibrationWSClean(
         msname=vis, 
-        nloops=nloops,
-        thresholds=thresholds,
-        calmode=calmode,
-        gaintype=gaintype,
-        solint=solint,
-        minsnr=minsnr,
+        nloops=parameters['nloops'],
+        thresholds=parameters['thresholds'],
+        calmode=parameters['calmode'],
+        gaintype=parameters['gaintype'],
+        solint=parameters['solint'],
+        minsnr=parameters['minsnr'],
         imsize=320,
         niter=10000000,
         use_pybdsf=True,
         pybdsf_threshold=3,
         overwrite=False,
-        final_image = True,
-        # cell = '4.6arcsec' ## use for A to D
+        final_image=True
+        # cell = '4.6arcsec' 
     )
     self_calibration_wsclean.selfcal()
 
-    ## Set imagename with full path
-    imagename = f"{vis.replace('.ms','')}_selfcal_loop_3"
-    imagename = f"{working_directory}/{imagename}-image.fits"  # Replace with actual image name
-    if not os.path.exists(imagename ):
-        print(f"Image {imagename} not found.")
-        return
-    else:
-        print(f"Image to peel is {imagename}")
-    
-    ### Initialize ImageProcessor
-    processor = ImageProcessor(imagename=imagename, msname=vis,  box_size=10,max_iterations=1)
-    processor.peel_sources()
-    peeled_image = imagename.replace('-image.fits','_peeled')
+    self_calibration_tclean = SelfCalibrationTclean(
+        msname=vis,
+        nloops=parameters['nloops'],
+        thresholds=parameters['thresholds'],
+        calmode=parameters['calmode'],
+        gaintype=parameters['gaintype'],
+        solint=parameters['solint'],
+        minsnr=parameters['minsnr'],
+        imsize=320,
+        niter=1000,  
+        nterms=2,
+        deconvolver='mtmfs',
+        weighting='briggs',
+        robust=0.5,
+        use_pybdsf=True,
+        pybdsf_threshold=5,
+        overwrite=False
+    )
+    # self_calibration_tclean.selfcal()
 
-    ## Image the peeled measurement set
+
+
+def check_image_exists(imagename):
+    """Check if the image already exists at the given path."""
+    if os.path.exists(imagename):
+        logging.info(f"Image found at {imagename}")
+        return True
+    else:
+        logging.warning(f"Image {imagename} not found.")
+        return False
+
+
+def process_and_plot_image(vis, parameters):
+
+    """Generate, process, and plot the self-calibration image."""
+    # Generate imagename with full path
+    imagename = f"{vis.replace('.ms', '')}_selfcal_loop_3"
+    imagename = f"{parameters['working_directory']}/{imagename}-image.fits"
+
+    # Check if image exists before proceeding
+    if not check_image_exists(imagename):
+        return
+
+    # Initialize ImageProcessor
+    processor = ImageProcessor(imagename=imagename, msname=vis, box_size=10, max_iterations=1)
+    processor.peel_sources()
+    peeled_image = imagename.replace('-image.fits', '_peeled')
+
+    # Image the peeled measurement set
     peeled_source_image = WSClean_Imager(
         msname=vis, 
         imsize=320,
@@ -1570,19 +1607,38 @@ def main():
         use_pybdsf=False,
         pybdsf_threshold=5,
         overwrite=False,
-        imagename = peeled_image,
-        # cell = '4.6arcsec' ## use for A to D
+        imagename=peeled_image
     )
     peeled_source_image.imager()
-    processor.imagename = peeled_image+'-image.fits'  # This automatically triggers the setter
-    plotter = PlottingRoutines(imagename = peeled_image + '-image.fits')
+
+    # Plotting and further processing
+    processor.imagename = peeled_image + '-image.fits'
+    plotter = PlottingRoutines(imagename=peeled_image + '-image.fits')
     plotter.plot_image_with_beam()
 
+
+def main():
+    """Main entry point for the script."""
+    setup_logging()
+
+    # Configure parameters
+    parameters = configure_parameters()
+
+    # fieldname = parameters.get('fieldnames', ['target', 'phasecalibrator'])
+    fieldname = parameters.get('fieldname') 
+    msname = prepare_data(parameters['working_directory'], parameters['msname'], parameters['avgtime'], parameters['width'],fieldname=fieldname)
+
+    vis = msname[0]
+
+    # # Perform self-calibration
+    perform_selfcalibration(vis, parameters)
+
+    # # Process the image, peel sources, and plot
+    # process_and_plot_image(vis, parameters)
 
 
 if __name__ == "__main__":
     main()
-
 
 
 
