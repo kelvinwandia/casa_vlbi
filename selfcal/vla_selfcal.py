@@ -26,7 +26,7 @@ tb = casatools.table()
 ms = casatools.ms()
 
 
-wsclean_sif = '/home/kelvin/Desktop/singularity/wsclean-v3.3-no-cuda.sif'
+wsclean_sif = '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
 
 
 
@@ -643,6 +643,14 @@ class tclean_Imager:
     
         logging.info(f"Imaging {self.msname} to make: {self.imagename}")
 
+
+        ### NB: The threshold here is an rms based threshold (nsigma) as opposed to an absolute one (threshold)
+
+        if isinstance(self.threshold, str) and self.threshold == '':
+            self.threshold = 0.0
+        elif isinstance(self.threshold, int):
+           self.threshold = float(self.threshold)
+
         tclean(
             vis=self.msname,
             imagename=self.imagename,
@@ -654,7 +662,7 @@ class tclean_Imager:
             robust=self.robust,
             niter=self.niter,
             nterms=self.nterms,
-            threshold=self.threshold,
+            nsigma=self.threshold,
             wprojplanes=self.wprojplanes,
             mask=self.mask,
             usemask=self.usemask,
@@ -757,7 +765,7 @@ class WSClean_Imager:
             "-scale", self.cell,
             "-mgain", str(self.mgain),
             "-niter", str(self.niter),
-            "-threshold", str(self.threshold),
+            "-auto-threshold", str(self.threshold),
             "-fits-mask", str(self.maskfile),
         ]
         if self.maskfile == '':
@@ -1240,8 +1248,10 @@ class SelfCalibrationTclean(tclean_Imager):
                 
                 if self.calmode[selfcal_loop] == 'p':
                     minblperant = 3
+                    solnorm = False
                 else:
                     minblperant = 4
+                    solnorm = True
                 # try:
                 gaincal(vis=self.msname,
                         caltable=caltable,
@@ -1252,6 +1262,7 @@ class SelfCalibrationTclean(tclean_Imager):
                         minsnr=self.minsnr[selfcal_loop],
                         calmode=self.calmode[selfcal_loop],
                         minblperant = minblperant,
+                        solnorm = solnorm, 
                         append=False,
                         parang=False)
                 # except Exception as e:
@@ -1499,17 +1510,17 @@ def configure_parameters():
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/home/kelvin/Desktop/vla_working_dir'),
-        'nloops': 5,
-        'thresholds': ['', '0.05', '0.05mJy', '0.01mJy', '0.005mJy'],
-        'calmode': ['', 'p', 'p', 'p', 'ap'],
-        'gaintype': ['', 'G', 'G', 'G', 'G'],
-        'solint': ['', 'inf', '90s', '60s', '300s'],
-        'minsnr': ['', 1, 1, 1, 1],
+        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424_wsclean'),
+        'nloops': 6,
+        'thresholds': ['', 18, 9, 7, 5,3],
+        'calmode': ['', 'p', 'p', 'p', 'ap','ap'],
+        'gaintype': ['', 'G', 'G', 'G', 'G','G'],
+        'solint': ['', 'inf', '90s', '60s', 'inf','300'],
+        'minsnr': ['', 1, 1, 1, 1, 1],
         'avgtime': '6s',
         'width': 4,
         'fieldname':fieldnames,
-        'msname': '/home/kelvin/Desktop/vla_data/23B-307/pipeline.60621.56114583323/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
     }
 
 
