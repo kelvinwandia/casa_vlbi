@@ -502,7 +502,7 @@ class MeasurementSetInfo:
         pref_ant_list = list(pref_ant)
         logging.info(f"The following antennas will be used as the reference antennas: {', '.join(pref_ant_list[:truncation])}")
 
-        return num_antennas, str(pref_ant_list)
+        return pref_ant_list
 
     @staticmethod
     def get_msinfo(msname):
@@ -953,7 +953,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 
 
-        _ ,self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
+        self.refant = [refant] if refant is not None else MeasurementSetInfo.find_refant(self.msname)
 
 
         
@@ -1149,7 +1149,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 class SelfCalibrationTclean(tclean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr,refant, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr,refant:str = None, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -1158,7 +1158,7 @@ class SelfCalibrationTclean(tclean_Imager):
         self.solint = solint
         self.minsnr = minsnr
 
-        _ ,self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
+        self.refant = [refant] if refant is not None else MeasurementSetInfo.find_refant(self.msname)
 
 
     @Utils.time_execution
