@@ -953,8 +953,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 
 
-        self.refant = [refant] if refant is not None else MeasurementSetInfo.find_refant(self.msname)
-
+        self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
 
         
 
@@ -1158,7 +1157,7 @@ class SelfCalibrationTclean(tclean_Imager):
         self.solint = solint
         self.minsnr = minsnr
 
-        self.refant = [refant] if refant is not None else MeasurementSetInfo.find_refant(self.msname)
+        self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
 
 
     @Utils.time_execution
