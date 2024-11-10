@@ -941,7 +941,7 @@ class PlottingRoutines:
 
 class SelfCalibrationWSClean(WSClean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant, final_image: bool = False, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant=None, final_image: bool = False, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -953,7 +953,9 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 
 
-        self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
+        self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
+
+        # print(self.refant)
 
         
 
@@ -992,7 +994,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     cell = self.cell,
                     niter = 1, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                     )
-                imager_instance.imager()
+                # imager_instance.imager()
 
                 plotter = PlottingRoutines(imagename = imagename_dirty + '-image.fits')
                 plotter.plot_image_with_beam()
@@ -1148,7 +1150,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 class SelfCalibrationTclean(tclean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr,refant:str = None, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -1157,8 +1159,9 @@ class SelfCalibrationTclean(tclean_Imager):
         self.solint = solint
         self.minsnr = minsnr
 
-        self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
 
+        self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
+        # print(self.refant)
 
     @Utils.time_execution
     def selfcal(self) -> None:
@@ -1524,25 +1527,26 @@ def setup_logging():
 
 def configure_parameters():
 
-    target = 'J2139+1423'
+    target = 'K2-18'
     phase_calibrator =''
 
     fieldnames = [name for name in [target, phase_calibrator] if name]
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
+        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44616223.eb44871184.60286.71989133102'),
         'nloops': 6,
         'thresholds': ['', 18, 9, 7, 5,3],
         'calmode': ['', 'p', 'p', 'p', 'ap','ap'],
         'gaintype': ['', 'G', 'G', 'G', 'G','G'],
-        'solint': ['', 'inf', '90s', '60s', 'inf','300'],
+        'solint': ['', 'inf', '90s', '60s', 'inf','240s'],
         'minsnr': ['', 3, 3, 3, 3, 3],
         'avgtime': '2s',
         'width': 4,
         'fieldname':fieldnames,
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
-        'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
+        # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
+        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
     }
 
 
@@ -1580,7 +1584,7 @@ def perform_selfcalibration(vis, parameters):
         pybdsf_threshold=3,
         overwrite=False,
         final_image=True,
-        refant = 'EF',
+        # refant = 'EF' ,
         # cell = '4.6arcsec' 
     )
     self_calibration_wsclean.selfcal()
