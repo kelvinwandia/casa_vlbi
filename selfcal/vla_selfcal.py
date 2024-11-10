@@ -398,20 +398,34 @@ class MeasurementSetInfo:
     def get_imaging_cellsize(msname) -> str:
         """
         Calculate the cell size for imaging based on the longest baseline.
-        
+
+        Parameters:
+        ----------
+        msname : str
+            The name of the measurement set.
+
         Returns:
         -------
         str
-            The size of the imaging cell in arcseconds.
+            The size of the imaging cell, either in arcseconds or milliarcseconds, depending on the value.
         """
-        ### TODO: This needs to respect the flags e.g if the longest baseline is flagged !
-
+        # Get the longest baseline in wavelength units, accounting for flags if needed
         longest_baseline_lambda = MeasurementSetInfo.get_longest_baseline(msname)
+        
+        # Calculate cell size in arcseconds
         cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
-        cell = f'{cell_float:.2f} arcsec'
-        logging.info(f"Imaging with a cell of size {cell}")
+        
+        # Convert to mas if the value is very small (e.g., <1 arcsecond)
+        if cell_float < 1.0:
+            cell_float *= 1000  # convert to mas
+            cell = f'{cell_float:.2f} mas'
+        else:
+            cell = f'{cell_float:.2f} arcsec'
+        
+        logging.info(f"Imaging with a cell size of {cell}")
         return cell
-    
+
+        
     
     @staticmethod
     # @Utils.time_execution
@@ -488,7 +502,7 @@ class MeasurementSetInfo:
         pref_ant_list = list(pref_ant)
         logging.info(f"The following antennas will be used as the reference antennas: {', '.join(pref_ant_list[:truncation])}")
 
-        return num_antennas, pref_ant_list
+        return num_antennas, str(pref_ant_list)
 
     @staticmethod
     def get_msinfo(msname):
@@ -744,6 +758,7 @@ class WSClean_Imager:
 
          # Use the manually supplied cell or calculate it if not provided
         self.cell = cell if cell is not None else MeasurementSetInfo.get_imaging_cellsize(self.msname)
+
         logging.info(f"Using an imaging cell size: {cell}")
 
     @Utils.time_execution
@@ -926,7 +941,7 @@ class PlottingRoutines:
 
 class SelfCalibrationWSClean(WSClean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, final_image: bool = False, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant, final_image: bool = False, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -936,12 +951,16 @@ class SelfCalibrationWSClean(WSClean_Imager):
         self.minsnr = minsnr
         self.final_image = final_image
 
+
+
+        _ ,self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
+
+
         
 
     @Utils.time_execution
     def selfcal(self) -> None:
         Utils.create_plots_directory()
-        num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
 
         logging.info("Deleting model column before selfcal")
         delmod(vis=self.msname, otf=True)
@@ -1050,7 +1069,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 # try:
                 gaincal(vis=self.msname,
                         caltable=caltable,
-                        refant=str(refant),
+                        refant=self.refant,
                         solint=self.solint[selfcal_loop],
                         gaintype=self.gaintype[selfcal_loop],
                         gaintable=prev_caltables,
@@ -1130,7 +1149,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 class SelfCalibrationTclean(tclean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr,refant, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -1139,10 +1158,13 @@ class SelfCalibrationTclean(tclean_Imager):
         self.solint = solint
         self.minsnr = minsnr
 
+        _ ,self.refant = refant if refant is not None else MeasurementSetInfo.find_refant(self.msname)
+
+
     @Utils.time_execution
     def selfcal(self) -> None:
         Utils.create_plots_directory()
-        num_antennas,refant = MeasurementSetInfo.find_refant(self.msname)  
+         
         
         logging.info("Deleting model column before selfcal")
         delmod(vis=self.msname, otf=True)
@@ -1255,7 +1277,7 @@ class SelfCalibrationTclean(tclean_Imager):
                 # try:
                 gaincal(vis=self.msname,
                         caltable=caltable,
-                        refant=str(refant),
+                        refant=self.refant,
                         solint=self.solint[selfcal_loop],
                         gaintype=self.gaintype[selfcal_loop],
                         gaintable=prev_caltables,
@@ -1503,24 +1525,25 @@ def setup_logging():
 
 def configure_parameters():
 
-    target = 'K2-18'
+    target = 'J2139+1423'
     phase_calibrator =''
 
     fieldnames = [name for name in [target, phase_calibrator] if name]
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44594812.eb44725045.60239.588568113424_wsclean'),
+        'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
         'nloops': 6,
         'thresholds': ['', 18, 9, 7, 5,3],
         'calmode': ['', 'p', 'p', 'p', 'ap','ap'],
         'gaintype': ['', 'G', 'G', 'G', 'G','G'],
         'solint': ['', 'inf', '90s', '60s', 'inf','300'],
-        'minsnr': ['', 1, 1, 1, 1, 1],
-        'avgtime': '6s',
+        'minsnr': ['', 3, 3, 3, 3, 3],
+        'avgtime': '2s',
         'width': 4,
         'fieldname':fieldnames,
-        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
     }
 
 
@@ -1557,7 +1580,8 @@ def perform_selfcalibration(vis, parameters):
         use_pybdsf=True,
         pybdsf_threshold=3,
         overwrite=False,
-        final_image=True
+        final_image=True,
+        refant = 'EF',
         # cell = '4.6arcsec' 
     )
     self_calibration_wsclean.selfcal()
