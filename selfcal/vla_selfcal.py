@@ -936,14 +936,14 @@ class PlottingRoutines:
         """
         imagename_header = fits.getheader(self.imagename)
         imaging_beam = Beam.from_fits_header(imagename_header)
-        
+
         ## beam in arcsec
         bmaj = imaging_beam.major.to(u.arcsec).value
         bmin = imaging_beam.minor.to(u.arcsec).value
         pa = imaging_beam.pa.to(u.deg).value  
 
         return (bmaj, bmin, pa)
-    
+
         
     def plot_image_with_beam(self):
             """
@@ -951,62 +951,32 @@ class PlottingRoutines:
             """
             # Read the FITS file data
             hdu = fits.open(self.imagename)
-            image_data = hdu[0].data[0, 0, :, :]  # Assuming single-channel, adjust if necessary
+            image_data = hdu[0].data[0, 0, :, :] 
             header = hdu[0].header
-
-            # Set up WCS from the FITS header
             w = WCS(header, naxis=2)
-            
-            # Create the figure and axis with WCS projection
             fig, ax = plt.subplots(figsize=self.figsize, subplot_kw={'projection': w})
-
-            # Plot the image
             im = ax.imshow(image_data, cmap=self.color, origin='lower', interpolation='none')
-            # Disable automatic labelling
             ax.coords[0].set_auto_axislabel(True) 
             ax.coords[1].set_auto_axislabel(True) 
-
-            # Get image shape from header
             shape = header['NAXIS1'], header['NAXIS2']
-
-            # Get the beam dimensions (BMAJ, BMIN, BPA)
             bmaj, bmin, pa = self.get_beam()
-           
-            # Define a fixed relative position in the image (e.g., 15, 15 on a 320x320 image)
             relative_x = 15
             relative_y = 15
-
-            # Calculate absolute position based on image size
             x_pos = (relative_x / 320) * shape[0]  
             y_pos = (relative_y / 320) * shape[1]  
-
-            # Define the beam ellipse in world coordinates
             beam_ellipse = patches.Ellipse(
                 (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor='white', facecolor='none', lw=2)
-            
-            
             ax.add_patch(beam_ellipse)
-            
-            # Set axis labels
             ax.set_xlabel('RA (J2000)', size=14)
             ax.set_ylabel('Dec (J2000)', size=14)
-
-    
-            # Customize ticks and make them consistent with WCS
             ax.tick_params(axis="x", which="both", bottom=True, top=False)
             ax.tick_params(axis="y", which="both", right=False, left=True)
-
-            # Add a colorbar with scientific notation and matching size to the image
             cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
             cbar.ax.tick_params(labelsize=16)
             cbar.set_label('Jy/beam', rotation=90, labelpad=12, size=18)
-
-            # Set the colorbar label to scientific notation
             cbar.formatter = ScalarFormatter()
             cbar.formatter.set_powerlimits((-3, 3))
             cbar.update_ticks()
-
-            # Display the plot
             # plt.show()
             plt.savefig(self.imagename.replace('.fits','.pdf'),dpi=300)
 
@@ -1304,7 +1274,6 @@ class SelfCalibrationTclean(tclean_Imager):
                     inpmask=masking_image,
                     output=imagename_dirty + '.mask', 
                 )
-
                 masking_file = imagename_dirty + '.mask'
                                 
 
