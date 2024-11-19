@@ -1,5 +1,5 @@
 
-import os, glob, subprocess, time, bdsf, logging, math
+import os, glob, subprocess, time, logging, math
 from typing import Callable, Any
 import casatools
 import matplotlib.pyplot as plt
@@ -170,36 +170,36 @@ class Utils():
 
 
 
-    @staticmethod
-    def pybdsf(input_image, detection_threshold):
+    # @staticmethod
+    # def pybdsf(input_image, detection_threshold):
 
-        # Check if the input image is a FITS file; if not, add .fits
-        if not input_image.endswith('.fits'):
-            input_image = input_image
-            fitsname =input_image + '.fits'
-        else:
-            # If it is already a FITS file, use it directly
-            fitsname = input_image
+    #     # Check if the input image is a FITS file; if not, add .fits
+    #     if not input_image.endswith('.fits'):
+    #         input_image = input_image
+    #         fitsname =input_image + '.fits'
+    #     else:
+    #         # If it is already a FITS file, use it directly
+    #         fitsname = input_image
 
-        # Process the FITS image with pybdsf
-        img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='hard',
-                                thresh_isl=True, thresh_pix=detection_threshold, 
-                                advanced_opts=True, mean_map='map', rms_map=True, 
-                                group_by_isl=True)
+    #     # Process the FITS image with pybdsf
+    #     img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='hard',
+    #                             thresh_isl=True, thresh_pix=detection_threshold, 
+    #                             advanced_opts=True, mean_map='map', rms_map=True, 
+    #                             group_by_isl=True)
 
-        # Write out island mask and FITS catalog
-        img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
-        img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
+    #     # Write out island mask and FITS catalog
+    #     img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
+    #     img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
 
-        regionfile = input_image + '.casabox'
-        ascii_file = input_image + '.ascii'
-        rmsfile = input_image + '.rmsfile'
+    #     regionfile = input_image + '.casabox'
+    #     ascii_file = input_image + '.ascii'
+    #     rmsfile = input_image + '.rmsfile'
 
-        img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
-        img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
-        img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
+    #     img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
+    #     img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
+    #     img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
 
-        return regionfile
+    #     return regionfile
     
     @staticmethod
     def make_mask(fits_file,rms, threshold):
@@ -1619,13 +1619,13 @@ def configure_parameters():
     """Configure the parameters for self-calibration."""
     return {
         'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal'),
-        'nloops': 2,
+        'nloops': 6,
         'thresholds': ['', 4, 4,4,4,4 ],
         'calmode': ['', 'p','p','p','ap','ap'],
         'gaintype': ['', 'G' ,'G','G','G','G'],
-        'solint': ['', '300s','90s','60s','300s','240s'],
+        'solint': ['', '96s','48s','12s','192s','96s'],
         'minsnr': ['', 2, 2, 2, 2, 2],
-        'avgtime': '6s',
+        'avgtime': '',
         'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
