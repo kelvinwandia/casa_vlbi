@@ -201,6 +201,38 @@ class Utils():
 
         return regionfile
     
+    @staticmethod
+    def make_mask(fits_file,rms, threshold):
+        """
+        This function reads a FITS file, masks all values above the given RMS threshold,
+        and writes the mask as a new FITS file.
+
+        Parameters:
+        -----------
+        fits_file : str
+            The path to the input FITS file.
+        rms_threshold : float
+            The RMS threshold value above which pixels will be masked.
+    
+        """
+        with fits.open(fits_file) as hdul:
+            data = hdul[0].data  
+
+        if data is None:
+            raise ValueError("No image data found in the FITS file.")
+
+        mask = data > threshold*rms
+        mask = mask.astype(np.int16)
+        hdu = fits.PrimaryHDU(mask)  
+        output_file = fits_file.replace('.fits','_masking.fits')
+        hdu.writeto(output_file, overwrite=True)  
+
+        logging.info(f"Mask saved to {output_file}")
+
+        return output_file
+
+
+    
 
 
 class MeasurementSetProcessor:
@@ -538,7 +570,7 @@ class tclean_Imager:
                  weighting: str = 'natural', robust: float = 0, nterms: int = 1, imsize: int = 640,
                  niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '', imagename: str = None,
                  usemask: str = 'user', pblimit: float = 0.1,phasecenter: str = '', overwrite:bool = False, 
-                 use_pybdsf:bool = True, pybdsf_threshold: int = 5,cell:list = None,parallel:bool = False,
+                 use_pybdsf:bool = False , pybdsf_threshold: int = 5,cell:list = None,parallel:bool = False,
                  outlierfile:str = None, pbcorrect:bool = False):
         """
         Initializes the tclean_Imager instance with specified parameters.
@@ -753,7 +785,7 @@ class WSClean_Imager:
     """
 
     def __init__(self, msname: str, imsize: int = 640, niter: int = 0, threshold: str = 0.0, deconvolution:str = None,
-                 overwrite: bool = False, use_pybdsf: bool = True, pybdsf_threshold: int = 5, mgain: float = 0.8,
+                 overwrite: bool = False, use_pybdsf: bool = False , pybdsf_threshold: int = 5, mgain: float = 0.8,
                 imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None):
         """
         Initializes the wsclean_Imager instance with specified parameters.
@@ -1185,7 +1217,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 class SelfCalibrationTclean(tclean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, make_final_image:bool = True, refant=None, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, make_final_image:bool = True, refant=None, masking_threshold:int = 5,**kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -1194,7 +1226,7 @@ class SelfCalibrationTclean(tclean_Imager):
         self.solint = solint
         self.minsnr = minsnr
         self.make_final_image = make_final_image
-
+        self.masking_threshold = masking_threshold
 
         self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
         # print(self.refant)
@@ -1243,27 +1275,34 @@ class SelfCalibrationTclean(tclean_Imager):
                 logging.info(f"Imaging {self.msname} to make: {self.imagename}")
                 imager_instance.imager()
 
-                            # Check if primary beam correction is requested and call the method
+                # Check if primary beam correction is requested and call the method
                 if self.pbcorrect:
                     logging.info(f"Primary beam correction requested, applying pbcorr.")
                     imager_instance.pbcorr()  # Call the pbcorr method
 
                 # Export dirty map to FITS after it has been created
                 image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
-                exportfits(imagename=imagename_dirty + image_ext, fitsimage=imagename_dirty+ image_ext + '.fits', overwrite=True)
+                fitsimage = imagename_dirty+ image_ext + '.fits'
+                exportfits(imagename=imagename_dirty + image_ext, fitsimage=fitsimage, overwrite=True)
+                
+                """ Make a masking file """
+                image_rms = imstat(fitsimage)['rms'][0]
+                global masking_file
+                masking_file = Utils.make_mask(fits_file=fitsimage, rms=image_rms, threshold=self.masking_threshold)
+                
 
-                # Run PYBDSF if requested
-                try:
-                    logging.info(f"Running pybdsf on {imagename_dirty}...")
-                    if self.use_pybdsf:
-                        Utils.pybdsf(imagename_dirty+ image_ext, self.pybdsf_threshold)
-                        mask = imagename_dirty+ image_ext + '.casabox'
-                        logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
-                    else:
-                        logging.info(f"Masking using PYBDSF not requested")
-                        mask = ''
-                except Exception as e:
-                    logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
+                # # Run PYBDSF if requested
+                # try:
+                #     logging.info(f"Running pybdsf on {imagename_dirty}...")
+                #     if self.use_pybdsf:
+                #         Utils.pybdsf(imagename_dirty+ image_ext, self.pybdsf_threshold)
+                #         mask = imagename_dirty+ image_ext + '.casabox'
+                #         logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
+                #     else:
+                #         logging.info(f"Masking using PYBDSF not requested")
+                #         mask = ''
+                # except Exception as e:
+                #     logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
 
             else:
                 # Set niter for subsequent loops and disable pybdsf
@@ -1283,7 +1322,7 @@ class SelfCalibrationTclean(tclean_Imager):
                     threshold=self.thresholds[selfcal_loop],
                     weighting = self.weighting,
                     robust = self.robust,
-                    mask=mask,
+                    mask=masking_file,
                     overwrite=self.overwrite,
                     outlierfile=self.outlierfile,
                 )
@@ -1367,7 +1406,7 @@ class SelfCalibrationTclean(tclean_Imager):
             logging.info("Making final image with all selfcal corrections applied")
             
             self.niter = 1000000  # Can be modified to set a new value if needed
-            self.threshold = '0.001mJy'
+            # self.threshold = '0.001mJy'
             self.use_pybdsf = False
 
             # Initialize imager_instance with required parameters for self-calibration
@@ -1379,7 +1418,7 @@ class SelfCalibrationTclean(tclean_Imager):
                 niter=self.niter,
                 deconvolver=self.deconvolver,
                 threshold=self.thresholds[selfcal_loop],
-                mask=mask,
+                mask=masking_file,
                 cell = self.cell,
                 weighting = self.weighting,
                 robust = self.robust,
@@ -1391,18 +1430,18 @@ class SelfCalibrationTclean(tclean_Imager):
             image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
             exportfits(imagename=imagename_final + image_ext, fitsimage=imagename_final+ image_ext + '.fits', overwrite=True)
 
-            # Run PYBDSF if requested
-            try:
-                logging.info(f"Running pybdsf on {imagename_final}...")
-                if self.use_pybdsf:
-                    Utils.pybdsf(imagename_final+ image_ext, self.pybdsf_threshold)
-                    mask = imagename_final+ image_ext+ '.casabox'
-                    logging.info(f"Successfully ran pybdsf on {imagename_final}.")
-                else:
-                    logging.info(f"Masking using PYBDSF not requested")
-                    mask = ''
-            except Exception as e:
-                logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
+            # # Run PYBDSF if requested
+            # try:
+            #     logging.info(f"Running pybdsf on {imagename_final}...")
+            #     if self.use_pybdsf:
+            #         Utils.pybdsf(imagename_final+ image_ext, self.pybdsf_threshold)
+            #         mask = imagename_final+ image_ext+ '.casabox'
+            #         logging.info(f"Successfully ran pybdsf on {imagename_final}.")
+            #     else:
+            #         logging.info(f"Masking using PYBDSF not requested")
+            #         mask = ''
+            # except Exception as e:
+            #     logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
 
 
     # def applycal_target():
@@ -1580,16 +1619,17 @@ def configure_parameters():
     """Configure the parameters for self-calibration."""
     return {
         'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal'),
-        'nloops': 1,
+        'nloops': 2,
         'thresholds': ['', 4, 4,4,4,4 ],
         'calmode': ['', 'p','p','p','ap','ap'],
         'gaintype': ['', 'G' ,'G','G','G','G'],
         'solint': ['', '300s','90s','60s','300s','240s'],
         'minsnr': ['', 2, 2, 2, 2, 2],
-        'avgtime': '',
+        'avgtime': '6s',
         'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
+        # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/K2-18.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
@@ -1608,7 +1648,7 @@ def prepare_data(working_directory, msname, avgtime, width,fieldname):
         msname_split = MeasurementSetProcessor.prepare_measurement_set(
             msname=msname, 
             fieldname=field, 
-            split_required=True, 
+            split_required= True, 
             avgtime=avgtime, 
             width=width
         )
@@ -1652,13 +1692,14 @@ def perform_selfcalibration(vis, parameters):
         deconvolver='mtmfs',
         weighting='briggs',
         robust=0.5,
-        use_pybdsf=True,
-        pybdsf_threshold=23.5,
+        use_pybdsf=False, # leave as False -- mask from pybdsf is weird
+        masking_threshold=7,
+        pybdsf_threshold=5,
         overwrite=False,
         parallel = True,
-        outlierfile = parameters['outlierfile'],
+        # outlierfile = parameters['outlierfile'],
         make_final_image=False,
-        pbcorrect = True
+        pbcorrect = False
     )
     self_calibration_tclean.selfcal()
 
