@@ -202,37 +202,43 @@ class Utils():
     #     return regionfile
     
     @staticmethod
-    def make_mask(fits_file,rms, threshold):
+    def make_mask(fits_file, rms, threshold):
         """
         This function reads a FITS file, masks all values above the given RMS threshold,
-        and writes the mask as a new FITS file.
+        and writes the mask as a new FITS file, retaining the WCS and header information.
 
         Parameters:
         -----------
         fits_file : str
             The path to the input FITS file.
-        rms_threshold : float
-            The RMS threshold value above which pixels will be masked.
-    
+        rms : float
+            The RMS value for scaling the threshold.
+        threshold : float
+            The multiplicative factor for the RMS threshold to create the mask.
+
+        Returns:
+        --------
+        output_file : str
+            The path to the output FITS mask file.
         """
         with fits.open(fits_file) as hdul:
-            data = hdul[0].data  
+            data = hdul[0].data
+            header = hdul[0].header
 
         if data is None:
             raise ValueError("No image data found in the FITS file.")
 
-        mask = data > threshold*rms
+        mask = data > (threshold * rms)
         mask = mask.astype(np.int16)
-        hdu = fits.PrimaryHDU(mask)  
-        output_file = fits_file.replace('.fits','_masking.fits')
-        hdu.writeto(output_file, overwrite=True)  
+        hdu = fits.PrimaryHDU(data=mask, header=header)
 
+        output_file = fits_file.replace('.fits', '_masking.fits')
+        hdu.writeto(output_file, overwrite=True)
         logging.info(f"Mask saved to {output_file}")
 
         return output_file
 
-
-    
+        
 
 
 class MeasurementSetProcessor:
@@ -1693,7 +1699,7 @@ def perform_selfcalibration(vis, parameters):
         weighting='briggs',
         robust=0.5,
         use_pybdsf=False, # leave as False -- mask from pybdsf is weird
-        masking_threshold=7,
+        masking_threshold=8,
         pybdsf_threshold=5,
         overwrite=False,
         parallel = True,
