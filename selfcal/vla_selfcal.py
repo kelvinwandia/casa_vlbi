@@ -904,7 +904,7 @@ class PlottingRoutines:
     """
 
 
-    def __init__(self, imagename,color='magma',figsize=(10,8)):
+    def __init__(self, imagename,color='magma_r',figsize=(10,8)):
         """
         Initialize the ImageProcessor class.
 
@@ -943,19 +943,82 @@ class PlottingRoutines:
         pa = imaging_beam.pa.to(u.deg).value  
 
         return (bmaj, bmin, pa)
+    
+    def set_rc_params():
+        """
+        Global configuration for matplotlib.pyplot.
+        Set various parameters to improve the default style and readability of plots.
+        """
+        import matplotlib as mpl
 
+        mpl.rcParams.update({
+            # General figure settings
+            'figure.figsize': (8, 6),
+            'axes.titlesize': 16,
+            'axes.labelsize': 16,
+            'axes.linewidth': 1.5,
+            'axes.edgecolor': 'orange',
+            'axes.spines.right': True,
+            'axes.grid': True,
+            'axes.grid.which': 'major',
+            'axes.grid.axis': 'both',
+
+            # Font and text settings
+            'font.size': 16,
+            'font.family': 'sans-serif',
+            'font.weight': 'medium',
+            'mathtext.fontset': 'stix',
+            'text.usetex': False,  # Disable LaTeX for faster rendering
+
+            # Tick settings
+            'xtick.labelsize': 16,
+            'ytick.labelsize': 16,
+            'xtick.major.width': 1,
+            'ytick.major.width': 1,
+
+            # Line and legend settings
+            'lines.linewidth': 2,
+            'legend.fontsize': 14,
+            'legend.framealpha': 1.0,
+
+            # Grid settings
+            'grid.linestyle': '--',
+            
+            # Additional styling
+            'axes.titleweight': 'medium',
+        })
         
     def plot_image_with_beam(self):
             """
             Plot the FITS image and place the beam at the bottom-left corner.
             """
+
+            from astropy.visualization import simple_norm
+
             # Read the FITS file data
             hdu = fits.open(self.imagename)
             image_data = hdu[0].data[0, 0, :, :] 
             header = hdu[0].header
             w = WCS(header, naxis=2)
             fig, ax = plt.subplots(figsize=self.figsize, subplot_kw={'projection': w})
-            im = ax.imshow(image_data, cmap=self.color, origin='lower', interpolation='none')
+   
+            num_contours = 5
+            image_rms = imstat(imagename=self.imagename)['rms'][0]
+            peak_flux = imstat(imagename=self.imagename)['max'][0]
+            extent = None
+            vmax = 1.05*peak_flux
+            vmin = 1*image_rms
+
+
+            # # Define the contour color palette
+            contour_palette_ = ['#000000', '#444444', '#666666', '#EEEEEE', '#EEEEEE', '#FFFFFF']
+            contour_palette = contour_palette_ if '_r' in color_map else contour_palette_[::-1]
+
+            # # Set normalization for plotting
+            norm0 = simple_norm(image_data, stretch='linear', max_percent=99.0)
+            norm = simple_norm(image_data, stretch='linear', asinh_a=0.02, min_cut=vmin, max_cut=vmax)
+
+            im = ax.imshow(image_data, cmap=self.color, origin='lower', norm=norm)
             ax.coords[0].set_auto_axislabel(True) 
             ax.coords[1].set_auto_axislabel(True) 
             shape = header['NAXIS1'], header['NAXIS2']
@@ -966,6 +1029,9 @@ class PlottingRoutines:
             y_pos = (relative_y / 320) * shape[1]  
             beam_ellipse = patches.Ellipse(
                 (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor='white', facecolor='none', lw=2)
+            
+
+
             ax.add_patch(beam_ellipse)
             ax.set_xlabel('RA (J2000)', size=14)
             ax.set_ylabel('Dec (J2000)', size=14)
@@ -978,6 +1044,26 @@ class PlottingRoutines:
             cbar.formatter.set_powerlimits((-3, 3))
             cbar.update_ticks()
             # plt.show()
+
+            # # Set contour levels
+            levels_low = np.asarray([4 * image_rms, 3 * image_rms])
+            levels_g = np.geomspace(2.0 * peak_flux, 5 * image_rms, num_contours)
+            neg_levels = np.asarray([-3])
+            levels_neg = neg_levels * image_rms
+
+            # Draw positive contours
+            contour = ax.contour(image_data, levels=levels_g[::-1], colors=contour_palette, linewidths=1.2, extent=extent, alpha=1.0)
+
+            # Draw low-level contours
+            contour = ax.contour(image_data, levels=levels_low[::-1], colors='brown', linewidths=1.0, extent=extent, alpha=1.0)
+
+            # Draw negative contours (if any)
+            try:
+                ax.contour(image_data, levels=levels_neg[::-1], colors='k', linewidths=1.0, extent=extent, alpha=1.0)
+            except Exception as e:
+                print(f"Error while plotting negative contours: {e}")
+
+            plt.tight_layout()
             plt.savefig(self.imagename.replace('.fits','.pdf'),dpi=300)
 
 
@@ -1009,7 +1095,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
         delmod(vis=self.msname, otf=True)
 
         for selfcal_loop in range(self.nloops):
-            caltable = f'{self.msname.replace(".ms", "_caltable_loop")}_{selfcal_loop}.gcal'
+            caltable = f'{self.msname.replace(".ms", f"_caltable_loop")}_{selfcal_loop}.gcal'
             prev_caltables = sorted(glob.glob('*.gcal'))
 
             # Apply previous calibration tables if they exist and if it's not the dirty map loop
@@ -1251,6 +1337,8 @@ class SelfCalibrationTclean(tclean_Imager):
                 logging.info(f"Imaging {self.msname} to make: {self.imagename}")
                 imager_instance.imager()
 
+
+
                 # Check if primary beam correction is requested and call the method
                 if self.pbcorrect:
                     logging.info(f"Primary beam correction requested, applying pbcorr.")
@@ -1260,6 +1348,10 @@ class SelfCalibrationTclean(tclean_Imager):
                 image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
                 fitsimage = imagename_dirty+ image_ext + '.fits'
                 exportfits(imagename=imagename_dirty + image_ext, fitsimage=fitsimage, overwrite=True)
+
+                """ Plot image """
+                plotter = PlottingRoutines(imagename = fitsimage)
+                plotter.plot_image_with_beam()
                 
                 """ Make a masking file """
                 image_rms = imstat(fitsimage)['rms'][0]
@@ -1313,6 +1405,13 @@ class SelfCalibrationTclean(tclean_Imager):
                     outlierfile=self.outlierfile,
                 )
                 imager_instance.imager()
+
+                image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
+                fitsimage = imagename + '.fits'
+                exportfits(imagename=imagename + image_ext, fitsimage=fitsimage, overwrite=True)
+
+                plotter = PlottingRoutines(imagename = fitsimage)
+                plotter.plot_image_with_beam()
                 
 
                 # Perform gain calibration only if this is not the dirty map loop
@@ -1370,14 +1469,14 @@ class SelfCalibrationTclean(tclean_Imager):
                             plotms(
                                 vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
                                 iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                                plotfile=caltable.replace('.gcal', f'_phase_{color}_.png'), dpi=300, width=3000, height=1500,
+                                plotfile=caltable.replace('.gcal', f'{self.solint[selfcal_loop]}_phase_{color}_.png'), dpi=300, width=1500, height=750,
                             )
 
                     else:
                           plotms(
                                     vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
                                     iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                                    plotfile=caltable.replace('.gcal', f'_amp_{color}_.png'), dpi=300, width=3000, height=1500,
+                                    plotfile=caltable.replace('.gcal', f'{self.solint[selfcal_loop]}_amp_{color}_.png'), dpi=300, width=1500, height=750,
                                 )
 
                 # Apply calibration tables after the last self-calibration loop
@@ -1605,18 +1704,18 @@ def configure_parameters():
     """Configure the parameters for self-calibration."""
     return {
         'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal'),
-        'nloops': 6,
-        'thresholds': ['', 4, 4,4,4,4 ],
-        'calmode': ['', 'p','p','p','ap','ap'],
-        'gaintype': ['', 'G' ,'G','G','G','G'],
-        'solint': ['', '96s','48s','12s','192s','96s'],
-        'minsnr': ['', 2, 2, 2, 2, 2],
-        'avgtime': '',
+        'nloops': 5,
+        'thresholds': ['', 4, 4,4,4],
+        'calmode': ['', 'p','p','p','ap'],
+        'gaintype': ['', 'G' ,'G','G','G'],
+        'solint': ['', '300s','60s','30s','300s'],
+        'minsnr': ['', 2, 2, 2, 2,],
+        'avgtime': '4s',
         'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
-        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/K2-18.ms'  
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
         'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
@@ -1735,6 +1834,7 @@ def process_and_plot_image(vis, parameters):
     # plotter.plot_image_with_beam()
 
 
+@Utils.time_execution
 def main():
     """Main entry point for the script."""
     setup_logging()
