@@ -904,7 +904,7 @@ class PlottingRoutines:
     """
 
 
-    def __init__(self, imagename,color='magma_r',figsize=(10,8)):
+    def __init__(self, imagename,color='magma',figsize=(10,8)):
         """
         Initialize the ImageProcessor class.
 
@@ -1012,7 +1012,7 @@ class PlottingRoutines:
 
             # # Define the contour color palette
             contour_palette_ = ['#000000', '#444444', '#666666', '#EEEEEE', '#EEEEEE', '#FFFFFF']
-            contour_palette = contour_palette_ if '_r' in color_map else contour_palette_[::-1]
+            contour_palette = contour_palette_ if '_r' in self.color else contour_palette_[::-1]
 
             # # Set normalization for plotting
             norm0 = simple_norm(image_data, stretch='linear', max_percent=99.0)
@@ -1703,22 +1703,22 @@ def configure_parameters():
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal'),
+        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
         'nloops': 5,
         'thresholds': ['', 4, 4,4,4],
         'calmode': ['', 'p','p','p','ap'],
         'gaintype': ['', 'G' ,'G','G','G'],
         'solint': ['', '300s','60s','30s','300s'],
         'minsnr': ['', 2, 2, 2, 2,],
-        'avgtime': '4s',
+        'avgtime': '',
         'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
-        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
-        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
     }
 
 
