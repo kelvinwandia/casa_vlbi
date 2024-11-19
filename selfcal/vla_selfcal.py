@@ -1295,7 +1295,18 @@ class SelfCalibrationTclean(tclean_Imager):
                 image_rms = imstat(fitsimage)['rms'][0]
                 global masking_file
                 masking_file = Utils.make_mask(fits_file=fitsimage, rms=image_rms, threshold=self.masking_threshold)
-                
+                # (Regrid the mask to match the image if necessary)
+                masking_image = masking_file.replace('.fits', '.im')
+                importfits(fitsimage=masking_file,imagename=masking_image,overwrite=True)
+                makemask(
+                    mode='copy',
+                    inpimage=masking_image,
+                    inpmask=masking_image,
+                    output=imagename_dirty + '.mask', 
+                )
+
+                masking_file = imagename_dirty + '.mask'
+                                
 
                 # # Run PYBDSF if requested
                 # try:
