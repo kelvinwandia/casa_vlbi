@@ -1,7 +1,7 @@
 
 import os, glob, subprocess, time, bdsf, logging, math
 from typing import Callable, Any
-import casatools, casalogger
+import casatools
 import matplotlib.pyplot as plt
 from datetime import datetime
 import matplotlib.patches as patches
@@ -538,7 +538,8 @@ class tclean_Imager:
                  weighting: str = 'natural', robust: float = 0, nterms: int = 1, imsize: int = 640,
                  niter: int = 0, threshold: str = None, wprojplanes: int = 1, mask: str = '', imagename: str = None,
                  usemask: str = 'user', pblimit: float = 0.1,phasecenter: str = '', overwrite:bool = False, 
-                 use_pybdsf:bool = True, pybdsf_threshold: int = 5,cell:list = None):
+                 use_pybdsf:bool = True, pybdsf_threshold: int = 5,cell:list = None,parallel:bool = False,
+                 outlierfile:str = None, pbcorrect:bool = False):
         """
         Initializes the tclean_Imager instance with specified parameters.
 
@@ -582,6 +583,12 @@ class tclean_Imager:
             Calls pybdsf and uses it for masking
         pybdsf_threshold: int, optional
             Masking threshold
+        parallel: bool (default is False)
+            Use MPI for imaging
+        outlierfile: str (default is empty)
+            "Outlier fields to image"
+        pbcorrect: bool 
+            "Correct the primary beam using widebandpbcor
 
         """
         self.msname = msname  
@@ -602,9 +609,13 @@ class tclean_Imager:
         self.overwrite = overwrite
         self.use_pybdsf = use_pybdsf
         self.pybdsf_threshold = pybdsf_threshold
-
+        self.parallel = parallel
+        self.pbcorrect = pbcorrect
+        
+        self.outlierfile = outlierfile if outlierfile else ""  
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
         
+        logging.info(f"Using outlierfile: {self.outlierfile if self.outlierfile else 'None'}")
 
         if cell is not None:
             self.cell = cell
@@ -664,7 +675,6 @@ class tclean_Imager:
             self.threshold = 0.0
         elif isinstance(self.threshold, int):
            self.threshold = float(self.threshold)
-
         tclean(
             vis=self.msname,
             imagename=self.imagename,
@@ -682,10 +692,33 @@ class tclean_Imager:
             usemask=self.usemask,
             pblimit=self.pblimit,
             field = self.field,
+            parallel = self.parallel,
+            outlierfile = self.outlierfile,
             interactive=False,
+            
         )
 
         logging.info(f"Finished imaging {self.msname}, created image: {self.imagename}")
+
+
+
+    def pbcorr(self) -> None:
+        """
+        Perform primary beam correction using widebandpbcor.
+
+        This method applies primary beam correction to the imaged data using the widebandpbcor function.
+        
+        Returns:
+        -------
+        None
+        """
+        widebandpbcor(
+            vis=self.msname,
+            imagename=self.imagename,
+            nterms=2,
+            action='pbcor',
+        )
+        logging.info(f"Applied primary beam correction to {self.imagename}.")
 
         # if self.deconvolver == 'mtmfs':
         #     image_ext = '.image.tt0'
@@ -702,6 +735,7 @@ class tclean_Imager:
         # #         logging.info(f"Masking using PYBDSF not requested")
         # # except Exception as e:
         # #     logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
+
 
 
 class WSClean_Imager:
@@ -941,7 +975,7 @@ class PlottingRoutines:
 
 class SelfCalibrationWSClean(WSClean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant=None, final_image: bool = False, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant=None, final_image: bool = False, pbcorrect:bool = False, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -950,7 +984,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
         self.solint = solint
         self.minsnr = minsnr
         self.final_image = final_image
-
+        self.pbcorrect = pbcorrect
 
 
         self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
@@ -994,7 +1028,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     cell = self.cell,
                     niter = 1, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                     )
-                # imager_instance.imager()
+                imager_instance.imager()
 
                 plotter = PlottingRoutines(imagename = imagename_dirty + '-image.fits')
                 plotter.plot_image_with_beam()
@@ -1077,6 +1111,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                         minsnr=self.minsnr[selfcal_loop],
                         calmode=self.calmode[selfcal_loop],
                         minblperant = minblperant,
+                        # combine ='spw',
                         append=False,
                         parang=False)
                 # except Exception as e:
@@ -1150,7 +1185,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
 class SelfCalibrationTclean(tclean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, make_final_image:bool = True, refant=None, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -1158,6 +1193,7 @@ class SelfCalibrationTclean(tclean_Imager):
         self.gaintype = gaintype
         self.solint = solint
         self.minsnr = minsnr
+        self.make_final_image = make_final_image
 
 
         self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
@@ -1201,10 +1237,16 @@ class SelfCalibrationTclean(tclean_Imager):
                     mask=mask,
                     weighting = self.weighting,
                     robust = self.robust,
-                    overwrite=self.overwrite
+                    overwrite=self.overwrite,
+                    outlierfile = self.outlierfile,
                 )
                 logging.info(f"Imaging {self.msname} to make: {self.imagename}")
                 imager_instance.imager()
+
+                            # Check if primary beam correction is requested and call the method
+                if self.pbcorrect:
+                    logging.info(f"Primary beam correction requested, applying pbcorr.")
+                    imager_instance.pbcorr()  # Call the pbcorr method
 
                 # Export dirty map to FITS after it has been created
                 image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
@@ -1242,9 +1284,11 @@ class SelfCalibrationTclean(tclean_Imager):
                     weighting = self.weighting,
                     robust = self.robust,
                     mask=mask,
-                    overwrite=self.overwrite
+                    overwrite=self.overwrite,
+                    outlierfile=self.outlierfile,
                 )
                 imager_instance.imager()
+                
 
                 # Perform gain calibration only if this is not the dirty map loop
                 logging.info("Adding model column to data")
@@ -1317,47 +1361,48 @@ class SelfCalibrationTclean(tclean_Imager):
                     logging.info("Applying the caltable derived from last gaincal iteration")
                     applycal(vis=self.msname, gaintable=prev_caltables, parang=False)
 
-        ## Generate a final mask of sources to peel -- optional
-        imagename_final = self.imagename+'_final_clean'
-        logging.info("Making final image with all selfcal corrections applied")
-        
-        self.niter = 1000000  # Can be modified to set a new value if needed
-        self.threshold = '0.001mJy'
-        self.use_pybdsf = False
+        if self.make_final_image:
+            ## Generate a final mask of sources to peel -- optional
+            imagename_final = self.imagename+'_final_clean'
+            logging.info("Making final image with all selfcal corrections applied")
+            
+            self.niter = 1000000  # Can be modified to set a new value if needed
+            self.threshold = '0.001mJy'
+            self.use_pybdsf = False
 
-        # Initialize imager_instance with required parameters for self-calibration
-        imager_instance = tclean_Imager(
-            msname=self.msname,
-            imagename=imagename_final,
-            nterms=self.nterms,
-            imsize=self.imsize,
-            niter=self.niter,
-            deconvolver=self.deconvolver,
-            threshold=self.thresholds[selfcal_loop],
-            mask=mask,
-            cell = self.cell,
-            weighting = self.weighting,
-            robust = self.robust,
-            overwrite=self.overwrite
-        )
-        imager_instance.imager()
+            # Initialize imager_instance with required parameters for self-calibration
+            imager_instance = tclean_Imager(
+                msname=self.msname,
+                imagename=imagename_final,
+                nterms=self.nterms,
+                imsize=self.imsize,
+                niter=self.niter,
+                deconvolver=self.deconvolver,
+                threshold=self.thresholds[selfcal_loop],
+                mask=mask,
+                cell = self.cell,
+                weighting = self.weighting,
+                robust = self.robust,
+                overwrite=self.overwrite
+            )
+            imager_instance.imager()
 
-        # Export dirty map to FITS after it has been created
-        image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
-        exportfits(imagename=imagename_final + image_ext, fitsimage=imagename_final+ image_ext + '.fits', overwrite=True)
+            # Export dirty map to FITS after it has been created
+            image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
+            exportfits(imagename=imagename_final + image_ext, fitsimage=imagename_final+ image_ext + '.fits', overwrite=True)
 
-        # Run PYBDSF if requested
-        try:
-            logging.info(f"Running pybdsf on {imagename_final}...")
-            if self.use_pybdsf:
-                Utils.pybdsf(imagename_final+ image_ext, self.pybdsf_threshold)
-                mask = imagename_final+ image_ext+ '.casabox'
-                logging.info(f"Successfully ran pybdsf on {imagename_final}.")
-            else:
-                logging.info(f"Masking using PYBDSF not requested")
-                mask = ''
-        except Exception as e:
-            logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
+            # Run PYBDSF if requested
+            try:
+                logging.info(f"Running pybdsf on {imagename_final}...")
+                if self.use_pybdsf:
+                    Utils.pybdsf(imagename_final+ image_ext, self.pybdsf_threshold)
+                    mask = imagename_final+ image_ext+ '.casabox'
+                    logging.info(f"Successfully ran pybdsf on {imagename_final}.")
+                else:
+                    logging.info(f"Masking using PYBDSF not requested")
+                    mask = ''
+            except Exception as e:
+                logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
 
 
     # def applycal_target():
@@ -1534,20 +1579,24 @@ def configure_parameters():
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/working_dir/23B-307.sb44616223.eb44871184.60286.71989133102'),
-        'nloops': 6,
-        'thresholds': ['', 18, 9, 7, 5,3],
-        'calmode': ['', 'p', 'p', 'p', 'ap','ap'],
-        'gaintype': ['', 'G', 'G', 'G', 'G','G'],
-        'solint': ['', 'inf', '90s', '60s', 'inf','240s'],
-        'minsnr': ['', 3, 3, 3, 3, 3],
-        'avgtime': '2s',
-        'width': 4,
+        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal'),
+        'nloops': 1,
+        'thresholds': ['', 4, 4,4,4,4 ],
+        'calmode': ['', 'p','p','p','ap','ap'],
+        'gaintype': ['', 'G' ,'G','G','G','G'],
+        'solint': ['', '300s','90s','60s','300s','240s'],
+        'minsnr': ['', 2, 2, 2, 2, 2],
+        'avgtime': '',
+        'width': 1,
         'fieldname':fieldnames,
-        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/K2-18.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
-        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
+        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
     }
+
+
 
 
 def prepare_data(working_directory, msname, avgtime, width,fieldname):
@@ -1578,16 +1627,16 @@ def perform_selfcalibration(vis, parameters):
         gaintype=parameters['gaintype'],
         solint=parameters['solint'],
         minsnr=parameters['minsnr'],
-        imsize=320,
+        imsize=640,
         niter=10000000,
         use_pybdsf=True,
-        pybdsf_threshold=3,
+        pybdsf_threshold=10,
         overwrite=False,
         final_image=True,
         # refant = 'EF' ,
-        # cell = '4.6arcsec' 
+        # cell = '3arcsec' 
     )
-    self_calibration_wsclean.selfcal()
+    # self_calibration_wsclean.selfcal()
 
     self_calibration_tclean = SelfCalibrationTclean(
         msname=vis,
@@ -1597,17 +1646,21 @@ def perform_selfcalibration(vis, parameters):
         gaintype=parameters['gaintype'],
         solint=parameters['solint'],
         minsnr=parameters['minsnr'],
-        imsize=320,
+        imsize=640,
         niter=1000,  
         nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
         robust=0.5,
         use_pybdsf=True,
-        pybdsf_threshold=5,
-        overwrite=False
+        pybdsf_threshold=23.5,
+        overwrite=False,
+        parallel = True,
+        outlierfile = parameters['outlierfile'],
+        make_final_image=False,
+        pbcorrect = True
     )
-    # self_calibration_tclean.selfcal()
+    self_calibration_tclean.selfcal()
 
 
 
@@ -1650,9 +1703,9 @@ def process_and_plot_image(vis, parameters):
     peeled_source_image.imager()
 
     # Plotting and further processing
-    processor.imagename = peeled_image + '-image.fits'
-    plotter = PlottingRoutines(imagename=peeled_image + '-image.fits')
-    plotter.plot_image_with_beam()
+    # processor.imagename = peeled_image + '-image.fits'
+    # plotter = PlottingRoutines(imagename=peeled_image + '-image.fits')
+    # plotter.plot_image_with_beam()
 
 
 def main():
@@ -1664,7 +1717,8 @@ def main():
 
     # fieldname = parameters.get('fieldnames', ['target', 'phasecalibrator'])
     fieldname = parameters.get('fieldname') 
-    msname = prepare_data(parameters['working_directory'], parameters['msname'], parameters['avgtime'], parameters['width'],fieldname=fieldname)
+    msname = prepare_data(parameters['working_directory'], parameters['msname'], 
+                          parameters['avgtime'], parameters['width'],fieldname=fieldname)
 
     vis = msname[0]
 
