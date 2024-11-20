@@ -54,11 +54,11 @@ def attach_tsys_gc():
         extracted_dir = helper_scripts.strip('.zip')
         if os.path.exists(extracted_dir):
             shutil.move(extracted_dir, helper_scripts_dir)
-            logging.info("======>>> renamed to casa-vlbi")
+            logging.info("renamed to casa-vlbi")
         else:
-            logging.info("======>>> Extraction failed or the directory was not found.")
+            logging.error("Extraction failed or the directory was not found.")
     else:
-        logging.info("======>>> JIVE helper scripts already downloaded: ", helper_scripts_dir)
+        logging.info("JIVE helper scripts already downloaded: ", helper_scripts_dir)
 
     # Append the helper scripts directory to sys.path
     sys.path.append(helper_scripts_dir)
@@ -67,16 +67,16 @@ def attach_tsys_gc():
     try:
         from casavlbitools.fitsidi import append_tsys, append_gc, convert_flags
         from casavlbitools.casa import convert_gaincurve
-        logging.info("======>>> imported casa-vlbi tools.")
+        logging.info("imported casa-vlbi tools.")
     except ImportError as e:
-        logging.error(f"======>>> importing casa-vlbi tools: {e}")
+        logging.error(f"importing casa-vlbi tools: {e}")
         sys.exit(1)
 
     # Check for UVFLG file and print
     if os.path.exists(uvflg_file):
-        logging.info(f"======>>> UVFLG File: {uvflg_file}")
+        logging.info(f"UVFLG File: {uvflg_file}")
     else:
-        logging.info("======>>> No uvflg file found")
+        logging.warning("No uvflg file found")
 
 
     fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1.IDI*'))
@@ -85,9 +85,9 @@ def attach_tsys_gc():
     # Convert flags
     try:
         convert_flags(infile=uvflg_file, idifiles=fitsidifiles, outfp=sys.stdout, outfile='{}_apriori.flag'.format(experiment))
-        logging.info("======>>> Flag conversion completed.")
+        logging.info("Flag conversion completed.")
     except Exception as e:
-        logging.info(f"======>>> Error during flag conversion: {e}")
+        logging.warning(f"Error during flag conversion: {e}")
 
 
     """ To remove all GC and TSYS"""
@@ -151,7 +151,7 @@ def attach_tsys_gc():
         hdul.close()
         
     # # Print the filenames that do not contain the 'SYSTEM_TEMPERATURE' extension
-    # logging.info("======>>> Filenames with missing 'SYSTEM_TEMPERATURE' extension:", missing_extensions)
+    # logging.info("Filenames with missing 'SYSTEM_TEMPERATURE' extension:", missing_extensions)
 
 
 def check_pols(vis):
@@ -178,8 +178,8 @@ def makems(vis,splitvis=None):
     fitsidifiles = natsorted(fitsfiles)
 
     if use_casa == True:
-        logging.info("======>>> use CASA has been requested")
-        logging.info("======>>> Assuming TSYS and GC already attached to fitsidifiles")
+        logging.info("use CASA has been requested")
+        logging.info("Assuming TSYS and GC already attached to fitsidifiles")
         if not os.path.exists(vis):
             print(f"Making {vis}")
             importfitsidi(
@@ -192,7 +192,7 @@ def makems(vis,splitvis=None):
             check_pols(vis)
 
     else:
-        logging.info("======>>> Using UVFITS from AIPS")
+        logging.info("Using UVFITS from AIPS")
         logging.info(f"======>>>Using {uvfits_file}")
         if not os.path.exists(vis):
             logging.info(f"======>>>Making {vis}")
@@ -286,7 +286,7 @@ def plot_check_baddata(save_as=None):
         os.makedirs(flags_dir)
 
 
-    logging.info("======>>> Plot visibilities to check bad data")
+    logging.info("Plot visibilities to check bad data")
 
     sources = [phase_calibrator,target]
 
@@ -297,7 +297,7 @@ def plot_check_baddata(save_as=None):
                 spw=str(spw),gridrows=3, plotfile=plotfile, width=1500, height=750, dpi=300, showgui=False, 
                 overwrite=True)
 
-    logging.info("======>>> Finished plotting the visibilities")
+    logging.info("Finished plotting the visibilities")
 
 def get_number_of_threads():
     try:
