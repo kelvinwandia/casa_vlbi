@@ -298,6 +298,12 @@ class MeasurementSetProcessor:
             # Otherwise, proceed with splitting even if only one field exists
             timebin = avgtime if avgtime is not None else MeasurementSetProcessor.default_timebin
             split_width = width if width is not None else MeasurementSetProcessor.default_width
+            
+            if avgtime is None:
+                logging.warning(f"Default timebin '{timebin}' is being used for splitting.")
+            if width is None:
+                logging.warning(f"Default split width '{split_width}' is being used for splitting.")
+
 
             current_working_dir = os.getcwd()
             if isinstance(fieldname, str):
@@ -307,7 +313,7 @@ class MeasurementSetProcessor:
                 for field in fieldname:
                    
                     if field in field_names:
-                        outputvis = os.path.join(current_working_dir, f"{field}_split_{timebin}_{split_width}.ms")
+                        outputvis = os.path.join(os.getcwd(), f"{field}_split{'_' + timebin if timebin else ''}{'_' + str(split_width) if split_width != 1 else ''}.ms")
                         if not os.path.exists(outputvis):
                             logging.info(f"Splitting {msname} to {outputvis} with timebin={timebin} and width={split_width}")
                             split(vis=msname, outputvis=outputvis, datacolumn='corrected',
@@ -323,7 +329,7 @@ class MeasurementSetProcessor:
             else:
                 # If no specific field is given, split all fields
                 for field in field_names:
-                    outputvis = os.path.join(current_working_dir, f"{field}_split_{timebin}_{split_width}.ms")
+                    outputvis = os.path.join(os.getcwd(), f"{field}_split{'_' + timebin if timebin else ''}{'_' + str(split_width) if split_width != 1 else ''}.ms")
                     if not os.path.exists(outputvis):
                         logging.info(f"Splitting {msname} to {outputvis} with timebin={timebin} and width={split_width}")
                         split(vis=msname, outputvis=outputvis, datacolumn='corrected',
@@ -341,6 +347,176 @@ class MeasurementSetProcessor:
             msmd.close()
 
         return outputvis
+
+# class MeasurementSetProcessor:
+#     """
+#     Class to process a measurement set.
+
+#     Attributes:
+#         default_timebin (str): Default time averaging interval. Defaults to '10s'.
+#         default_width (int): Default channel averaging width. Defaults to 4.
+#     """
+
+#     default_timebin: str = '10s'
+#     default_width: int = 4
+
+#     @staticmethod
+#     @Utils.time_execution
+#     def prepare_measurement_set(
+#         msname: str,
+#         fieldname: Union[str, List[str]] = None,
+#         split_required: bool = True,
+#         avgtime: str = None,
+#         width: int = None,
+#         make_mms: bool = False
+#     ) -> Tuple[str, ...]:
+#         """
+#         Prepare a measurement set by optionally splitting it into individual fields or creating an MMS.
+
+#         Parameters:
+#             msname (str): Path to the measurement set file.
+#             fieldname (str or list, optional): Specific field(s) to split. If None, all fields are split.
+#             split_required (bool): Whether splitting is required. Defaults to True.
+#             avgtime (str, optional): Custom time averaging interval. Defaults to `default_timebin`.
+#             width (int, optional): Custom channel averaging width. Defaults to `default_width`.
+#             make_mms (bool): Whether to partition the measurement set into an MMS. Defaults to False.
+
+#         Returns:
+#             Tuple[str, ...]: A tuple of paths to processed measurement set files.
+#         """
+#         msmd = casatools.msmetadata()
+#         outputvis_list = []
+
+#         try:
+#             # Resolve full path of the input measurement set
+#             msname = os.path.abspath(msname)
+
+#             # Generate list of fields
+#             msmd.open(msname)
+#             field_names = msmd.fieldnames()
+#             logging.info(f"Fields found in {msname}: {field_names}")
+
+#             # Handle no splitting scenario
+#             if not split_required:
+#                 logging.info("Splitting not required. Checking MMS creation.")
+#                 if make_mms:
+#                     return MeasurementSetProcessor._create_mms(msname, avgtime, width)
+#                 return (msname,)
+
+#             # Handle field selection
+#             if fieldname is not None:
+#                 fieldname = [fieldname] if isinstance(fieldname, str) else fieldname
+#                 missing_fields = [f for f in fieldname if f not in field_names]
+#                 if missing_fields:
+#                     logging.warning(f"Field(s) not found in {msname}: {missing_fields}")
+#                 fieldname = [f for f in fieldname if f in field_names]
+#             else:
+#                 fieldname = field_names
+
+#             # Set averaging parameters
+#             timebin = avgtime if avgtime is not None else MeasurementSetProcessor.default_timebin
+#             split_width = width if width is not None else MeasurementSetProcessor.default_width
+#             if avgtime is None:
+#                 logging.warning(f"Default timebin '{timebin}' is being used for splitting.")
+#             if width is None:
+#                 logging.warning(f"Default split width '{split_width}' is being used for splitting.")
+
+                
+#             # Split each field
+#             for field in fieldname:
+#                 outputvis = os.path.join(os.getcwd(), f"{field}_split{'_' + timebin if timebin else ''}{'_' + str(split_width) if split_width != 1 else ''}.ms")
+#                 if not os.path.exists(outputvis):
+#                     logging.info(f"Splitting {msname} -> {outputvis} with timebin={timebin} and width={split_width}")
+#                     split(vis=msname, outputvis=outputvis, datacolumn='corrected',
+#                           timebin=timebin, width=split_width, field=field)
+#                     listobs(vis=outputvis, listfile=outputvis.replace('.ms', '_listobs.txt'), overwrite=True)
+#                     logging.info(f"Split completed: {outputvis}")
+#                 else:
+#                     logging.info(f"Output measurement set already exists: {outputvis}")
+#                 outputvis_list.append(outputvis)
+
+#             # Create an MMS if requested
+#             if make_mms:
+#                 return MeasurementSetProcessor._create_mms(msname,fieldname, avgtime, width)
+
+#         except Exception as e:
+#             logging.error(f"Error during measurement set processing: {e}")
+#         finally:
+#             msmd.close()
+
+#         return outputvis_list
+
+#     @staticmethod
+#     def _create_mms(outputvis: str, fieldname: str = None, avgtime: str = None, width: int = None) -> Tuple[str]:
+#         """
+#         Create a Multi-MS (MMS) from the input measurement set.
+
+#         Parameters:
+#             outputvis (str): Path to the output measurement set to partition.
+#             fieldname (str, optional): Field name to process. If None, process all fields.
+#             avgtime (str, optional): Time averaging interval. Defaults to `default_timebin`.
+#             width (int, optional): Channel averaging width. Defaults to `default_width`.
+
+#         Returns:
+#             Tuple[str]: Path to the created MMS.
+#         """
+#         partitioned_ms_list = []
+
+#         # Defaults for timebin and width
+#         timebin = avgtime if avgtime else MeasurementSetProcessor.default_timebin
+#         chanbin = width if width else MeasurementSetProcessor.default_width
+
+#         if avgtime is None:
+#             logging.warning(f"Default timebin '{timebin}' is being used for splitting.")
+#         if width is None:
+#             logging.warning(f"Default split width '{chanbin}' is being used for splitting.")
+
+#         msmd = casatools.msmetadata()
+#         msmd.open(outputvis)
+#         field_name = msmd.fieldnames()
+#         msmd.close()
+
+#         for field in field_name:
+#             partitioned_ms = os.path.join(
+#                 os.getcwd(),
+#                 f"{field}_split{'_' + timebin if timebin else ''}{'_' + str(chanbin) if chanbin != 1 else ''}_partitioned.mms"
+#             )
+
+#             if not os.path.exists(partitioned_ms):
+#                 msmd.open(outputvis)
+#                 scans = msmd.scansforfield(field)
+#                 nscans = len(scans)
+#                 msmd.close()
+
+#                 # Decide whether to average channels and/or time
+#                 chan_average = 1
+#                 chan_average = chanbin > 1
+#                 time_average = bool(timebin and timebin != '0')
+
+#                 logging.info(f"Creating MMS: {partitioned_ms} with timebin={timebin}, chanbin={chanbin}, scans={nscans}")
+
+#                 mstransform(
+#                     vis=outputvis,
+#                     outputvis=partitioned_ms,
+#                     datacolumn='data',
+#                     createmms=True,
+#                     field=field,
+#                     separationaxis='scan',
+#                     numsubms=nscans,
+#                     timeaverage=time_average,
+#                     chanaverage=chan_average,
+#                     timebin=timebin,
+#                     chanbin=chan_average,
+#                 )
+#                 logging.info(f"MMS creation completed: {partitioned_ms}")
+#             else:
+#                 logging.info(f"MMS already exists: {partitioned_ms}")
+
+#             partitioned_ms_list.append(partitioned_ms)
+
+#         return partitioned_ms_list
+
+
 
 
 class MeasurementSetInfo:
@@ -904,7 +1080,7 @@ class PlottingRoutines:
     """
 
 
-    def __init__(self, imagename,color='magma',figsize=(10,8)):
+    def __init__(self, imagename,color='magma_r',figsize=(8,6)):
         """
         Initialize the ImageProcessor class.
 
@@ -1027,8 +1203,14 @@ class PlottingRoutines:
             relative_y = 15
             x_pos = (relative_x / 320) * shape[0]  
             y_pos = (relative_y / 320) * shape[1]  
+
+            if self.color in ('magma', 'magma_r'):
+                beam_color = 'red'
+            else:
+                beam_color = 'white'
+                
             beam_ellipse = patches.Ellipse(
-                (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor='white', facecolor='none', lw=2)
+                (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor=beam_color, facecolor='none', lw=2)
             
 
 
@@ -1469,14 +1651,14 @@ class SelfCalibrationTclean(tclean_Imager):
                             plotms(
                                 vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
                                 iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                                plotfile=caltable.replace('.gcal', f'{self.solint[selfcal_loop]}_phase_{color}_.png'), dpi=300, width=1500, height=750,
+                                plotfile=caltable.replace('.gcal', f'{selfcal_loop}_phase_{color}_.png'), dpi=300, width=1500, height=750,
                             )
 
                     else:
                           plotms(
                                     vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
                                     iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                                    plotfile=caltable.replace('.gcal', f'{self.solint[selfcal_loop]}_amp_{color}_.png'), dpi=300, width=1500, height=750,
+                                    plotfile=caltable.replace('.gcal', f'{selfcal_loop}_amp_{color}_.png'), dpi=300, width=1500, height=750,
                                 )
 
                 # Apply calibration tables after the last self-calibration loop
@@ -1705,12 +1887,12 @@ def configure_parameters():
     return {
         'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
         'nloops': 5,
-        'thresholds': ['', 4, 4,4,4],
-        'calmode': ['', 'p','p','p','ap'],
-        'gaintype': ['', 'G' ,'G','G','G'],
-        'solint': ['', '300s','60s','30s','300s'],
-        'minsnr': ['', 2, 2, 2, 2,],
-        'avgtime': '',
+        'thresholds': ['', 4 , 4, 4],
+        'calmode': ['','p','p','ap'],
+        'gaintype': ['' ,'G','G','G'],
+        'solint': ['','96s','48s','300s'],
+        'minsnr': ['', 2, 2, 2,],
+        'avgtime': '6s',
         'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
@@ -1735,7 +1917,8 @@ def prepare_data(working_directory, msname, avgtime, width,fieldname):
             fieldname=field, 
             split_required= True, 
             avgtime=avgtime, 
-            width=width
+            width=width,    
+            # make_mms=True,
         )
         msnames.append(msname_split)
 
@@ -1771,8 +1954,8 @@ def perform_selfcalibration(vis, parameters):
         gaintype=parameters['gaintype'],
         solint=parameters['solint'],
         minsnr=parameters['minsnr'],
-        imsize=640,
-        niter=1000,  
+        imsize=320,
+        niter=10000,  
         nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
