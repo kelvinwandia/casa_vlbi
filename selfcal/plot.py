@@ -55,7 +55,19 @@ def set_rc_params():
         'legend.framealpha': 1.0
     })
 
+def get_beam(imagename):
+        """
+        Get the beam in arcsec.
+        """
+        imagename_header = fits.getheader(imagename)
+        imaging_beam = Beam.from_fits_header(imagename_header)
 
+        ## beam in arcsec
+        bmaj = imaging_beam.major.to(u.arcsec).value
+        bmin = imaging_beam.minor.to(u.arcsec).value
+        pa = imaging_beam.pa.to(u.deg).value  
+
+        return (bmaj, bmin, pa)
 
 def plot_image_with_beam(imagename):
         
@@ -94,6 +106,20 @@ def plot_image_with_beam(imagename):
         norm = simple_norm(image_data, stretch='linear', asinh_a=0.02, min_cut=vmin, max_cut=vmax)
 
         im = ax.imshow(image_data, cmap=color_map, origin='lower', norm=norm)
+
+        shape = header['NAXIS1'], header['NAXIS2']
+        bmaj, bmin, pa = get_beam(imagename)
+        relative_x = 15
+        relative_y = 15
+        x_pos = (relative_x / 320) * shape[0]  
+        y_pos = (relative_y / 320) * shape[1]  
+        beam_ellipse = patches.Ellipse(
+                (x_pos,y_pos), width=bmaj, height=bmin, angle=pa, edgecolor='red', facecolor='none', lw=2)
+
+
+
+        ax.add_patch(beam_ellipse)
+
         ax.coords[0].set_auto_axislabel(True) 
         ax.coords[1].set_auto_axislabel(True) 
         # shape = header['NAXIS1'], header['NAXIS2']
@@ -121,30 +147,42 @@ def plot_image_with_beam(imagename):
 
 
         # # Set contour levels
-        levels_low = np.asarray([4 * image_rms, 3 * image_rms])
+        levels_low = np.asarray([5 * image_rms, 2* image_rms])
         levels_g = np.geomspace(2.0 * peak_flux, 5 * image_rms, num_contours)
-        neg_levels = np.asarray([-3])
+        neg_levels = np.asarray([-7])
         levels_neg = neg_levels * image_rms
 
+        # Define contour levels explicitly
+        contour_levels_pos = np.array([ 1, 3, 5, 10, 15]) * image_rms
+        contour_levels_neg = np.array([-3, -1]) * image_rms
+
+
+
         # Draw positive contours
-        contour = ax.contour(image_data, levels=levels_g[::-1], colors=contour_palette, linewidths=1.2, extent=extent, alpha=1.0)
+        # contour = ax.contour(image_data, levels=levels_g[::-1], colors=contour_palette, linewidths=1.2, extent=extent, alpha=1.0)
+        contour = ax.contour(image_data, levels=contour_levels_pos, colors=contour_palette, linewidths=1.2, extent=extent, alpha=1.0)
+
 
         # Draw low-level contours
         contour = ax.contour(image_data, levels=levels_low[::-1], colors='brown', linewidths=1.0, extent=extent, alpha=1.0)
+        # contour = ax.contour(image_data, levels=contour_levels_neg, colors='brown', linewidths=1.0, extent=extent, alpha=1.0)
+
 
         # Draw negative contours (if any)
         try:
-            ax.contour(image_data, levels=levels_neg[::-1], colors='k', linewidths=1.0, extent=extent, alpha=1.0)
+            # ax.contour(image_data, levels=levels_neg[::-1], colors='k', linewidths=1.0, extent=extent, alpha=1.0)
+            ax.contour(image_data, levels=contour_levels_neg, colors='k', linewidths=1.0, extent=extent, alpha=1.0)
+
         except Exception as e:
             print(f"Error while plotting negative contours: {e}")
         plt.tight_layout()
-        # plt.show()
+        plt.show()
         plt.savefig(imagename.replace('.fits','.pdf'),dpi=300)
         
 
 
 # fits_filename = '/raid1/scratch/kelvinw/k2_18b/K2-18_split__1_image_dirty.image.tt0.fits'
-fits_filename = '/raid1/scratch/kelvinw/k2_18b/23B-307.MJD60286.699115069445.K2-18_sci.C_band.cont.regcal.I.tt0.fits'
+fits_filename = '/raid1/scratch/kelvinw/k2_18b/selfcal_d_config/K2-18_split_6s_image_dirty.image.tt0.fits'
 
 plot_image_with_beam(fits_filename)
 
