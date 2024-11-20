@@ -53,12 +53,7 @@ try:
 except:
     logfile_name = datetime.now().strftime('casa_vlbi_%H:%M:%S_%d:%m:%Y.log')
     filename = os.path.join(log_dir, logfile_name)
-    
-    logging.basicConfig(filename=filename, level=logging.DEBUG)
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    logging.getLogger('').addHandler(console)
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    logging.basicConfig(filename=filename, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 

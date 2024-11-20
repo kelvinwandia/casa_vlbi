@@ -108,20 +108,20 @@ def attach_tsys_gc():
             else:
                 logging.info(f"Extensions {', '.join(extension_names)} do not exist in the FITS file.")
 
-    extension_name = 'SYSTEM_TEMPERATURE'
+        extension_name = 'SYSTEM_TEMPERATURE'
 
-    if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
-        print(f"'{extension_name}' exists in the FITS file.")
-        hdul.close()
-    else:
-        print(f"Extension '{extension_name}' does not exist in the FITS file.")
-    
-        hdul.close()
-        print("Attaching TSYS table")
-        for i in fitsidifiles:
-            append_tsys(antab_file,idifiles=i)
-        print("Finished attaching TSYS table")
+        if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
+            print(f"'{extension_name}' exists in the FITS file.")
+            hdul.close()
+        else:
+            print(f"Extension '{extension_name}' does not exist in the FITS file.")
+        
+            hdul.close()
 
+    print("Attaching TSYS table")
+    for i in fitsidifiles:
+        append_tsys(antab_file,idifiles=i)
+    print("Finished attaching TSYS table")
 
     print("Attaching GAIN_CURVE table.")
     append_gc(antab_file, fitsidifiles[0])  # Append the GAIN_CURVE table
@@ -182,10 +182,10 @@ def makems(vis,splitvis=None):
         logging.info("======>>> Assuming TSYS and GC already attached to fitsidifiles")
         if not os.path.exists(vis):
             print(f"Making {vis}")
-            casatasks.importfitsidi(
+            importfitsidi(
                 vis= vis, fitsidifile=fitsidifiles,scanreindexgap_s=15.0,constobsid=True)
             listfile = vis.replace(".ms","_listobs.list")
-            casatasks.listobs(vis = vis, listfile = listfile, overwrite=True)
+            listobs(vis = vis, listfile = listfile, overwrite=True)
 
             check_pols(vis)
         else:
@@ -196,20 +196,20 @@ def makems(vis,splitvis=None):
         logging.info(f"======>>>Using {uvfits_file}")
         if not os.path.exists(vis):
             logging.info(f"======>>>Making {vis}")
-            casatasks.importuvfits(vis=vis, fitsfile=uvfits_file)
+            importuvfits(vis=vis, fitsfile=uvfits_file)
             listfile = vis.replace(".ms","_listobs.list")
-            casatasks.listobs(vis = vis, listfile = listfile, overwrite=True)
+            listobs(vis = vis, listfile = listfile, overwrite=True)
 
     if splitvis and not os.path.exists(splitvis):
         if not os.path.exists(splitvis):
             logging.info(f"Averaging to {timebin} and {width} channels")
-            casatasks.split(
+            split(
                 vis = vis, outputvis = splitvis, timebin=timebin, width=width,
                 datacolumn='data'
             )
 
             listfile = splitvis.replace(".ms","_split_listobs.list")
-            casatasks.listobs(vis = splitvis, listfile = listfile, overwrite=True)
+            listobs(vis = splitvis, listfile = listfile, overwrite=True)
 
 
 def export_to_uvfits(vis):
@@ -219,7 +219,7 @@ def export_to_uvfits(vis):
     uvfitsfile = vis.replace('.ms','.FITS')
     logging.info(f"Exporting {vis} to AIPS compatible {uvfitsfile}")
     if not os.path.exists(uvfitsfile):
-        casatasks.exportuvfits(
+        exportuvfits(
             vis = vis, fitsfile=uvfitsfile, writesyscal=False, overwrite=False
         )
     else:
@@ -319,7 +319,7 @@ def flagging():
      
     if not use_aoflagger:
         logging.info("Flagging the auto-correlations")
-        casatasks.flagdata(
+        flagdata(
                 vis = vis, autocorr=True )
         logging.info("Auto-correlations flagged successfully")
 
@@ -329,11 +329,11 @@ def flagging():
 
 
     # logging.info(f"Quacking every {integration_time}s from each scan")
-    # casatasks.flagdata(
+    # flagdata(
     #     vis = vis, mode='quack', quackinterval=integration_time, quackmode='beg',
     #     quackincrement=True,
     #     )
-    # casatasks.flagdata(
+    # flagdata(
     #     vis = vis, mode='quack', quackinterval=integration_time, quackmode='endb',
     #     quackincrement=True,
     #     )
@@ -348,7 +348,7 @@ def flagging():
     if os.path.exists(manual_file):
         logging.info(f"Flagging file {manual_file} exists")
         logging.info(f"Flagging using {manual_file}")
-        casatasks.flagdata(vis = vis, mode='list',inpfile=manual_file)
+        flagdata(vis = vis, mode='list',inpfile=manual_file)
         flagmanager(vis=vis, mode='save', versionname="after_manual_flagging")
         manual_flagging_summary = flagdata(vis=vis, mode='summary')
         logging.info("======>>>REPORTING FLAGGING STATS after manual flagging")
@@ -533,7 +533,7 @@ def applycal_tsys_gc():
     # print(table,interp)
     # print(os.getcwd())
     logging.info(f"======>>>Applying {table} using interpolation {interp}")  
-    casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
+    applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
     tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
@@ -545,7 +545,7 @@ def tec_corrections():
     tec_caltable = vis.replace('.ms','.tec')
 
     logging.info("Downloading tec files")
-    from casatasks.private import tec_maps
+    from private import tec_maps
 
     tec_image, _, _ = tec_maps.create(vis=vis)
   
@@ -564,7 +564,7 @@ def tec_corrections():
 
 def plot_sbd(plotfile,timerange,datacolumn):
     try:
-        casaplotms.plotms(
+        plotms(
             vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', 
             timerange=timerange, correlation='LL',avgtime='1200',
             showgui=False, coloraxis='spw', overwrite=True, ydatacolumn = datacolumn,
@@ -587,7 +587,7 @@ def sbd_fringefit():
     
     if not os.path.exists(sbd_table):
         logging.info(f"Fringefitting and writing caltable: {sbd_table}")
-        casatasks.fringefit(
+        fringefit(
             vis=vis, caltable=sbd_table, solint='inf',
             zerorates=True, timerange=timerange, refant=refant,
             minsnr=snr_sbd, parang=True
@@ -597,7 +597,7 @@ def sbd_fringefit():
 
         if timerange_ar:
             logging.info(f"Appending solutions derived when arecibo is up {timerange_ar} to {sbd_table}")
-            casatasks.fringefit(
+            fringefit(
                 vis=vis, caltable=sbd_table, solint='inf',
                 zerorates=True, timerange=timerange_ar, refant=refant,
                 # antenna='AR',
@@ -636,7 +636,7 @@ def applycal_sbd_fringe():
     interp = list(cal_tables_dict.values())
 
     logging.info(f"======>>>Applying {table} using interpolation {interp}")  
-    casatasks.applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
+    applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
 
     
@@ -667,7 +667,7 @@ def mbd_fringefit():
     # logging.info(f"Using solution interval {solint}")
     if not os.path.exists(mbd_table):
         logging.info(f"Fringefitting and making {mbd_table}")
-        casatasks.fringefit(
+        fringefit(
             vis=vis, caltable=mbd_table, solint=solint,
             zerorates=False, field=phase_calibrator, refant=refant, minsnr=snr_mbd, combine='spw',
             corrdepflags=True,
@@ -677,7 +677,7 @@ def mbd_fringefit():
 
     for m in ['delay', 'phase', 'rate']:
         plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_mbd_{m}.png"
-        casaplotms.plotms(
+        plotms(
             vis=mbd_table, yaxis=m, xaxis='time', gridcols=3, gridrows=3,
             coloraxis='corr', iteraxis='antenna', highres=True, showgui=False,  width=1920, height=1080,
             overwrite=True, plotfile=plotfile,
@@ -714,12 +714,12 @@ def applycal_mbd_fringe():
         spwmap = [[], nspw*[0]]
         logging.info(f"spw mapping is {spwmap}")
 
-    casatasks.applycal(
+    applycal(
             vis = vis, field = fields, gaintable=table,
             interp = interp, spwmap = spwmap , parang = True,
         )
 
-    casaplotms.plotms(
+    plotms(
             vis=vis, xaxis='frequency', yaxis='phase', antenna='EF&*', ydatacolumn='corrected',
             correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw', iteraxis='baseline',
             plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080, avgtime='9999',
@@ -757,7 +757,7 @@ def bpass():
 
     if not os.path.exists(bpass_table):
         # logging.info(f"{bpass_table} exists. Will not create a new one")
-        casatasks.bandpass(
+        bandpass(
             vis = vis, bandtype = 'B', solint= 'inf', minsnr=3.0, solnorm = True, 
             field = phase_calibrator,
             refant=refant, caltable = bpass_table,gaintable = table, 
@@ -768,7 +768,7 @@ def bpass():
 
     for m in ['amp','phase']:
         plotfile = f"{plots_dir}/{vis.replace('.ms', '')}_bpass_{m}.png"
-        casaplotms.plotms(
+        plotms(
                 vis=bpass_table, yaxis=m, xaxis='frequency', gridcols=3, gridrows=3, 
                 coloraxis='spw',iteraxis='antenna', highres=True, showgui=False, width=1920, height=1080,
                 overwrite=True, plotfile=plotfile,
@@ -797,7 +797,7 @@ def applycal_bpass():
         spwmap = [[], nspw*[0],[]]
         logging.info(f"spw mapping is {spwmap}")
 
-    casatasks.applycal(vis = vis, field = '', gaintable = table,interp = interp,
+    applycal(vis = vis, field = '', gaintable = table,interp = interp,
             spwmap = spwmap,parang = True,
         )
     
