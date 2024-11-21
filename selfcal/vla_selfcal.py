@@ -567,7 +567,59 @@ class MeasurementSetInfo:
         msmd.close()
 
         return nspw,nchan
+    
+    @staticmethod
+    @Utils.time_execution
 
+    def get_weights(msname:str):
+
+        """
+        
+        Returns list of weights rounded to one decimal place
+            type:float
+        """
+
+        ms = casatools.ms()
+        ms.close()
+        logging.info("Opening self.msname")
+        ms.open(msname)
+        logging.info("Getting weights, this will be slow for large data")
+        spw_weights = []
+        spw_info = ms.getspectralwindowinfo()
+        sorted_spw_keys = sorted(spw_info.keys(), key=lambda x: int(x))
+        for spw_id in sorted_spw_keys:
+            logging.info(f"Processing SPW {spw_id}...")
+            ms.selectinit(reset=True)  
+            ms.selectinit(datadescid=int(spw_id))
+            data = ms.getdata(['weight'], ifraxis=True)
+            weights = data['weight']
+            total_weight = weights.sum()
+            mean_weight = weights.mean()
+            spw_weights.append((spw_id, total_weight))
+
+            logging.info(f"SPW {spw_id}: Total Weight = {total_weight}, Mean Weight = {mean_weight}")
+
+        ms.close()
+
+        # Extract total weights and calculate min-max scaling
+        weights = [weight for spw_id, weight in spw_weights]
+        min_weight = min(weights)
+        max_weight = max(weights)
+        if max_weight == min_weight:
+            logging.info("All SPWs are fully flagged or have equal weights. Scaling not possible - have you used statwt? ")
+            scaled_weights = {spw_id: 0 for spw_id, weight in spw_weights}
+        else:
+            scaled_weights = {
+                spw_id: (weight - min_weight) / (max_weight - min_weight)
+                for spw_id, weight in spw_weights
+            }
+        for spw_id, scaled_weight in scaled_weights.items():
+            logging.info(f"SPW {spw_id}: Scaled Weight = {scaled_weight}")
+
+        logging.info("Weights rounded to one decimal place")
+        rounded_weights = [round(weight, 1) for weight in scaled_weights.values()]
+
+        return rounded_weights
 
 
 class tclean_Imager:
@@ -763,55 +815,27 @@ class tclean_Imager:
         None
         """
 
+        spw_weights = MeasurementSetInfo.get_weights(self.msname)
+        spw_list = list(range(0, len(spw_weights)))
+        
+        ## Apply the pb using the middle channel -- you need to get nchan
+        _ ,nchan = MeasurementSetInfo.get_msinfo(self.msname)
+        middle_chan = []
+        for chan in nchan:
+            middle_chan.append(int(chan/2))
 
-        # Open the Measurement Set
-        ms = casatools.ms()
-        ms.close()
-        ms.open(self.msname)
-
-        spw_weights = []
-        spw_info = ms.getspectralwindowinfo()
-        sorted_spw_keys = sorted(spw_info.keys(), key=lambda x: int(x))
-        for spw_id in sorted_spw_keys:
-            print(f"Processing SPW {spw_id}...")
-            ms.selectinit(reset=True)  
-            ms.selectinit(datadescid=int(spw_id))
-            data = ms.getdata(['weight'], ifraxis=True)
-            weights = data['weight']
-            total_weight = weights.sum()
-            mean_weight = weights.mean()
-            spw_weights.append((spw_id, total_weight))
-
-            print(f"SPW {spw_id}: Total Weight = {total_weight}, Mean Weight = {mean_weight}")
-
-        ms.close()
-
-        # Extract total weights and calculate min-max scaling
-        weights = [weight for spw_id, weight in spw_weights]
-        min_weight = min(weights)
-        max_weight = max(weights)
-
-        # Handle the edge case where all SPWs are fully flagged
-        if max_weight == min_weight:
-            print("All SPWs are fully flagged or have equal weights. Scaling not possible.")
-            scaled_weights = {spw_id: 0 for spw_id, weight in spw_weights}
-        else:
-            scaled_weights = {
-                spw_id: (weight - min_weight) / (max_weight - min_weight)
-                for spw_id, weight in spw_weights
-            }
-
-        # Print scaled weights
-        for spw_id, scaled_weight in scaled_weights.items():
-            print(f"SPW {spw_id}: Scaled Weight = {scaled_weight}")
-
+        logging.info(f"Apply wideband PB correction using the middle channel: {middle_chan}")
 
         widebandpbcor(
             vis=self.msname,
             imagename=self.imagename,
-            nterms=2,
+            nterms=self.nterms,
             action='pbcor',
+            spwlist=spw_list,
+            weightlist=spw_weights,
+            chanlist=middle_chan
         )
+
         logging.info(f"Applied primary beam correction to {self.imagename}.")
 
 
@@ -1792,9 +1816,9 @@ def configure_parameters():
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
-        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
+        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
         # 'msname' : '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
-        'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
+        # 'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
     }
 
 
@@ -1851,7 +1875,7 @@ def perform_selfcalibration(vis, parameters):
         minsnr=parameters['minsnr'],
         imsize=320,
         niter=10000,  
-        nterms=1,
+        nterms=2,
         deconvolver='mtmfs',
         weighting='briggs',
         robust=0.5,
@@ -1862,7 +1886,7 @@ def perform_selfcalibration(vis, parameters):
         parallel = True,
         # outlierfile = parameters['outlierfile'],
         make_final_image=False,
-        pbcorrect = False,
+        pbcorrect = True,
         # refant = 'EF' ,
 
     )
