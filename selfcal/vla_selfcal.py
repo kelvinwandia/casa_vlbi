@@ -346,175 +346,11 @@ class MeasurementSetProcessor:
         finally:
             msmd.close()
 
+        ## TODO: Make this better
+        logging.info("Flagging data using inpfile")
+        flagdata(vis=outputvis,mode='list',inpfile='/raid1/scratch/kelvinw/casa_vlbi/selfcal/vla_flagging_template/s_band_d_config.txt')
+
         return outputvis
-
-# class MeasurementSetProcessor:
-#     """
-#     Class to process a measurement set.
-
-#     Attributes:
-#         default_timebin (str): Default time averaging interval. Defaults to '10s'.
-#         default_width (int): Default channel averaging width. Defaults to 4.
-#     """
-
-#     default_timebin: str = '10s'
-#     default_width: int = 4
-
-#     @staticmethod
-#     @Utils.time_execution
-#     def prepare_measurement_set(
-#         msname: str,
-#         fieldname: Union[str, List[str]] = None,
-#         split_required: bool = True,
-#         avgtime: str = None,
-#         width: int = None,
-#         make_mms: bool = False
-#     ) -> Tuple[str, ...]:
-#         """
-#         Prepare a measurement set by optionally splitting it into individual fields or creating an MMS.
-
-#         Parameters:
-#             msname (str): Path to the measurement set file.
-#             fieldname (str or list, optional): Specific field(s) to split. If None, all fields are split.
-#             split_required (bool): Whether splitting is required. Defaults to True.
-#             avgtime (str, optional): Custom time averaging interval. Defaults to `default_timebin`.
-#             width (int, optional): Custom channel averaging width. Defaults to `default_width`.
-#             make_mms (bool): Whether to partition the measurement set into an MMS. Defaults to False.
-
-#         Returns:
-#             Tuple[str, ...]: A tuple of paths to processed measurement set files.
-#         """
-#         msmd = casatools.msmetadata()
-#         outputvis_list = []
-
-#         try:
-#             # Resolve full path of the input measurement set
-#             msname = os.path.abspath(msname)
-
-#             # Generate list of fields
-#             msmd.open(msname)
-#             field_names = msmd.fieldnames()
-#             logging.info(f"Fields found in {msname}: {field_names}")
-
-#             # Handle no splitting scenario
-#             if not split_required:
-#                 logging.info("Splitting not required. Checking MMS creation.")
-#                 if make_mms:
-#                     return MeasurementSetProcessor._create_mms(msname, avgtime, width)
-#                 return (msname,)
-
-#             # Handle field selection
-#             if fieldname is not None:
-#                 fieldname = [fieldname] if isinstance(fieldname, str) else fieldname
-#                 missing_fields = [f for f in fieldname if f not in field_names]
-#                 if missing_fields:
-#                     logging.warning(f"Field(s) not found in {msname}: {missing_fields}")
-#                 fieldname = [f for f in fieldname if f in field_names]
-#             else:
-#                 fieldname = field_names
-
-#             # Set averaging parameters
-#             timebin = avgtime if avgtime is not None else MeasurementSetProcessor.default_timebin
-#             split_width = width if width is not None else MeasurementSetProcessor.default_width
-#             if avgtime is None:
-#                 logging.warning(f"Default timebin '{timebin}' is being used for splitting.")
-#             if width is None:
-#                 logging.warning(f"Default split width '{split_width}' is being used for splitting.")
-
-                
-#             # Split each field
-#             for field in fieldname:
-#                 outputvis = os.path.join(os.getcwd(), f"{field}_split{'_' + timebin if timebin else ''}{'_' + str(split_width) if split_width != 1 else ''}.ms")
-#                 if not os.path.exists(outputvis):
-#                     logging.info(f"Splitting {msname} -> {outputvis} with timebin={timebin} and width={split_width}")
-#                     split(vis=msname, outputvis=outputvis, datacolumn='corrected',
-#                           timebin=timebin, width=split_width, field=field)
-#                     listobs(vis=outputvis, listfile=outputvis.replace('.ms', '_listobs.txt'), overwrite=True)
-#                     logging.info(f"Split completed: {outputvis}")
-#                 else:
-#                     logging.info(f"Output measurement set already exists: {outputvis}")
-#                 outputvis_list.append(outputvis)
-
-#             # Create an MMS if requested
-#             if make_mms:
-#                 return MeasurementSetProcessor._create_mms(msname,fieldname, avgtime, width)
-
-#         except Exception as e:
-#             logging.error(f"Error during measurement set processing: {e}")
-#         finally:
-#             msmd.close()
-
-#         return outputvis_list
-
-#     @staticmethod
-#     def _create_mms(outputvis: str, fieldname: str = None, avgtime: str = None, width: int = None) -> Tuple[str]:
-#         """
-#         Create a Multi-MS (MMS) from the input measurement set.
-
-#         Parameters:
-#             outputvis (str): Path to the output measurement set to partition.
-#             fieldname (str, optional): Field name to process. If None, process all fields.
-#             avgtime (str, optional): Time averaging interval. Defaults to `default_timebin`.
-#             width (int, optional): Channel averaging width. Defaults to `default_width`.
-
-#         Returns:
-#             Tuple[str]: Path to the created MMS.
-#         """
-#         partitioned_ms_list = []
-
-#         # Defaults for timebin and width
-#         timebin = avgtime if avgtime else MeasurementSetProcessor.default_timebin
-#         chanbin = width if width else MeasurementSetProcessor.default_width
-
-#         if avgtime is None:
-#             logging.warning(f"Default timebin '{timebin}' is being used for splitting.")
-#         if width is None:
-#             logging.warning(f"Default split width '{chanbin}' is being used for splitting.")
-
-#         msmd = casatools.msmetadata()
-#         msmd.open(outputvis)
-#         field_name = msmd.fieldnames()
-#         msmd.close()
-
-#         for field in field_name:
-#             partitioned_ms = os.path.join(
-#                 os.getcwd(),
-#                 f"{field}_split{'_' + timebin if timebin else ''}{'_' + str(chanbin) if chanbin != 1 else ''}_partitioned.mms"
-#             )
-
-#             if not os.path.exists(partitioned_ms):
-#                 msmd.open(outputvis)
-#                 scans = msmd.scansforfield(field)
-#                 nscans = len(scans)
-#                 msmd.close()
-
-#                 # Decide whether to average channels and/or time
-#                 chan_average = 1
-#                 chan_average = chanbin > 1
-#                 time_average = bool(timebin and timebin != '0')
-
-#                 logging.info(f"Creating MMS: {partitioned_ms} with timebin={timebin}, chanbin={chanbin}, scans={nscans}")
-
-#                 mstransform(
-#                     vis=outputvis,
-#                     outputvis=partitioned_ms,
-#                     datacolumn='data',
-#                     createmms=True,
-#                     field=field,
-#                     separationaxis='scan',
-#                     numsubms=nscans,
-#                     timeaverage=time_average,
-#                     chanaverage=chan_average,
-#                     timebin=timebin,
-#                     chanbin=chan_average,
-#                 )
-#                 logging.info(f"MMS creation completed: {partitioned_ms}")
-#             else:
-#                 logging.info(f"MMS already exists: {partitioned_ms}")
-
-#             partitioned_ms_list.append(partitioned_ms)
-
-#         return partitioned_ms_list
 
 
 
@@ -630,7 +466,7 @@ class MeasurementSetInfo:
         cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
         
         # Convert to mas if the value is very small (e.g., <1 arcsecond)
-        if cell_float < 1.0:
+        if cell_float < 0.01:
             cell_float *= 1000  # convert to mas
             cell = f'{cell_float:.2f} mas'
         else:
@@ -926,6 +762,50 @@ class tclean_Imager:
         -------
         None
         """
+
+
+        # Open the Measurement Set
+        ms = casatools.ms()
+        ms.close()
+        ms.open(self.msname)
+
+        spw_weights = []
+        spw_info = ms.getspectralwindowinfo()
+        sorted_spw_keys = sorted(spw_info.keys(), key=lambda x: int(x))
+        for spw_id in sorted_spw_keys:
+            print(f"Processing SPW {spw_id}...")
+            ms.selectinit(reset=True)  
+            ms.selectinit(datadescid=int(spw_id))
+            data = ms.getdata(['weight'], ifraxis=True)
+            weights = data['weight']
+            total_weight = weights.sum()
+            mean_weight = weights.mean()
+            spw_weights.append((spw_id, total_weight))
+
+            print(f"SPW {spw_id}: Total Weight = {total_weight}, Mean Weight = {mean_weight}")
+
+        ms.close()
+
+        # Extract total weights and calculate min-max scaling
+        weights = [weight for spw_id, weight in spw_weights]
+        min_weight = min(weights)
+        max_weight = max(weights)
+
+        # Handle the edge case where all SPWs are fully flagged
+        if max_weight == min_weight:
+            print("All SPWs are fully flagged or have equal weights. Scaling not possible.")
+            scaled_weights = {spw_id: 0 for spw_id, weight in spw_weights}
+        else:
+            scaled_weights = {
+                spw_id: (weight - min_weight) / (max_weight - min_weight)
+                for spw_id, weight in spw_weights
+            }
+
+        # Print scaled weights
+        for spw_id, scaled_weight in scaled_weights.items():
+            print(f"SPW {spw_id}: Scaled Weight = {scaled_weight}")
+
+
         widebandpbcor(
             vis=self.msname,
             imagename=self.imagename,
@@ -933,6 +813,7 @@ class tclean_Imager:
             action='pbcor',
         )
         logging.info(f"Applied primary beam correction to {self.imagename}.")
+
 
         # if self.deconvolver == 'mtmfs':
         #     image_ext = '.image.tt0'
@@ -949,6 +830,8 @@ class tclean_Imager:
         # #         logging.info(f"Masking using PYBDSF not requested")
         # # except Exception as e:
         # #     logging.error(f"Failed to run pybdsf on {self.imagename}: {e}")
+
+        
 
 
 
@@ -1251,7 +1134,7 @@ class PlottingRoutines:
 
 class SelfCalibrationWSClean(WSClean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant=None, final_image: bool = False, pbcorrect:bool = False, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant=None, final_image: bool = False, pbcorrect:bool = False, masking_threshold:int = 5, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -1261,7 +1144,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
         self.minsnr = minsnr
         self.final_image = final_image
         self.pbcorrect = pbcorrect
-
+        self.masking_threshold = masking_threshold
 
         self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
 
@@ -1296,18 +1179,26 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     msname = self.msname, 
                     imagename = imagename_dirty,
                     imsize = self.imsize,  
-                    threshold  =  self.threshold, ## threshold here can be 0.0 which is the default, 
+                    # threshold  =  self.threshold, ## threshold here can be 0.0 which is the default, 
+                    threshold = 3,
                     overwrite = self.overwrite,
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
                     mgain = self.mgain,
                     cell = self.cell,
-                    niter = 1, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
+                    niter = 10000000, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                     )
                 imager_instance.imager()
 
+
                 plotter = PlottingRoutines(imagename = imagename_dirty + '-image.fits')
                 plotter.plot_image_with_beam()
+
+                """ Masking """
+                image_rms = imstat(imagename=imagename_dirty + '-image.fits')['rms'][0]
+                masking_file = Utils.make_mask(fits_file=imagename_dirty + '-image.fits',\
+                    rms=image_rms, threshold=self.masking_threshold)
+
 
                 # If using PYBDSF for masking, call it here
                 if self.use_pybdsf:
@@ -1339,7 +1230,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     pybdsf_threshold = self.pybdsf_threshold,
                     mgain = self.mgain,
                     cell = self.cell,
-                    maskfile = self.maskfile
+                    # maskfile = self.maskfile
+                    maskfile = masking_file
                     )
                 imager_instance.imager()
 
@@ -1435,7 +1327,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 use_pybdsf = self.use_pybdsf,
                 pybdsf_threshold = self.pybdsf_threshold,
                 mgain = self.mgain,
-                maskfile = self.maskfile,
+                # maskfile = self.maskfile,
+                maskfile = masking_file,
                 cell = self.cell,
                 )
             
@@ -1741,6 +1634,8 @@ class ImageProcessor:
         self.threshold_factor = threshold_factor
         self.max_iterations = max_iterations  # Max iterations or None
         self.cl = casatools.componentlist()
+
+
     
     
 
@@ -1867,10 +1762,6 @@ class ImageProcessor:
 
 
 
-
-
-
-
 def setup_logging():
     """Set up logging configuration."""
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1885,22 +1776,25 @@ def configure_parameters():
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
-        'nloops': 5,
-        'thresholds': ['', 4 , 4, 4],
-        'calmode': ['','p','p','ap'],
-        'gaintype': ['' ,'G','G','G'],
-        'solint': ['','96s','48s','300s'],
-        'minsnr': ['', 2, 2, 2,],
+        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config_flagged_4'),
+        # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
+        'nloops': 1,
+        'thresholds': ['', 4 , 4, 4, 4,4],
+        'calmode': ['','p','p','p','p','ap'],
+        'gaintype': ['' ,'G','G', 'G', 'G','G'],
+        'solint': ['','96s','48s','24s', '300s','240s'],
+        'minsnr': ['', 2, 2, 2, 2,2],
         'avgtime': '6s',
         'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
-        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
+        # 'msname' : '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
+        'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
     }
 
 
@@ -1935,12 +1829,13 @@ def perform_selfcalibration(vis, parameters):
         gaintype=parameters['gaintype'],
         solint=parameters['solint'],
         minsnr=parameters['minsnr'],
-        imsize=640,
+        imsize=320,
         niter=10000000,
-        use_pybdsf=True,
+        use_pybdsf=False, ## Leave as false
         pybdsf_threshold=10,
+        masking_threshold = 8,
         overwrite=False,
-        final_image=True,
+        final_image=False,
         # refant = 'EF' ,
         # cell = '3arcsec' 
     )
@@ -1956,18 +1851,20 @@ def perform_selfcalibration(vis, parameters):
         minsnr=parameters['minsnr'],
         imsize=320,
         niter=10000,  
-        nterms=2,
+        nterms=1,
         deconvolver='mtmfs',
         weighting='briggs',
         robust=0.5,
         use_pybdsf=False, # leave as False -- mask from pybdsf is weird
-        masking_threshold=8,
+        masking_threshold=10,
         pybdsf_threshold=5,
         overwrite=False,
         parallel = True,
         # outlierfile = parameters['outlierfile'],
         make_final_image=False,
-        pbcorrect = False
+        pbcorrect = False,
+        # refant = 'EF' ,
+
     )
     self_calibration_tclean.selfcal()
 
