@@ -925,7 +925,7 @@ def split_calibrated_ms(*args):
     timebin = int(solint/10)
 
     for source in sources:
-        outputvis = source+f'_{nchan}chan_{timebin}s.ms'
+        outputvis = source+f'_{nchan}_chan_{timebin}s.ms'
         if not os.path.exists(outputvis):
             logging.info(f"======>>>Splitting {vis} to {outputvis}")
             logging.info(f"Averaging to width {width} channels and timebin {timebin} seconds ")
