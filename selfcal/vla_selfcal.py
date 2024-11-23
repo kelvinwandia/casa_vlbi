@@ -142,6 +142,20 @@ class Utils():
             except Exception as e:
                 logging.exception("An error occurred during wsclean execution: %s", e)
 
+    @staticmethod
+    def get_number_of_threads():
+        try:
+            num_threads = os.cpu_count()
+            if num_threads is None:
+                logging.info("Could not determine the number of threads.")
+            else:
+                logging.info(f"Number of threads (logical processors) available: {num_threads}")
+        except Exception as e:
+            logging.warning(f"An error occurred while determining the number of threads: {e}")
+        
+        return num_threads
+
+
 
     @staticmethod
     def get_im_stats(imagename):
@@ -149,14 +163,14 @@ class Utils():
         #### Not properly integrated into the code yet -- this is useful for EVN images
 
         """
-        Gets the statistics for either a 256x256 pix image and writes
-        them to a logfile
+        Calculate the peak flux from the image and the noise from the residual
+        Gets the statistics them to a logfile
         """
 
 
-        rms=imstat(imagename=imagename,box='60,60,580,240')['rms'][0]  # for 640x640 px
-        peak=imstat(imagename=imagename,box='300,300,340,340')['max'][0]
-        print('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+        rms=imstat(imagename=imagename)['rms'][0]  # for 640x640 px
+        peak=imstat(imagename=imagename)['max'][0]
+        logging.info('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
                     (imagename, peak*1e3, rms*1e3, peak/rms))
         
         logfile = 'imstat.txt'
@@ -166,6 +180,37 @@ class Utils():
                         (imagename, peak*1e3, rms*1e3, peak/rms))
 
             txt_file.write(f"For {imagename}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
+
+    @staticmethod
+    def plot_caltable(caltable,coloraxis,yaxis):
+        """ Plot calibration table """
+
+        ## TODO: Extract the number of antennas from the measurement set directly
+        num_ants = 27
+        antennas_per_plot = 9  
+
+        for i in range(0, num_ants, antennas_per_plot):
+
+            antenna_range = list(range(i, min(i + antennas_per_plot, num_ants)))
+            antenna_range_str = ','.join(map(str, antenna_range))
+
+            plotms(
+                vis=caltable,
+                xaxis='time',
+                yaxis=yaxis,
+                gridcols=3,  
+                gridrows=3,  
+                iteraxis='antenna',  
+                antenna=antenna_range_str, 
+                showgui=False,  
+                plotfile=caltable.replace('.gcal', f'_{coloraxis}_antennas_{i}_{i + antennas_per_plot - 1}.png'), 
+                overwrite=True,
+                coloraxis=coloraxis,
+                width=1500,
+                height=750,
+                dpi=300
+            )
+
 
 
 
@@ -238,7 +283,28 @@ class Utils():
 
         return output_file
 
+    @staticmethod
+    def get_im_stats(deconvolved_image,residual_image):
         
+        """
+        Gets the statistics for either a 256x256 pix image and writes
+        them to a logfile
+        """
+
+        peak=imstat(imagename=deconvolved_image)['max'][0]
+        rms=imstat(imagename=residual_image)['rms'][0]  
+        
+        logging.info('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+                    (deconvolved_image, peak*1e3, rms*1e3, peak/rms))
+        
+        logfile = 'imstat.txt'
+        casa_imstat = imstat(deconvolved_image)
+        with open(logfile,"a") as txt_file:
+            txt_file.write('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+                        (deconvolved_image, peak*1e3, rms*1e3, peak/rms))
+
+            txt_file.write(f"For {deconvolved_image}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
+
 
 
 class MeasurementSetProcessor:
@@ -873,9 +939,9 @@ class WSClean_Imager:
 
     """
 
-    def __init__(self, msname: str, imsize: int = 640, niter: int = 0, threshold: str = 0.0, deconvolution:str = None,
-                 overwrite: bool = False, use_pybdsf: bool = False , pybdsf_threshold: int = 5, mgain: float = 0.8,
-                imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None):
+    def __init__(self, msname: str, imsize: int = 640, niter: int = 0, auto_thresh: int = 0.3, auto_mask_thresh: float = 3, deconvolution:str = None, wsclean_masking: bool = True,
+                 overwrite: bool = False, use_pybdsf: bool = False , pybdsf_threshold: int = 5, mgain: float = 0.8, robust: float = 0.5, pbcorrect: bool = True,
+                imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None, multifreq: bool = False):
         """
         Initializes the wsclean_Imager instance with specified parameters.
 
@@ -901,13 +967,18 @@ class WSClean_Imager:
         self.msname = msname  
         self.imsize = imsize  
         self.niter = niter
-        self.threshold = threshold
+        self.auto_thresh = auto_thresh
+        self.auto_mask_thresh = auto_mask_thresh
         self.deconvolution = deconvolution
         self.overwrite = overwrite
         self.use_pybdsf = use_pybdsf
         self.pybdsf_threshold = pybdsf_threshold
         self.mgain = mgain
         self.maskfile = maskfile
+        self.multifreq = multifreq
+        self.robust = robust
+        self.wsclean_masking = wsclean_masking
+        self.pbcorrect = pbcorrect
 
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
 
@@ -925,27 +996,50 @@ class WSClean_Imager:
         -------
         None
         """
-                
+
+            # Get the number of spectral windows
+        nspw, _ = MeasurementSetInfo.get_msinfo(self.msname)
+            
+        num_threads = Utils.get_number_of_threads()
+        cores = int(num_threads/2)
+        logging.info(f"Parallelising. Using {cores} cores for imaging ")
+        # Prepare the base command
         command = [
             "wsclean",
             "-log-time",
+            "-j", str(cores), 
             "-size", str(self.imsize), str(self.imsize),
-            "-reorder",      
+            "-reorder",
             "-name", self.imagename,
             "-scale", self.cell,
             "-mgain", str(self.mgain),
             "-niter", str(self.niter),
-            "-auto-threshold", str(self.threshold),
-            "-fits-mask", str(self.maskfile),
+            "-auto-mask", str(self.auto_mask_thresh),
+            "-auto-threshold", str(self.auto_thresh),
+            # "-weight briggs",str(self.robust),
         ]
-        if self.maskfile == '':
-            logging.info(f"Masking not requested.")
+
+        # Handle multifrequency mode
+        if self.multifreq:
+            command.extend(["-join-channels", "-channels-out", str(nspw)])
+
+        # Handle masking
+        if self.maskfile:
+            logging.info(f"Using mask file: {self.maskfile}")
+            command.extend(["-fits-mask", str(self.maskfile)])
         else:
-            logging.info(f"Using maskfile: {self.maskfile}")
+            logging.info("Masking not requested.")
+
         if self.deconvolution == "multiscale":
             command.append("-multiscale")
 
+        if self.pbcorrect:
+            logging.info("Applying primary beam correction")
+            command.append("-apply-primary-beam")
+
+
         command.append(self.msname)
+        logging.info(f"Executing WSClean with command: {' '.join(command)}")
         
         try:
             Utils.run_wsclean(command)
@@ -963,16 +1057,21 @@ class WSClean_Imager:
         phasecal_ms : str
             The path to the measurement set for the prediction process.
         """
+
+        if self.multifreq ==True:
+            model_imagename = self.imagename+'-MFS'
+        else:
+            model_imagename = self.imagename
+
         predict_cmd = [
             'wsclean',
             '-log-time',
             '-predict',
             '-reorder',
-            '-name', self.imagename,
+            '-name', model_imagename,
             self.msname
         ]
 
-        # Run the WSClean prediction command
         try:
             Utils.run_wsclean(predict_cmd)
             logging.info(f"Prediction completed successfully with imagename: {self.imagename}")
@@ -1158,7 +1257,8 @@ class PlottingRoutines:
 
 class SelfCalibrationWSClean(WSClean_Imager):
 
-    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant=None, final_image: bool = False, pbcorrect:bool = False, masking_threshold:int = 5, **kwargs):
+    def __init__(self, msname, nloops, thresholds, calmode, gaintype, solint, minsnr, refant=None, final_image: bool = False, \
+                masking_threshold:int = 5, **kwargs):
         super().__init__(msname=msname, **kwargs)
         self.nloops = nloops
         self.thresholds = thresholds
@@ -1167,7 +1267,6 @@ class SelfCalibrationWSClean(WSClean_Imager):
         self.solint = solint
         self.minsnr = minsnr
         self.final_image = final_image
-        self.pbcorrect = pbcorrect
         self.masking_threshold = masking_threshold
 
         self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
@@ -1204,72 +1303,99 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     imagename = imagename_dirty,
                     imsize = self.imsize,  
                     # threshold  =  self.threshold, ## threshold here can be 0.0 which is the default, 
-                    threshold = 3,
+                    # threshold = 3,                
                     overwrite = self.overwrite,
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
                     mgain = self.mgain,
                     cell = self.cell,
-                    niter = 10000000, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
+                    robust = self.robust,
+                    multifreq = self.multifreq,
+                    niter = 1, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                     )
                 imager_instance.imager()
 
+                if self.multifreq == True:
+        
+                    imagename_dirty = imagename_dirty+'-MFS'
+                    plotter = PlottingRoutines(imagename = imagename_dirty + '-image.fits')
+                    plotter.plot_image_with_beam()
+                    Utils.get_im_stats(imagename_dirty+'-image.fits',imagename_dirty+'-residual.fits')
 
-                plotter = PlottingRoutines(imagename = imagename_dirty + '-image.fits')
-                plotter.plot_image_with_beam()
-
-                """ Masking """
-                image_rms = imstat(imagename=imagename_dirty + '-image.fits')['rms'][0]
-                masking_file = Utils.make_mask(fits_file=imagename_dirty + '-image.fits',\
-                    rms=image_rms, threshold=self.masking_threshold)
-
-
-                # If using PYBDSF for masking, call it here
-                if self.use_pybdsf:
-                    try:
-                        logging.info(f"Running pybdsf on {imagename_dirty}...")
-                        Utils.pybdsf(imagename_dirty + '-image.fits', self.pybdsf_threshold)
-                        self.maskfile = imagename_dirty + '-image.fits.maskfile.fits'
-                        self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
-                        logging.info(f"PYBDSF output file: {self.maskfile} will be used for masking")
-                        logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
-                    except Exception as e:
-                        logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
                 else:
-                    logging.info("Masking using PYBDSF not requested.")
-                    self.maskfile = ''
+                    plotter = PlottingRoutines(imagename = imagename_dirty + '-image.fits')
+                    plotter.plot_image_with_beam()
+                    Utils.get_im_stats(imagename_dirty+'-image.fits',imagename_dirty+'-residual.fits')
+
+
+
+                # """ Masking """
+                # image_rms = imstat(imagename=imagename_dirty + '-image.fits')['rms'][0]
+                # masking_file = Utils.make_mask(fits_file=imagename_dirty + '-image.fits',\
+                #     rms=image_rms, threshold=self.masking_threshold)
+
+
+                # # If using PYBDSF for masking, call it here
+                # if self.use_pybdsf:
+                #     try:
+                #         logging.info(f"Running pybdsf on {imagename_dirty}...")
+                #         Utils.pybdsf(imagename_dirty + '-image.fits', self.pybdsf_threshold)
+                #         self.maskfile = imagename_dirty + '-image.fits.maskfile.fits'
+                #         self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
+                #         logging.info(f"PYBDSF output file: {self.maskfile} will be used for masking")
+                #         logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
+                #     except Exception as e:
+                #         logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
+                # else:
+                #     logging.info("Masking using PYBDSF not requested.")
+                #     self.maskfile = ''
 
             else:
-                # Set niter for subsequent loops and disable pybdsf
-                self.use_pybdsf = False
+            #     # Set niter for subsequent loops and disable pybdsf
+            #     self.use_pybdsf = False
                 
                 imager_instance = WSClean_Imager(
                     msname = self.msname, 
                     imagename = imagename,
                     imsize = self.imsize,  
                     niter = self.niter,
-                    threshold = self.thresholds[selfcal_loop],
+                    # threshold = self.thresholds[selfcal_loop],
                     overwrite = self.overwrite,
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
                     mgain = self.mgain,
                     cell = self.cell,
+                    robust = self.robust,
+                    multifreq = self.multifreq,
                     # maskfile = self.maskfile
-                    maskfile = masking_file
+                    # maskfile = masking_file
                     )
+
                 imager_instance.imager()
 
-                plotter = PlottingRoutines(imagename = imagename + '-image.fits')
-                plotter.plot_image_with_beam()
 
-                ###TODO logging.info not working properly, using print
+
                 ### Put image model in measurement set  MODEL COLUMN -- similar to ft in CASA
-                # logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
-                print(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
-                ## WSClean must find an image named --model.fits (IN CWD) in order to predict !
-                model_fits = imagename.replace('-image.fits','-model.fits')
-                logging.info(f"Adding modelcolumn to data. Using {model_fits} to predict")
-                print(f"======>>>Adding modelcolumn to data. Using {model_fits} to predict")
+
+                if self.multifreq == True:
+
+                    imagename = imagename+'-MFS'
+                    plotter = PlottingRoutines(imagename = imagename + '-image.fits')
+                    plotter.plot_image_with_beam()
+                    Utils.get_im_stats(imagename+'-image.fits',imagename+'-residual.fits')
+
+                    logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
+                    # model_fits = imagename.replace('-image.fits','-model.fits') ## WSClean must find an image named --model.fits (IN CWD) in order to predict !
+                    model_fits = imagename+'-model.fits'
+                    logging.info(f"Adding modelcolumn to data. Using {model_fits} to predict")
+                else:
+                    plotter = PlottingRoutines(imagename = imagename + '-image.fits')
+                    plotter.plot_image_with_beam()
+                    Utils.get_im_stats(imagename+'-image.fits',imagename+'-residual.fits')
+                    logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
+                    # model_fits = imagename.replace('-image.fits','-model.fits') ## WSClean must find an image named --model.fits (IN CWD) in order to predict !
+                    model_fits = imagename+'-model.fits'
+                    logging.info(f"Adding modelcolumn to data. Using {model_fits} to predict")
 
 
                 imager_instance.predict()
@@ -1309,23 +1435,22 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 # except Exception as e:
                 #     logging.error(f"Error during gain calibration: {e}")
 
-                gridcols = 7
-                gridrows = 4  
-                # Loop over the coloraxis values (corr and spw)
                 coloraxis = ['corr', 'spw']
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
-                        plotms(
-                            vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
-                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
-                        )
+                        # plotms(
+                        #     vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
+                        #     iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                        #     plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                        # )
+                        Utils.plot_caltable(caltable,color,yaxis='phase')
                     else:
-                        plotms(
-                            vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
-                            iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                            plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
-                        )
+                        # plotms(
+                        #     vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
+                        #     iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
+                        #     plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
+                        # )
+                        Utils.plot_caltable(caltable,color,yaxis='amp')
                 # Apply calibration tables after the last self-calibration loop
                 if selfcal_loop == self.nloops - 1:
                     prev_caltables = sorted(glob.glob('*.gcal'))
@@ -1341,24 +1466,38 @@ class SelfCalibrationWSClean(WSClean_Imager):
             # self.threshold = '0.001mJy'
             self.use_pybdsf = False
 
+    
             imager_instance = WSClean_Imager(
                 msname = self.msname, 
                 imagename = imagename_final,
                 imsize = self.imsize,  
-                niter = self.niter,
-                threshold = self.threshold, # attempt to go to 0.0
+                # threshold  =  self.threshold, ## threshold here can be 0.0 which is the default, 
+                # threshold = 3,                
                 overwrite = self.overwrite,
                 use_pybdsf = self.use_pybdsf,
                 pybdsf_threshold = self.pybdsf_threshold,
                 mgain = self.mgain,
-                # maskfile = self.maskfile,
-                maskfile = masking_file,
                 cell = self.cell,
+                robust = self.robust,
+                multifreq = self.multifreq,
+                niter = 1000000, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                 )
-            
+        
             imager_instance.imager()
-            plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
-            plotter.plot_image_with_beam()
+
+            if self.multifreq == True:
+
+                imagename_final = imagename_final+'-MFS'
+                plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
+                plotter.plot_image_with_beam()
+                Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
+
+            else:
+                plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
+                plotter.plot_image_with_beam()
+                Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
+
+
 
 
         
@@ -1496,7 +1635,7 @@ class SelfCalibrationTclean(tclean_Imager):
                     niter=self.niter,
                     cell=self.cell,
                     deconvolver=self.deconvolver,
-                    threshold=self.thresholds[selfcal_loop],
+                    # threshold=self.thresholds[selfcal_loop],
                     weighting = self.weighting,
                     robust = self.robust,
                     mask=masking_file,
@@ -1800,23 +1939,23 @@ def configure_parameters():
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config_flagged_4'),
+        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
         # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
-        'nloops': 1,
-        'thresholds': ['', 4 , 4, 4, 4,4],
-        'calmode': ['','p','p','p','p','ap'],
-        'gaintype': ['' ,'G','G', 'G', 'G','G'],
-        'solint': ['','96s','48s','24s', '300s','240s'],
-        'minsnr': ['', 2, 2, 2, 2,2],
+        'nloops': 3,
+        'thresholds': ['', 4 , 4, 4, 4],
+        'calmode': ['','p','ap','ap','ap'],
+        'gaintype': ['' ,'G','G', 'G','G'],
+        'solint': ['','96s', '192s','240s'],
+        'minsnr': ['', 2, 2, 2, 2],
         'avgtime': '6s',
         'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
-        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
-        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
         # 'msname' : '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
     }
@@ -1858,12 +1997,17 @@ def perform_selfcalibration(vis, parameters):
         use_pybdsf=False, ## Leave as false
         pybdsf_threshold=10,
         masking_threshold = 8,
+        auto_thresh = 0.3,
+        auto_mask_thresh = 3,
         overwrite=False,
-        final_image=False,
+        final_image=True,
+        robust = 0.5, 
+        multifreq = True,  # defaults is False -- set True for VLA data
+        pbcorrect=True,
         # refant = 'EF' ,
         # cell = '3arcsec' 
     )
-    # self_calibration_wsclean.selfcal()
+    self_calibration_wsclean.selfcal()
 
     self_calibration_tclean = SelfCalibrationTclean(
         msname=vis,
@@ -1875,8 +2019,8 @@ def perform_selfcalibration(vis, parameters):
         minsnr=parameters['minsnr'],
         imsize=320,
         niter=10000,  
-        nterms=2,
-        deconvolver='mtmfs',
+        nterms=1,
+        deconvolver='hogbom',
         weighting='briggs',
         robust=0.5,
         use_pybdsf=False, # leave as False -- mask from pybdsf is weird
@@ -1886,11 +2030,11 @@ def perform_selfcalibration(vis, parameters):
         parallel = True,
         # outlierfile = parameters['outlierfile'],
         make_final_image=False,
-        pbcorrect = True,
+        pbcorrect = False,
         # refant = 'EF' ,
 
     )
-    self_calibration_tclean.selfcal()
+    # self_calibration_tclean.selfcal()
 
 
 
