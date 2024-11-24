@@ -16,7 +16,7 @@ from astropy import units as u
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 from radio_beam import Beam
-import bdsf
+# import bdsf
 
 from casatasks import *
 from casaplotms import *
@@ -215,34 +215,35 @@ class Utils():
 
     @staticmethod
     def pybdsf(input_image, detection_threshold):
+        pass
 
-        # Check if the input image is a FITS file; if not, add .fits
-        if not input_image.endswith('.fits'):
-            input_image = input_image
-            fitsname =input_image + '.fits'
-        else:
-            # If it is already a FITS file, use it directly
-            fitsname = input_image
+    #     # Check if the input image is a FITS file; if not, add .fits
+    #     if not input_image.endswith('.fits'):
+    #         input_image = input_image
+    #         fitsname =input_image + '.fits'
+    #     else:
+    #         # If it is already a FITS file, use it directly
+    #         fitsname = input_image
 
-        # Process the FITS image with pybdsf
-        img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='soft',
-                                thresh_isl=True, thresh_pix=detection_threshold, 
-                                advanced_opts=True, mean_map='map', rms_map=True, 
-                                group_by_isl=True)
+    #     # Process the FITS image with pybdsf
+    #     img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='soft',
+    #                             thresh_isl=True, thresh_pix=detection_threshold, 
+    #                             advanced_opts=True, mean_map='map', rms_map=True, 
+    #                             group_by_isl=True)
 
-        # Write out island mask and FITS catalog
-        img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
-        img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
+    #     # Write out island mask and FITS catalog
+    #     img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
+    #     img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
 
-        regionfile = input_image + '.casabox'
-        ascii_file = input_image + '.ascii'
-        rmsfile = input_image + '.rmsfile'
+    #     regionfile = input_image + '.casabox'
+    #     ascii_file = input_image + '.ascii'
+    #     rmsfile = input_image + '.rmsfile'
 
-        img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
-        img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
-        img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
+    #     img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
+    #     img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
+    #     img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
 
-        return regionfile
+    #     return regionfile
     
     @staticmethod
     def make_mask(fits_file, rms, threshold):
@@ -412,8 +413,8 @@ class MeasurementSetProcessor:
 
 
         ## TODO: Make this better
-        logging.info("Flagging data using inpfile")
-        flagdata(vis=outputvis,mode='list',inpfile='/raid1/scratch/kelvinw/casa_vlbi/selfcal/vla_flagging_template/s_band_d_config.txt')
+        # logging.info("Flagging data using inpfile")
+        # flagdata(vis=outputvis,mode='list',inpfile='/raid1/scratch/kelvinw/casa_vlbi/selfcal/vla_flagging_template/s_band_d_config.txt')
         
         phasecenter = 'J2000 11:30:17.38226541 +07.32.13.0287212'
         logging.info("Phaseshifting")
@@ -954,7 +955,7 @@ class WSClean_Imager:
     """
 
     def __init__(self, msname: str, imsize: int = 640, niter: int = 0, auto_thresh: int = 0.3, auto_mask_thresh: float = 3, deconvolution:str = None, wsclean_masking: bool = True,
-                 overwrite: bool = False, use_pybdsf: bool = False , pybdsf_threshold: int = 5, mgain: float = 0.8, robust: float = 0.5, pbcorrect: bool = True,
+                 overwrite: bool = False, use_pybdsf: bool = False , pybdsf_threshold: int = 5, mgain: float = 0.8, robust: float = 0.5, pbcorrect: bool = True, verbose: bool = False,
                 imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None, multifreq: bool = False,use_auto_thresh_auto_mask: bool = False):
         """
         Initializes the wsclean_Imager instance with specified parameters.
@@ -994,6 +995,7 @@ class WSClean_Imager:
         self.wsclean_masking = wsclean_masking
         self.pbcorrect = pbcorrect
         self.use_auto_thresh_auto_mask = use_auto_thresh_auto_mask
+        self.verbose = verbose
 
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
 
@@ -1037,11 +1039,16 @@ class WSClean_Imager:
 
         if self.use_auto_thresh_auto_mask:
             logging.info(f"Using auto thresholding and auto masking")
-            command.append("-auto-mask", str(self.auto_mask_thresh))
-            command.append("-auto-threshold", str(self.auto_thresh))
+            command.extend(["-auto-mask", str(self.auto_mask_thresh)])
+            command.extend(["-auto-threshold", str(self.auto_thresh)])
 
 
             # "-weight briggs",str(self.robust),
+        
+        if self.verbose:
+            command.append("-verbose")
+        else:
+            command.append("-quiet")
 
         # Handle masking
         if self.maskfile:
@@ -1360,8 +1367,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 # If using PYBDSF for masking, call it here
                 if self.use_pybdsf:
                     try:
-                        logging.info(f"Running pybdsf on {imagename_dirty}...")
                         if self.multifreq:
+                            logging.info(f"Running pybdsf on {imagename_dirty}...")
                             imagename_dirty = imagename_dirty+'-MFS'
                         Utils.pybdsf(imagename_dirty + '-image.fits', self.pybdsf_threshold)
                         self.maskfile = imagename_dirty + '-image.fits.maskfile.fits'
@@ -1501,19 +1508,19 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 niter = 1000000, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                 )
         
-            imager_instance.imager()
+            # imager_instance.imager()
 
-            if self.multifreq == True:
+            # if self.multifreq == True:
 
-                imagename_final = imagename_final+'-MFS'
-                plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
-                plotter.plot_image_with_beam()
-                Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
+            #     imagename_final = imagename_final+'-MFS'
+            #     plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
+            #     plotter.plot_image_with_beam()
+            #     Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
 
-            else:
-                plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
-                plotter.plot_image_with_beam()
-                Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
+            # else:
+            #     plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
+            #     plotter.plot_image_with_beam()
+            #     Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
 
 
 
@@ -1959,7 +1966,7 @@ def configure_parameters():
     return {
         'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
         # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
-        'nloops': 1,
+        'nloops': 5,
         'thresholds': ['', 4 , 4, 4, 4],
         'calmode': ['','p','p','ap','ap'],
         'gaintype': ['' ,'G','G', 'G','G'],
@@ -1970,12 +1977,13 @@ def configure_parameters():
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
-        'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
+        # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307/pipeline.60623.88275462948/23B-307.sb44616223.eb44871184.60286.71989133102.ms'
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
         # 'msname' : '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
+        "msname":'/raid1/scratch/kelvinw/k2_18b/working_dir_d_config/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
     }
 
 
@@ -2022,7 +2030,8 @@ def perform_selfcalibration(vis, parameters):
         robust = 0.5, 
         multifreq = True,  # defaults is False -- set True for VLA data
         pbcorrect=True,
-        use_auto_thresh_auto_mask = False,
+        use_auto_thresh_auto_mask = True,
+        verbose = False,
         # refant = 'EF' ,
         # cell = '3arcsec' 
     )
@@ -2042,7 +2051,7 @@ def perform_selfcalibration(vis, parameters):
         deconvolver='hogbom',
         weighting='briggs',
         robust=0.5,
-        use_pybdsf=True, # leave as False -- mask from pybdsf is weird
+        use_pybdsf=False, # leave as False -- mask from pybdsf is weird
         masking_threshold=10,
         pybdsf_threshold=5,
         overwrite=False,
