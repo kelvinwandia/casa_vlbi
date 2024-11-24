@@ -16,6 +16,7 @@ from astropy import units as u
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 from radio_beam import Beam
+import bdsf
 
 from casatasks import *
 from casaplotms import *
@@ -212,39 +213,36 @@ class Utils():
             )
 
 
+    @staticmethod
+    def pybdsf(input_image, detection_threshold):
 
+        # Check if the input image is a FITS file; if not, add .fits
+        if not input_image.endswith('.fits'):
+            input_image = input_image
+            fitsname =input_image + '.fits'
+        else:
+            # If it is already a FITS file, use it directly
+            fitsname = input_image
 
+        # Process the FITS image with pybdsf
+        img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='soft',
+                                thresh_isl=True, thresh_pix=detection_threshold, 
+                                advanced_opts=True, mean_map='map', rms_map=True, 
+                                group_by_isl=True)
 
-    # @staticmethod
-    # def pybdsf(input_image, detection_threshold):
+        # Write out island mask and FITS catalog
+        img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
+        img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
 
-    #     # Check if the input image is a FITS file; if not, add .fits
-    #     if not input_image.endswith('.fits'):
-    #         input_image = input_image
-    #         fitsname =input_image + '.fits'
-    #     else:
-    #         # If it is already a FITS file, use it directly
-    #         fitsname = input_image
+        regionfile = input_image + '.casabox'
+        ascii_file = input_image + '.ascii'
+        rmsfile = input_image + '.rmsfile'
 
-    #     # Process the FITS image with pybdsf
-    #     img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='hard',
-    #                             thresh_isl=True, thresh_pix=detection_threshold, 
-    #                             advanced_opts=True, mean_map='map', rms_map=True, 
-    #                             group_by_isl=True)
+        img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
+        img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
+        img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
 
-    #     # Write out island mask and FITS catalog
-    #     img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
-    #     img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
-
-    #     regionfile = input_image + '.casabox'
-    #     ascii_file = input_image + '.ascii'
-    #     rmsfile = input_image + '.rmsfile'
-
-    #     img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
-    #     img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
-    #     img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
-
-    #     return regionfile
+        return regionfile
     
     @staticmethod
     def make_mask(fits_file, rms, threshold):
@@ -412,11 +410,27 @@ class MeasurementSetProcessor:
         finally:
             msmd.close()
 
+
         ## TODO: Make this better
         logging.info("Flagging data using inpfile")
         flagdata(vis=outputvis,mode='list',inpfile='/raid1/scratch/kelvinw/casa_vlbi/selfcal/vla_flagging_template/s_band_d_config.txt')
+        
+        phasecenter = 'J2000 11:30:17.38226541 +07.32.13.0287212'
+        logging.info("Phaseshifting")
+        phaseshifted_vis = outputvis.replace('.ms','_phaseshifted.ms')
+        
+        if not os.path.exists(phaseshifted_vis):
+            logging.info(f"{phaseshifted_vis} exists")
+            phaseshift(vis=outputvis,
+                    outputvis=phaseshifted_vis,
+                    phasecenter=phasecenter,
+                    datacolumn='data',
+                    )
+            return phaseshifted_vis
 
-        return outputvis
+        else:
+            return outputvis
+
 
 
 
@@ -941,7 +955,7 @@ class WSClean_Imager:
 
     def __init__(self, msname: str, imsize: int = 640, niter: int = 0, auto_thresh: int = 0.3, auto_mask_thresh: float = 3, deconvolution:str = None, wsclean_masking: bool = True,
                  overwrite: bool = False, use_pybdsf: bool = False , pybdsf_threshold: int = 5, mgain: float = 0.8, robust: float = 0.5, pbcorrect: bool = True,
-                imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None, multifreq: bool = False):
+                imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None, multifreq: bool = False,use_auto_thresh_auto_mask: bool = False):
         """
         Initializes the wsclean_Imager instance with specified parameters.
 
@@ -979,6 +993,7 @@ class WSClean_Imager:
         self.robust = robust
         self.wsclean_masking = wsclean_masking
         self.pbcorrect = pbcorrect
+        self.use_auto_thresh_auto_mask = use_auto_thresh_auto_mask
 
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
 
@@ -1014,14 +1029,19 @@ class WSClean_Imager:
             "-scale", self.cell,
             "-mgain", str(self.mgain),
             "-niter", str(self.niter),
-            "-auto-mask", str(self.auto_mask_thresh),
-            "-auto-threshold", str(self.auto_thresh),
-            # "-weight briggs",str(self.robust),
         ]
 
         # Handle multifrequency mode
         if self.multifreq:
             command.extend(["-join-channels", "-channels-out", str(nspw)])
+
+        if self.use_auto_thresh_auto_mask:
+            logging.info(f"Using auto thresholding and auto masking")
+            command.append("-auto-mask", str(self.auto_mask_thresh))
+            command.append("-auto-threshold", str(self.auto_thresh))
+
+
+            # "-weight briggs",str(self.robust),
 
         # Handle masking
         if self.maskfile:
@@ -1311,6 +1331,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     cell = self.cell,
                     robust = self.robust,
                     multifreq = self.multifreq,
+                    pbcorrect = self.pbcorrect,
+                    use_auto_thresh_auto_mask = self.use_auto_thresh_auto_mask,
                     niter = 1, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                     )
                 imager_instance.imager()
@@ -1335,20 +1357,22 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 #     rms=image_rms, threshold=self.masking_threshold)
 
 
-                # # If using PYBDSF for masking, call it here
-                # if self.use_pybdsf:
-                #     try:
-                #         logging.info(f"Running pybdsf on {imagename_dirty}...")
-                #         Utils.pybdsf(imagename_dirty + '-image.fits', self.pybdsf_threshold)
-                #         self.maskfile = imagename_dirty + '-image.fits.maskfile.fits'
-                #         self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
-                #         logging.info(f"PYBDSF output file: {self.maskfile} will be used for masking")
-                #         logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
-                #     except Exception as e:
-                #         logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
-                # else:
-                #     logging.info("Masking using PYBDSF not requested.")
-                #     self.maskfile = ''
+                # If using PYBDSF for masking, call it here
+                if self.use_pybdsf:
+                    try:
+                        logging.info(f"Running pybdsf on {imagename_dirty}...")
+                        if self.multifreq:
+                            imagename_dirty = imagename_dirty+'-MFS'
+                        Utils.pybdsf(imagename_dirty + '-image.fits', self.pybdsf_threshold)
+                        self.maskfile = imagename_dirty + '-image.fits.maskfile.fits'
+                        self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
+                        logging.info(f"PYBDSF output file: {self.maskfile} will be used for masking")
+                        logging.info(f"Successfully ran pybdsf on {imagename_dirty}.")
+                    except Exception as e:
+                        logging.error(f"Failed to run pybdsf on {imagename_dirty}: {e}")
+                else:
+                    logging.info("Masking using PYBDSF not requested.")
+                    self.maskfile = ''
 
             else:
             #     # Set niter for subsequent loops and disable pybdsf
@@ -1367,6 +1391,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     cell = self.cell,
                     robust = self.robust,
                     multifreq = self.multifreq,
+                    pbcorrect = self.pbcorrect,
+                    use_auto_thresh_auto_mask = self.use_auto_thresh_auto_mask,
                     # maskfile = self.maskfile
                     # maskfile = masking_file
                     )
@@ -1438,18 +1464,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 coloraxis = ['corr', 'spw']
                 for color in coloraxis:
                     if self.calmode[selfcal_loop] == 'p':
-                        # plotms(
-                        #     vis=caltable, xaxis='time', yaxis='phase', gridcols=3, gridrows=3,
-                        #     iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                        #     plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
-                        # )
                         Utils.plot_caltable(caltable,color,yaxis='phase')
                     else:
-                        # plotms(
-                        #     vis=caltable, xaxis='time', yaxis='amp', gridcols=3, gridrows=3,
-                        #     iteraxis='antenna', coloraxis=color, showgui=False, overwrite=True,
-                        #     plotfile=caltable.replace('.gcal', f'_{color}.png'), dpi=300, width=1500, height=750,
-                        # )
                         Utils.plot_caltable(caltable,color,yaxis='amp')
                 # Apply calibration tables after the last self-calibration loop
                 if selfcal_loop == self.nloops - 1:
@@ -1480,6 +1496,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 cell = self.cell,
                 robust = self.robust,
                 multifreq = self.multifreq,
+                pbcorrect = self.pbcorrect,
+                use_auto_thresh_auto_mask = self.use_auto_thresh_auto_mask,
                 niter = 1000000, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                 )
         
@@ -1941,12 +1959,12 @@ def configure_parameters():
     return {
         'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
         # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
-        'nloops': 3,
+        'nloops': 1,
         'thresholds': ['', 4 , 4, 4, 4],
-        'calmode': ['','p','ap','ap','ap'],
+        'calmode': ['','p','p','ap','ap'],
         'gaintype': ['' ,'G','G', 'G','G'],
-        'solint': ['','96s', '192s','240s'],
-        'minsnr': ['', 2, 2, 2, 2],
+        'solint': ['','192s','96s', 'inf','192s'],
+        'minsnr': ['', 1, 1, 1, 1],
         'avgtime': '6s',
         'width': 1,
         'fieldname':fieldnames,
@@ -2004,6 +2022,7 @@ def perform_selfcalibration(vis, parameters):
         robust = 0.5, 
         multifreq = True,  # defaults is False -- set True for VLA data
         pbcorrect=True,
+        use_auto_thresh_auto_mask = False,
         # refant = 'EF' ,
         # cell = '3arcsec' 
     )
@@ -2023,7 +2042,7 @@ def perform_selfcalibration(vis, parameters):
         deconvolver='hogbom',
         weighting='briggs',
         robust=0.5,
-        use_pybdsf=False, # leave as False -- mask from pybdsf is weird
+        use_pybdsf=True, # leave as False -- mask from pybdsf is weird
         masking_threshold=10,
         pybdsf_threshold=5,
         overwrite=False,
