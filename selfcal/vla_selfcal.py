@@ -16,7 +16,7 @@ from astropy import units as u
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 from radio_beam import Beam
-# import bdsf
+import bdsf
 
 from casatasks import *
 from casaplotms import *
@@ -119,6 +119,7 @@ class Utils():
             singularity_bind = os.path.join(os.path.dirname(os.path.dirname(wsclean_sif)))
             # Form the command to execute with Singularity
             command_to_execute = ['singularity', 'exec', '-B', singularity_bind, wsclean_sif] + command
+            logging.info(f"Executing: {' '.join(command_to_execute)}")
             print(f"Executing: {' '.join(command_to_execute)}")
             try:
                 # logging.info(f"Executing: {' '.join(command_to_execute)}")
@@ -215,35 +216,34 @@ class Utils():
 
     @staticmethod
     def pybdsf(input_image, detection_threshold):
-        pass
 
-    #     # Check if the input image is a FITS file; if not, add .fits
-    #     if not input_image.endswith('.fits'):
-    #         input_image = input_image
-    #         fitsname =input_image + '.fits'
-    #     else:
-    #         # If it is already a FITS file, use it directly
-    #         fitsname = input_image
+        # Check if the input image is a FITS file; if not, add .fits
+        if not input_image.endswith('.fits'):
+            input_image = input_image
+            fitsname =input_image + '.fits'
+        else:
+            # If it is already a FITS file, use it directly
+            fitsname = input_image
 
-    #     # Process the FITS image with pybdsf
-    #     img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='soft',
-    #                             thresh_isl=True, thresh_pix=detection_threshold, 
-    #                             advanced_opts=True, mean_map='map', rms_map=True, 
-    #                             group_by_isl=True)
+        # Process the FITS image with pybdsf
+        img = bdsf.process_image(fitsname, adaptive_rms_box=True, thresh='hard',
+                                thresh_isl=True, thresh_pix=detection_threshold, rms_box=(20,10),
+                                advanced_opts=True, mean_map='map', rms_map=True, 
+                                group_by_isl=True)
 
-    #     # Write out island mask and FITS catalog
-    #     img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
-    #     img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
+        # Write out island mask and FITS catalog
+        img.export_image(outfile=input_image + '.maskfile.fits', img_type='island_mask', img_format='fits', clobber=True)
+        img.write_catalog(outfile=input_image + '.cat', format='fits', clobber=True, catalog_type='gaul')
 
-    #     regionfile = input_image + '.casabox'
-    #     ascii_file = input_image + '.ascii'
-    #     rmsfile = input_image + '.rmsfile'
+        regionfile = input_image + '.casabox'
+        ascii_file = input_image + '.ascii'
+        rmsfile = input_image + '.rmsfile'
 
-    #     img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
-    #     img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
-    #     img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
+        img.write_catalog(outfile=regionfile, format='casabox', clobber=True, catalog_type='srl')
+        img.write_catalog(outfile=ascii_file, format='ascii', clobber=True, catalog_type='gaul')
+        img.export_image(outfile=rmsfile, img_type='rms', img_format='fits', clobber=True)
 
-    #     return regionfile
+        return regionfile
     
     @staticmethod
     def make_mask(fits_file, rms, threshold):
@@ -420,17 +420,17 @@ class MeasurementSetProcessor:
         logging.info("Phaseshifting")
         phaseshifted_vis = outputvis.replace('.ms','_phaseshifted.ms')
         
-        if not os.path.exists(phaseshifted_vis):
-            logging.info(f"{phaseshifted_vis} exists")
-            phaseshift(vis=outputvis,
-                    outputvis=phaseshifted_vis,
-                    phasecenter=phasecenter,
-                    datacolumn='data',
-                    )
-            return phaseshifted_vis
+        # if not os.path.exists(phaseshifted_vis):
+        #     logging.info(f"Phaseshifting {outputvis} to {phaseshifted_vis}")
+        #     phaseshift(vis=outputvis,
+        #             outputvis=phaseshifted_vis,
+        #             phasecenter=phasecenter,
+        #             datacolumn='data',
+        #             )
+        #     return phaseshifted_vis
 
-        else:
-            return outputvis
+        # else:
+        return outputvis
 
 
 
@@ -955,7 +955,7 @@ class WSClean_Imager:
     """
 
     def __init__(self, msname: str, imsize: int = 640, niter: int = 0, auto_thresh: int = 0.3, auto_mask_thresh: float = 3, deconvolution:str = None, wsclean_masking: bool = True,
-                 overwrite: bool = False, use_pybdsf: bool = False , pybdsf_threshold: int = 5, mgain: float = 0.8, robust: float = 0.5, pbcorrect: bool = True, verbose: bool = False,
+                 overwrite: bool = False, use_pybdsf: bool = True , pybdsf_threshold: int = 5, mgain: float = 0.8, robust: float = 0.5, pbcorrect: bool = True, verbose: bool = False, threshold: int = None,
                 imagename: str = None, wsclean_sif: str = None, maskfile: str = '', cell:list = None, multifreq: bool = False,use_auto_thresh_auto_mask: bool = False):
         """
         Initializes the wsclean_Imager instance with specified parameters.
@@ -996,6 +996,7 @@ class WSClean_Imager:
         self.pbcorrect = pbcorrect
         self.use_auto_thresh_auto_mask = use_auto_thresh_auto_mask
         self.verbose = verbose
+        self.threshold = threshold
 
         self.imagename = imagename if imagename else f"{self.msname.replace('.ms', '_image')}"
 
@@ -1044,10 +1045,14 @@ class WSClean_Imager:
 
 
             # "-weight briggs",str(self.robust),
+
+        if self.threshold:
+            command.extend(["-auto-threshold",str(self.threshold)])
         
         if self.verbose:
             command.append("-verbose")
         else:
+            logging.info("Running in quiet mode")
             command.append("-quiet")
 
         # Handle masking
@@ -1066,7 +1071,8 @@ class WSClean_Imager:
 
 
         command.append(self.msname)
-        logging.info(f"Executing WSClean with command: {' '.join(command)}")
+
+        # logging.info(f"Executing WSClean with command: {' '.join(command)}")
         
         try:
             Utils.run_wsclean(command)
@@ -1137,7 +1143,7 @@ class PlottingRoutines:
         if not isinstance(new_imagename, str):
             raise ValueError("Imagename must be a string")
         self._imagename = new_imagename
-        print(f"Imagename updated to: {self._imagename}")
+        logging.info(f"Imagename updated to: {self._imagename}")
 
     def get_beam(self):
         """
@@ -1276,7 +1282,7 @@ class PlottingRoutines:
             try:
                 ax.contour(image_data, levels=levels_neg[::-1], colors='k', linewidths=1.0, extent=extent, alpha=1.0)
             except Exception as e:
-                print(f"Error while plotting negative contours: {e}")
+                logging.warning(f"Error while plotting negative contours: {e}")
 
             plt.tight_layout()
             plt.savefig(self.imagename.replace('.fits','.pdf'),dpi=300)
@@ -1298,7 +1304,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
 
         self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
 
-        # print(self.refant)
+        # logging.info(self.refant)
 
         
 
@@ -1319,6 +1325,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
             
             
             imagename = f'{self.msname.replace(".ms", "_selfcal_loop")}_{selfcal_loop}'
+            
 
             # Set niter to 0 for the first loop to create a dirty map and run PYBDSF
             if selfcal_loop == 0:
@@ -1330,7 +1337,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     imagename = imagename_dirty,
                     imsize = self.imsize,  
                     # threshold  =  self.threshold, ## threshold here can be 0.0 which is the default, 
-                    # threshold = 3,                
+                    threshold = 3.0,                
                     overwrite = self.overwrite,
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
@@ -1369,7 +1376,6 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     try:
                         if self.multifreq:
                             logging.info(f"Running pybdsf on {imagename_dirty}...")
-                            imagename_dirty = imagename_dirty+'-MFS'
                         Utils.pybdsf(imagename_dirty + '-image.fits', self.pybdsf_threshold)
                         self.maskfile = imagename_dirty + '-image.fits.maskfile.fits'
                         self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
@@ -1381,16 +1387,17 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     logging.info("Masking using PYBDSF not requested.")
                     self.maskfile = ''
 
-            else:
-            #     # Set niter for subsequent loops and disable pybdsf
-            #     self.use_pybdsf = False
-                
+                logging.info(f"Using {self.maskfile} for masking")
+
+
+            else:           
+
                 imager_instance = WSClean_Imager(
                     msname = self.msname, 
                     imagename = imagename,
                     imsize = self.imsize,  
                     niter = self.niter,
-                    # threshold = self.thresholds[selfcal_loop],
+                    threshold = self.thresholds[selfcal_loop],
                     overwrite = self.overwrite,
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
@@ -1400,40 +1407,53 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     multifreq = self.multifreq,
                     pbcorrect = self.pbcorrect,
                     use_auto_thresh_auto_mask = self.use_auto_thresh_auto_mask,
-                    # maskfile = self.maskfile
+                    maskfile = self.maskfile
                     # maskfile = masking_file
                     )
-
+                    
                 imager_instance.imager()
 
-
-
-                ### Put image model in measurement set  MODEL COLUMN -- similar to ft in CASA
-
                 if self.multifreq == True:
-
                     imagename = imagename+'-MFS'
                     plotter = PlottingRoutines(imagename = imagename + '-image.fits')
                     plotter.plot_image_with_beam()
                     Utils.get_im_stats(imagename+'-image.fits',imagename+'-residual.fits')
 
-                    logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
+                    if self.use_pybdsf:
+                        logging.info(f"Running pybdsf on {imagename}...")
+                        Utils.pybdsf(imagename + '-image.fits', self.pybdsf_threshold)
+                        self.maskfile = imagename + '-image.fits.maskfile.fits'
+                        self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
+                        logging.info(f"PYBDSF output file: {self.maskfile} will be used for masking")
+                        logging.info(f"Successfully ran pybdsf on {imagename}.")
+
+
                     # model_fits = imagename.replace('-image.fits','-model.fits') ## WSClean must find an image named --model.fits (IN CWD) in order to predict !
                     model_fits = imagename+'-model.fits'
                     logging.info(f"Adding modelcolumn to data. Using {model_fits} to predict")
+
+
                 else:
                     plotter = PlottingRoutines(imagename = imagename + '-image.fits')
                     plotter.plot_image_with_beam()
                     Utils.get_im_stats(imagename+'-image.fits',imagename+'-residual.fits')
-                    logging.info(f"Making imagename: {imagename} for selfcal loop: {selfcal_loop} using niter: {self.niter}")
+
+                    if self.use_pybdsf:
+                        logging.info(f"Running pybdsf on {imagename}...")
+                        Utils.pybdsf(imagename + '-image.fits', self.pybdsf_threshold)
+                        self.maskfile = imagename + '-image.fits.maskfile.fits'
+                        self.maskfile.replace('.fits','') + '.fits' ## removing the repeated .fits name
+                        logging.info(f"PYBDSF output file: {self.maskfile} will be used for masking")
+                        logging.info(f"Successfully ran pybdsf on {imagename}.")
+
                     # model_fits = imagename.replace('-image.fits','-model.fits') ## WSClean must find an image named --model.fits (IN CWD) in order to predict !
                     model_fits = imagename+'-model.fits'
                     logging.info(f"Adding modelcolumn to data. Using {model_fits} to predict")
 
-
+                ### Put image model in measurement set  MODEL COLUMN -- similar to ft in CASA
                 imager_instance.predict()
 
-                ### Make plot to verify that predict is working
+                ## Make plot to verify that predict is working
                 nspw,nchan = MeasurementSetInfo.get_msinfo(self.msname)
                 logging.info("Plotting the model column")
                 try:
@@ -1474,7 +1494,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                         Utils.plot_caltable(caltable,color,yaxis='phase')
                     else:
                         Utils.plot_caltable(caltable,color,yaxis='amp')
-                # Apply calibration tables after the last self-calibration loop
+
+                ### Apply calibration tables after the last self-calibration loop
                 if selfcal_loop == self.nloops - 1:
                     prev_caltables = sorted(glob.glob('*.gcal'))
                     logging.info("Applying the caltable derived from last gaincal iteration")
@@ -1508,19 +1529,19 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 niter = 1000000, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                 )
         
-            # imager_instance.imager()
+            imager_instance.imager()
 
-            # if self.multifreq == True:
+            if self.multifreq == True:
 
-            #     imagename_final = imagename_final+'-MFS'
-            #     plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
-            #     plotter.plot_image_with_beam()
-            #     Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
+                imagename_final = imagename_final+'-MFS'
+                plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
+                plotter.plot_image_with_beam()
+                Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
 
-            # else:
-            #     plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
-            #     plotter.plot_image_with_beam()
-            #     Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
+            else:
+                plotter = PlottingRoutines(imagename = imagename_final + '-image.fits')
+                plotter.plot_image_with_beam()
+                Utils.get_im_stats(imagename_final+'-image.fits',imagename_final+'-residual.fits')
 
 
 
@@ -1554,7 +1575,7 @@ class SelfCalibrationTclean(tclean_Imager):
         self.masking_threshold = masking_threshold
 
         self.refant = refant if refant is not None else str(MeasurementSetInfo.find_refant(self.msname))
-        # print(self.refant)
+        # logging.info(self.refant)
 
     @Utils.time_execution
     def selfcal(self) -> None:
@@ -1580,7 +1601,7 @@ class SelfCalibrationTclean(tclean_Imager):
                 imagename_dirty = self.imagename+'_dirty'
 
                 mask = ''
-
+                print(f"++++++++++++++++++{self.thresholds}")
                 # Run tclean to generate the dirty map
                 imager_instance = tclean_Imager(
                     msname=self.msname,
@@ -1660,7 +1681,7 @@ class SelfCalibrationTclean(tclean_Imager):
                     niter=self.niter,
                     cell=self.cell,
                     deconvolver=self.deconvolver,
-                    # threshold=self.thresholds[selfcal_loop],
+                    threshold=self.thresholds[selfcal_loop],
                     weighting = self.weighting,
                     robust = self.robust,
                     mask=masking_file,
@@ -1755,7 +1776,7 @@ class SelfCalibrationTclean(tclean_Imager):
             
             self.niter = 1000000  # Can be modified to set a new value if needed
             # self.threshold = '0.001mJy'
-            self.use_pybdsf = False
+            # self.use_pybdsf = False
 
             # Initialize imager_instance with required parameters for self-calibration
             imager_instance = tclean_Imager(
@@ -1778,18 +1799,18 @@ class SelfCalibrationTclean(tclean_Imager):
             image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
             exportfits(imagename=imagename_final + image_ext, fitsimage=imagename_final+ image_ext + '.fits', overwrite=True)
 
-            # # Run PYBDSF if requested
-            # try:
-            #     logging.info(f"Running pybdsf on {imagename_final}...")
-            #     if self.use_pybdsf:
-            #         Utils.pybdsf(imagename_final+ image_ext, self.pybdsf_threshold)
-            #         mask = imagename_final+ image_ext+ '.casabox'
-            #         logging.info(f"Successfully ran pybdsf on {imagename_final}.")
-            #     else:
-            #         logging.info(f"Masking using PYBDSF not requested")
-            #         mask = ''
-            # except Exception as e:
-            #     logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
+            # Run PYBDSF if requested
+            try:
+                logging.info(f"Running pybdsf on {imagename_final}...")
+                if self.use_pybdsf:
+                    Utils.pybdsf(imagename_final+ image_ext, self.pybdsf_threshold)
+                    mask = imagename_final+ image_ext+ '.casabox'
+                    logging.info(f"Successfully ran pybdsf on {imagename_final}.")
+                else:
+                    logging.info(f"Masking using PYBDSF not requested")
+                    mask = ''
+            except Exception as e:
+                logging.error(f"Failed to run pybdsf on {imagename_final}: {e}")
 
 
     # def applycal_target():
@@ -1838,22 +1859,22 @@ class ImageProcessor:
         noise_level = stats['rms'][0]
         threshold = 5 * noise_level  # Threshold set to 5 times the RMS
 
-        print(f"Using threshold: {threshold} Jy")  # Debug print
+        logging.info(f"Using threshold: {threshold} Jy")  # Debug print
 
         ## call get_beam from plotting routines
         bmaj, bmin, pa = PlottingRoutines.get_beam(self)
-        # print(bmaj,bmin,pa)
+        # logging.info(bmaj,bmin,pa)
 
         ## Set region to ignore
         ignore_radius = 2 * bmaj
 
         # Get max_iterations value
         max_iterations = self.max_iterations
-        print(f"Peeling will run {max_iterations} iterations")  
+        logging.info(f"Peeling will run {max_iterations} iterations")  
 
         # Iterate using a for loop
         for iteration in range(max_iterations):
-            print(f"Starting iteration {iteration + 1}")  # Debug print
+            logging.info(f"Starting iteration {iteration + 1}")  # Debug logging.info
 
             # Get image statistics for max flux
             image_data = imstat(self.imagename)
@@ -1862,7 +1883,7 @@ class ImageProcessor:
 
             # If flux is below the threshold, exit the loop
             if max_flux < threshold:
-                print(f"Flux is below threshold {threshold} Jy. Stopping after {iteration + 1} iterations.")
+                logging.info(f"Flux is below threshold {threshold} Jy. Stopping after {iteration + 1} iterations.")
                 break
 
             # Ignore the center of the image (a few beam factors)
@@ -1871,7 +1892,7 @@ class ImageProcessor:
             center_x, center_y = shape[0] / 2, shape[1] / 2
 
             if ((max_x - center_x) ** 2 + (max_y - center_y) ** 2) ** 0.5 < ignore_radius:
-                print("Skipping central region of the image.")
+                logging.info("Skipping central region of the image.")
                 break
 
             # Define the box around the peak position
@@ -1882,12 +1903,12 @@ class ImageProcessor:
 
             imfit_box = f"{xmin},{ymin},{xmax},{ymax}"
         
-            print(f"Automatically determined imfit box: {imfit_box}")
+            logging.info(f"Automatically determined imfit box: {imfit_box}")
 
             # Fit a Gaussian to the source and extract position and flux
             fit_result = imfit(self.imagename, box=imfit_box)
             if 'component0' not in fit_result['results']:
-                print("No fit found for this source, skipping.")
+                logging.info("No fit found for this source, skipping.")
                 break
 
             peak_flux = fit_result['results']['component0']['peak']['value']
@@ -1899,9 +1920,9 @@ class ImageProcessor:
             ra_hms = sky_coord.ra.to_string(unit=u.hour, sep=':')
             dec_dms = sky_coord.dec.to_string(unit=u.deg, sep='.', pad=True)
 
-            print(f"Right Ascension (hms): {ra_hms}")
-            print(f"Declination (dms): {dec_dms}")
-            print(f"Peak flux: {peak_flux} Jy")
+            logging.info(f"Right Ascension (hms): {ra_hms}")
+            logging.info(f"Declination (dms): {dec_dms}")
+            logging.info(f"Peak flux: {peak_flux} Jy")
 
             # Define the component list filename using RA and Dec
             clname = f"{ra_hms}_{dec_dms}.cl"
@@ -1912,25 +1933,25 @@ class ImageProcessor:
             self.cl.addcomponent(flux=peak_flux, fluxunit='Jy', shape='point', dir=f"J2000 {ra_hms} {dec_dms}")
             self.cl.rename(clname)
             self.cl.done()
-            print(f"Component with flux {peak_flux} Jy at J2000 {ra_hms} {dec_dms} saved to {clname}")
+            logging.info(f"Component with flux {peak_flux} Jy at J2000 {ra_hms} {dec_dms} saved to {clname}")
 
             # Delete the original model column
-            print("Deleting model column.")
+            logging.info("Deleting model column.")
             delmod(vis=self.msname, otf=True)
             plotms(vis=self.msname, xaxis='frequency', yaxis='amp', ydatacolumn='model', plotfile='empty_model.png', showgui=False, overwrite=True)
 
             # Add model to the MODEL column and subtract
-            print(f"Adding {clname} to model column using ft")
+            logging.info(f"Adding {clname} to model column using ft")
             ft(vis=self.msname, complist=clname, incremental=False, usescratch=True)
             plotms(vis=self.msname, xaxis='frequency', yaxis='amp', ydatacolumn='model', plotfile='added_model.png', showgui=False, overwrite=True)
 
             # Perform UV subtraction
-            print("Performing UVSUB to remove the source.")
+            logging.info("Performing UVSUB to remove the source.")
             uvsub(vis=self.msname, reverse=False)
 
-            print(f"Finished peeling source at {ra_hms}, {dec_dms} with flux {peak_flux} Jy.\n")
+            logging.info(f"Finished peeling source at {ra_hms}, {dec_dms} with flux {peak_flux} Jy.\n")
 
-            # print(f"Making new image to use for peeling")
+            # logging.info(f"Making new image to use for peeling")
             # # Re-image to update `self.imagename`
             # new_imagename = f"{self.imagename}_iteration_{iteration + 1}"
             # WSClean_Imager(
@@ -1946,7 +1967,7 @@ class ImageProcessor:
 
             # Update `self.imagename` to the new image name
             # self.imagename = new_imagename + "-image.fits"
-            # print(f"Updated imagename to {self.imagename}")
+            # logging.info(f"Updated imagename to {self.imagename}")
 
 
 
@@ -1967,7 +1988,7 @@ def configure_parameters():
         'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
         # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
         'nloops': 5,
-        'thresholds': ['', 4 , 4, 4, 4],
+        'thresholds': [3, 3 , 3, 3, 3],
         'calmode': ['','p','p','ap','ap'],
         'gaintype': ['' ,'G','G', 'G','G'],
         'solint': ['','192s','96s', 'inf','192s'],
@@ -2018,10 +2039,10 @@ def perform_selfcalibration(vis, parameters):
         gaintype=parameters['gaintype'],
         solint=parameters['solint'],
         minsnr=parameters['minsnr'],
-        imsize=320,
+        imsize=512,
         niter=10000000,
-        use_pybdsf=False, ## Leave as false
-        pybdsf_threshold=10,
+        use_pybdsf=True, ## Leave as false
+        pybdsf_threshold=5,
         masking_threshold = 8,
         auto_thresh = 0.3,
         auto_mask_thresh = 3,
@@ -2030,8 +2051,8 @@ def perform_selfcalibration(vis, parameters):
         robust = 0.5, 
         multifreq = True,  # defaults is False -- set True for VLA data
         pbcorrect=True,
-        use_auto_thresh_auto_mask = True,
-        verbose = False,
+        use_auto_thresh_auto_mask = False,
+        verbose = True,
         # refant = 'EF' ,
         # cell = '3arcsec' 
     )
@@ -2054,7 +2075,7 @@ def perform_selfcalibration(vis, parameters):
         use_pybdsf=False, # leave as False -- mask from pybdsf is weird
         masking_threshold=10,
         pybdsf_threshold=5,
-        overwrite=False,
+        overwrite=True,
         parallel = True,
         # outlierfile = parameters['outlierfile'],
         make_final_image=False,
