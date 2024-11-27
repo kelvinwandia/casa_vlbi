@@ -224,19 +224,20 @@ def flagdata_split(msname):
     split(vis=msname,outputvis=splitvis,datacolumn='corrected',spw='')
 
 
-def instr_delay_pol(msname):
+def derive_pol_properties(msname,polarisation_calibrator):
 
 
     from scipy.optimize import curve_fit
     import matplotlib.pyplot as plt
     
     polarisation_calibrator = '3c286'
-    os.system(f"wget -c 'https://science.nrao.edu/facilities/vla/docs/manuals/obsguide/files/modes/3c286_2019' -O {polarisation_calibrator}_2019.dat")
+    os.system(f"wget -c 'https://science.nrao.edu/facilities/vla/docs/manuals/obsguide/files/modes/{polarisation_calibrator}_2019' -O {polarisation_calibrator}_2019.dat")
 
     data = np.loadtxt(f"{polarisation_calibrator}_2019.dat")
 
     _ , mean_freq, _, _ = get_observing_band(msname)
     
+    ### Stokes I
 
     def S(f,S,alpha,beta):
             return S*(f/round(mean_freq,1))**(alpha+beta*np.log10(f/round(mean_freq,1)))
@@ -254,27 +255,46 @@ def instr_delay_pol(msname):
     print( 'Covariance')
     print(pcov)
 
-    # #Clear any plots that may already exist
-    # plt.close()
+    #Clear any plots that may already exist
+    plt.close()
 
-    # plt.plot(data[0:6,0], data[0:6,1], 'ro', label='data')
-    # plt.plot(np.arange(1,5,0.1), S(np.arange(1,5,0.1), *popt), 'r-', label='fit')
+    plt.plot(data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,1], 'ro', label='data')
+    plt.plot(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), S(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), *popt), 'r-', label='fit')
 
-    # plt.title('3C48')
-    # plt.legend()
-    # plt.xlabel('Frequency (GHz)')
-    # plt.ylabel('Flux Density (Jy)')
-    # plt.savefig('FluxvFreq.png')
-    # plt.show()
+    plt.title(f'{polarisation_calibrator}')
+    plt.legend()
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('Flux Density (Jy)')
+    plt.savefig('FluxvFreq.png')
 
-    
+    ### Polarisation fraction
+    def PF(f,a,b,c,d):
+        return a+b*((f-round(mean_freq,1))/round(mean_freq,1))+c*((f-round(mean_freq,1))/round(mean_freq,1))**2+d*((f-round(mean_freq,1))/round(mean_freq,1))**3
+
+    # Fit 1 - 5 GHz data points
+    popt, pcov = curve_fit(PF,data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,2])
+    print("Polfrac Polynomial: ", popt)
+    print("Covariance")
+    print(pcov)
+
+    #Clear any plots that may already exist
+    plt.close()
+
+    plt.plot(data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,2], 'ro', label='data')
+    plt.plot(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), PF(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), *popt), 'r-', label='fit')
+
+    plt.title(f'{polarisation_calibrator}')
+    plt.legend()
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('Lin. Pol. Fraction')
+    plt.savefig('LinPolFracvFreq.png')
+    plt.show()
 
 
 set_working_dir(working_directory)
 # remove_parang_corrections(msname)
 # flagdata_split(msname)
 
-
-instr_delay_pol(msname = splitvis)
+derive_pol_properties(msname = splitvis,polarisation_calibrator='3c286')
 
 
