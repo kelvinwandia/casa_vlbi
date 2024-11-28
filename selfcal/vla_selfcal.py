@@ -21,6 +21,17 @@ from casatasks import *
 from casaplotms import *
 from casatools import componentlist
 
+from casatools import image as IA
+import numpy as np
+import astropy.io.fits as pf
+from astropy.wcs import WCS
+from astropy import units as u
+from casatasks import imhead
+from skimage.morphology import disk, square
+from scipy import ndimage
+import matplotlib.pyplot as plt
+from astropy.stats import mad_std
+
 msmd = casatools.msmetadata()
 tb = casatools.table()
 ms = casatools.ms()
@@ -282,6 +293,235 @@ class Utils():
         logging.info(f"Mask saved to {output_file}")
 
         return output_file
+    
+
+
+    def load_fits_data(image):
+        '''
+            Function that read fits files, using casa IA.open or astropy.io.fits.
+            Note: For some reason, IA.open returns a rotated mirrored array, so we need
+            to undo it by a rotation.
+            '''
+        if isinstance(image, str) == True:
+            try:
+                ia = IA()
+                ia.open(image)
+                try:
+                    numpy_array = ia.getchunk()[:, :, 0, 0]
+                except:
+                    numpy_array = ia.getchunk()[:, :]
+                ia.close()
+                # casa gives a mirroed and 90-degree rotated image :(
+                data_image = np.rot90(numpy_array)[::-1, ::]
+                return (data_image)
+            except:
+                try:
+                    _data_image = pf.getdata(image)
+                    if len(_data_image.shape) == 4:
+                        data_image = _data_image[0][0]
+                    else:
+                        data_image = _data_image
+                    return (data_image)
+                except:
+                    print('Input image is not a fits file.')
+                    return (ValueError)
+        else:
+            raise ValueError("Input image is not a string.")
+        
+
+
+
+    def get_cell_size(imagename):
+        """
+        Get the cell size/pixel size in arcsec from an image header wcs.
+        """
+        hdu = pf.open(imagename)
+        ww = WCS(hdu[0].header)
+        pixel_scale = (ww.pixel_scale_matrix[1,1]*3600)
+        cell_size =  pixel_scale.copy()
+        return(cell_size)
+
+
+    def beam_shape(image):
+        '''
+        Return the beam shape (bmin,bmaj,pa) from given image.
+        It uses CASA's function `imhead`.
+
+        '''
+        cell_size = Utils.get_cell_size(image)
+        imhd = imhead(image)
+        Omaj = imhd['restoringbeam']['major']['value']
+        Omin = imhd['restoringbeam']['minor']['value']
+        PA = imhd['restoringbeam']['positionangle']['value']
+        freq = imhd['refval'][2] / 1e9
+        bmaj = Omaj*u.arcsec
+        bmin = Omin*u.arcsec
+        freq_ = freq * u.GHz
+
+        fwhm_to_sigma = 1./(8*np.log(2))**0.5
+        BAarcsec = 2.*np.pi*(bmaj*bmin*fwhm_to_sigma**2)
+        return (Omaj,Omin,PA,freq,BAarcsec)
+
+
+
+
+
+    def mask_dilation(image, cell_size=None, sigma=6,rms=None,
+                    dilation_size=None,iterations=2, dilation_type='disk',
+                    PLOT=False,show_figure=True,logger=None,
+                    fig_size_factor = 1,
+                    special_name='',verbose=0):
+        """
+        Mask dilation function.
+
+        Apply a binary dilation to a mask originated from the emission of a source.
+        This was originally designed for radio images, where the dilation factor is
+        proportional to the beam size. The dilation factor is computed as the geometric
+        mean of the major and minor axis of the beam. The dilation factor is then
+        converted to pixels using the cell size of the image. Note that the expansion
+        occurs in two opposite directions, so the dilation size should be half of the
+        size of the beam for one iteration, so that the final dilation will be a unit of
+        the beam size. However, the exact size of the dilation will also be determined by
+        the number of iterations.
+
+
+        Parameters
+        ----------
+        image : str
+            Image name.
+        cell_size : float
+            Cell size of the image in arcsec.
+        sigma : float
+            Sigma level for the mask.
+        rms : float
+            RMS level for the mask.
+        dilation_size : int
+            Size of the dilation.
+        iterations : int
+            Number of iterations for the dilation.
+        dilation_type : str
+            Type of dilation. Options are 'disk' or 'square'.
+        PLOT : bool
+            Plot the mask dilation.
+        show_figure : bool
+            Show the figure.
+        logger : logger
+            Logger object.
+        fig_size_factor : float
+            Figure size factor.
+        special_name : str
+            Special name for the mask dilation.
+        """
+
+        if isinstance(image, str) == True:
+            data = Utils.load_fits_data(image)
+        else:
+            data = image
+        if rms is None:
+            std = mad_std(data)
+        else:
+            std = rms
+
+        if (dilation_size is None) or (dilation_size == '2x'):
+            try:
+                omaj, omin, _, _, _ = Utils.beam_shape(image)
+                if dilation_size == '2x':
+                    dilation_size = int(
+                        2*np.sqrt(omaj * omin) / (2 * Utils.get_cell_size(image)))
+                else:
+                    dilation_size = int(
+                        np.sqrt(omaj * omin) / (2 * Utils.get_cell_size(image)))
+                if verbose >= 1:
+                    if logger is not None:
+                        logger.debug(f" ==>  Mask dilation size is "
+                                    f"{dilation_size} [px]")
+                    else:
+                        print(f" ==>  Mask dilation size is "
+                            f"{dilation_size} [px]")
+            except:
+                if dilation_size is None:
+                    dilation_size = 5
+
+        mask = (data >= sigma * std)
+        mask3 = (data >= 3 * std)
+
+        if dilation_type == 'disk':
+            data_mask_d = ndimage.binary_dilation(mask,
+                                                structure=disk(dilation_size),
+                                                iterations=iterations).astype(mask.dtype)
+
+        if dilation_type == 'square':
+            data_mask_d = ndimage.binary_dilation(mask,
+                                                structure=square(dilation_size),
+                                                iterations=iterations).astype(mask.dtype)
+
+        if PLOT == True:
+            fig = plt.figure(figsize=(int(15*fig_size_factor), int(4*fig_size_factor)))
+            ax0 = fig.add_subplot(1, 4, 1)
+            ax0.imshow((mask3), origin='lower',cmap='magma')
+            ax0.set_title(r'Mask above ' + str(3) + '$\sigma_{\mathrm{mad}}$')
+            ax0.axis('off')
+            ax1 = fig.add_subplot(1, 4, 2)
+            #         ax1.legend(loc='lower left')
+            ax1.imshow((mask), origin='lower',cmap='magma')
+            ax1.set_title(r'Mask above ' + str(sigma) + '$\sigma_{\mathrm{mad}}$')
+            ax1.axis('off')
+            ax2 = fig.add_subplot(1, 4, 3)
+            ax2.imshow(data_mask_d, origin='lower',cmap='magma')
+            ax2.set_title(r'Dilated mask'+f'{special_name}')
+            ax2.axis('off')
+            ax3 = fig.add_subplot(1, 4, 4)
+            ax3 = imshow(data * data_mask_d, ax=ax3, vmin_factor=0.01,CM='magma')
+            ax3.set_title(r'Dilated mask $\times$ data')
+            #         ax3.imshow(np.log(data*data_mask_d))
+            plt.subplots_adjust(wspace=0.1, hspace=0.1)
+            #         fig.tight_layout()
+            ax3.axis('off')
+            if show_figure == True:
+                plt.show()
+            else:
+                plt.close()
+
+        return (mask, data_mask_d)
+
+    def create_mask_for_wsclean(imagename,
+                                rms_mask=None,
+                                sigma_mask=6.0,
+                                mask_grow_iterations=1,
+                                PLOT=False):
+
+        valid_sigma_mask = sigma_mask
+        while True:
+            mask_valid = Utils.mask_dilation(imagename,
+                                            PLOT=PLOT,
+                                            rms=rms_mask,
+                                            dilation_size = None,
+                                            sigma=valid_sigma_mask,
+                                            iterations=mask_grow_iterations)[1]
+            if mask_valid.sum() > 0:
+                break
+            print(' ++>> No mask found with sigma_mask:',valid_sigma_mask)
+            print(' ++>> Reducing sigma_mask by 2 until valid mask is found...')
+            valid_sigma_mask = valid_sigma_mask - 2.0
+
+            if valid_sigma_mask <= 6:
+                print("Reached minimum sigma threshold without finding a valid mask.")
+                break
+
+        mask_valid = Utils.mask_dilation(imagename,
+                                        PLOT=PLOT,
+                                        rms=rms_mask,
+                                        dilation_size=None, # 1x beam size
+                                        sigma=valid_sigma_mask-1,
+                                        iterations=mask_grow_iterations)[1]
+
+        mask = mask_valid
+        mask_wslclean = mask * 1.0  # mask in wsclean is inverted??
+        mask_name = imagename.replace('.fits', '') + '_masking_file.fits'
+        pf.writeto(mask_name, mask_wslclean, overwrite=True)
+        return(mask_name)
+
+
 
     @staticmethod
     def get_im_stats(deconvolved_image,residual_image):
@@ -305,7 +545,7 @@ class Utils():
 
             txt_file.write(f"For {deconvolved_image}, the maximum pos for imstat is {casa_imstat['maxposf']}\n")
 
-
+ 
 
 class MeasurementSetProcessor:
 
@@ -1045,10 +1285,10 @@ class WSClean_Imager:
             command.extend(["-auto-threshold", str(self.auto_thresh)])
 
 
-            # "-weight briggs",str(self.robust),
+        #     # "-weight briggs",str(self.robust),
 
-        if self.threshold:
-            command.extend(["-auto-threshold",str(self.threshold)])
+        # if self.threshold:
+        #     command.extend(["-auto-threshold",str(self.threshold)])
         
         if self.verbose:
             command.append("-verbose")
@@ -1338,7 +1578,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     imagename = imagename_dirty,
                     imsize = self.imsize,  
                     # threshold  =  self.threshold, ## threshold here can be 0.0 which is the default, 
-                    threshold = 3.0,                
+                    # threshold = 3.0,                
                     overwrite = self.overwrite,
                     use_pybdsf = self.use_pybdsf,
                     pybdsf_threshold = self.pybdsf_threshold,
@@ -1370,6 +1610,20 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 # image_rms = imstat(imagename=imagename_dirty + '-image.fits')['rms'][0]
                 # masking_file = Utils.make_mask(fits_file=imagename_dirty + '-image.fits',\
                 #     rms=image_rms, threshold=self.masking_threshold)
+
+                image_name = imagename_dirty +'-image.fits'
+                residual_image = imagename_dirty+'-residual.fits'
+                mask_grow_iterations = 2
+                sigma_mask = 6.0
+
+                residual_data = Utils.load_fits_data(residual_image)
+
+                rms_mask = mad_std(residual_data)
+
+                masking_file = Utils.create_mask_for_wsclean(image_name,
+                                    rms_mask=rms_mask,
+                                    sigma_mask=sigma_mask,
+                                    mask_grow_iterations=mask_grow_iterations)
 
 
                 # If using PYBDSF for masking, call it here
@@ -1408,8 +1662,8 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     multifreq = self.multifreq,
                     pbcorrect = self.pbcorrect,
                     use_auto_thresh_auto_mask = self.use_auto_thresh_auto_mask,
-                    maskfile = self.maskfile
-                    # maskfile = masking_file
+                    # maskfile = self.maskfile,
+                    maskfile = masking_file
                     )
                     
                 imager_instance.imager()
@@ -1521,7 +1775,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                 overwrite = self.overwrite,
                 use_pybdsf = self.use_pybdsf,
                 pybdsf_threshold = self.pybdsf_threshold,
-                threshold = 3,
+                # threshold = 3,
                 mgain = self.mgain,
                 cell = self.cell,
                 robust = self.robust,
@@ -1618,6 +1872,7 @@ class SelfCalibrationTclean(tclean_Imager):
                     robust = self.robust,
                     overwrite=self.overwrite,
                     outlierfile = self.outlierfile,
+                    parallel = self.parallel,
                 )
                 logging.info(f"Imaging {self.msname} to make: {self.imagename}")
                 imager_instance.imager()
@@ -1686,6 +1941,7 @@ class SelfCalibrationTclean(tclean_Imager):
                     # mask=masking_file,
                     overwrite=self.overwrite,
                     outlierfile=self.outlierfile,
+                    parallel = self.parallel
                 )
                 imager_instance.imager()
 
@@ -1781,7 +2037,8 @@ class SelfCalibrationTclean(tclean_Imager):
                 cell = self.cell,
                 weighting = self.weighting,
                 robust = self.robust,
-                overwrite=self.overwrite
+                overwrite=self.overwrite,
+                parallel = self.parallel,
             )
             imager_instance.imager()
 
@@ -1976,17 +2233,17 @@ def configure_parameters():
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config'),
+        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config_wsclean'),
         # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
         'nloops': 5,
         # 'thresholds': [3, 3 , 3, 3, 3],
-        'thresholds': [13, 9 , 7, 5, 3],
-        'calmode': ['','p','p','p','ap'],
-        'gaintype': ['' ,'G','G', 'G','G'],
-        'solint': ['','192s','96s','48s', '240','192s'],
-        'minsnr': ['', 1, 1, 1, 1],
-        'avgtime': '12s',
-        'width': 2,
+        'thresholds': [13, 9 , 7, 5, 3,3],
+        'calmode': ['','p','p','p','ap','ap'],
+        'gaintype': ['' ,'G','G', 'G','G','G'],
+        'solint': ['','192s','96s','64s', '240','192s'],
+        'minsnr': ['', 1,1,1,1,1],
+        'avgtime': '4s',
+        'width': 1,
         'fieldname':fieldnames,
         'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
@@ -1997,6 +2254,7 @@ def configure_parameters():
         # 'msname' : '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
         "msname":'/raid1/scratch/kelvinw/k2_18b/working_dir_d_config/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+        # "msname":'/raid1/scratch/kelvinw/k2_18b/23B-307.sb44672012.eb44857902.60279.39833322917.ms'
     }
 
 
@@ -2033,22 +2291,22 @@ def perform_selfcalibration(vis, parameters):
         minsnr=parameters['minsnr'],
         imsize=640,
         niter=10000000,
-        use_pybdsf=True, ## Leave as false
+        use_pybdsf=False, ## Leave as false
         pybdsf_threshold=5,
         masking_threshold = 8,
-        auto_thresh = 0.3,
+        auto_thresh = 0.5,
         auto_mask_thresh = 3,
         overwrite=False,
         final_image=True,
         robust = 0.5, 
         multifreq = True,  # defaults is False -- set True for VLA data
         pbcorrect=False,
-        use_auto_thresh_auto_mask = False,
+        use_auto_thresh_auto_mask = True,
         verbose = True,
         # refant = 'EF' ,
         # cell = '3arcsec' 
     )
-    # self_calibration_wsclean.selfcal()
+    self_calibration_wsclean.selfcal()
 
     self_calibration_tclean = SelfCalibrationTclean(
         msname=vis,
@@ -2076,7 +2334,7 @@ def perform_selfcalibration(vis, parameters):
         usemask = 'auto-multithresh'
 
     )
-    self_calibration_tclean.selfcal()
+    # self_calibration_tclean.selfcal()
 
 
 
