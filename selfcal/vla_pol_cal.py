@@ -249,6 +249,7 @@ def calculate_pol_parameters(msname,polarisation_calibrator='3c286'):
     
     spectral_index = {}
     pol_fraction = {}
+    pol_angle = {}
 
 
     # Select the frequencies that are strictly greater than mean_freq
@@ -301,6 +302,34 @@ def calculate_pol_parameters(msname,polarisation_calibrator='3c286'):
     plt.xlabel('Frequency (GHz)')
     plt.ylabel('Lin. Pol. Fraction')
     plt.savefig('LinPolFracvFreq.png')
+
+    ########## Polarization angle ###############
+
+    def PA(f,a,b,c,d,e):
+        return a+b*((f-3.0)/3.0)+c*((f-3.0)/3.0)**2+d*((f-3.0)/3.0)**3+e*((f-3.0)/3.0)**4
+
+    # De-rotating the 1.8 GHz point
+    data[2,3] = data[2,3]-np.pi
+    popt, pcov = curve_fit(PA, data[2:11,0], data[2:11,3]) # Fit 2 - 19 GHz data points -- for C/X bands
+    pol_angle['Polynomial angle'] = popt
+    logging.info(f"The Polangle Polynomial is : {pol_angle}")
+    # print("Covariance")
+    # print(pcov)
+    #Clear any plots that may already exist
+    plt.close()
+
+    plt.plot(data[2:8,0], data[2:8,3], 'ro', label='data')
+    plt.plot(np.arange(1,9,0.1), PA(np.arange(1,9,0.1), *popt), 'r-', label='fit')
+
+    plt.title('3C48')
+    plt.legend()
+    plt.xlabel('Frequency (GHz)')
+    plt.ylabel('Lin. Pol. Angle (rad)')
+    plt.savefig('LinPolAnglevFreq.png')
+
+
+    return spectral_index, pol_fraction, pol_angle
+
 
 
 
