@@ -296,6 +296,7 @@ def calculate_pol_parameters(msname,polarisation_calibrator,centre_freq=None):
     def PF(f,a,b,c,d):
         return a+b*((f-round(mean_freq,1))/round(mean_freq,1))+c*((f-round(mean_freq,1))/round(mean_freq,1))**2+d*((f-round(mean_freq,1))/round(mean_freq,1))**3
 
+
     popt, pcov = curve_fit(PF,data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,2])
     pol_fraction[f'Polfrac polynomial'] = popt
     logging.info(f"The sources polarisation fraction is: {pol_fraction}")
@@ -315,12 +316,25 @@ def calculate_pol_parameters(msname,polarisation_calibrator,centre_freq=None):
 
     ########## Polarization angle ###############
 
+    ### Increase max freq to fit
+    higher_freq_data = data[data[:, 0] > mean_freq]
+    sorted_higher_freq_data = higher_freq_data[higher_freq_data[:, 0].argsort()]
+    max_freq_to_fit = sorted_higher_freq_data[4:] ## Go four frequencies higher
+    max_freq_to_fit_index = np.where(data[:, 0] == max_freq_to_fit[0][0])[0][0]
+
+    data_greq_two_ghz = data[data[:,0]>2.0]
+    sorted_data = data_greq_two_ghz[data_greq_two_ghz[:,0].argsort()[::1]] # ascending
+    # print(sorted_data)
+    # min_freq_to_fit = sorted_higher_freq_data
+    logging.info(f"Using frequency range {data[max_freq_to_fit_index,0]} GHz to fit the pol angle")
     def PA(f,a,b,c,d,e):
-        return a+b*((f-3.0)/3.0)+c*((f-3.0)/3.0)**2+d*((f-3.0)/3.0)**3+e*((f-3.0)/3.0)**4
+        return a+b*((f-round(mean_freq,1))/round(mean_freq,1))+c*((f-round(mean_freq,1))/round(mean_freq,1))**2 + \
+            d*((f-round(mean_freq,1))/round(mean_freq,1))**3+ e*((f-round(mean_freq,1))/round(mean_freq,1))**4
+    
 
     # De-rotating the 1.8 GHz point
     data[2,3] = data[2,3]-np.pi
-    popt, pcov = curve_fit(PA, data[2:11,0], data[2:11,3]) # Fit 2 - 19 GHz data points -- for C/X bands
+    popt, pcov = curve_fit(PA, data[2:max_freq_to_fit_index,0], data[2:max_freq_to_fit_index,3]) # Fit 2 - 19 GHz data points -- for C/X bands
     pol_angle['Polynomial angle'] = popt
     logging.info(f"The Polangle Polynomial is : {pol_angle}")
     # print("Covariance")
@@ -328,8 +342,8 @@ def calculate_pol_parameters(msname,polarisation_calibrator,centre_freq=None):
     #Clear any plots that may already exist
     plt.close()
 
-    plt.plot(data[2:8,0], data[2:8,3], 'ro', label='data')
-    plt.plot(np.arange(1,9,0.1), PA(np.arange(1,9,0.1), *popt), 'r-', label='fit')
+    plt.plot(data[2:max_freq_to_fit_index,0], data[2:max_freq_to_fit_index,3], 'ro', label='data')
+    plt.plot(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), PA(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), *popt), 'r-', label='fit')
 
     plt.title('3c286')
     plt.legend()
@@ -353,4 +367,4 @@ working_directory = '/home/kelvin/Desktop/vla_calibrated/d_config/selfcal/polcal
 
 
 set_working_dir(working_directory)
-calculate_pol_parameters(msname,polarisation_calibrator='3c286',centre_freq=3.0)
+calculate_pol_parameters(msname,polarisation_calibrator='3c286',centre_freq=6.0)
