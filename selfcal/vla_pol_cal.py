@@ -3,6 +3,7 @@ from casaplotms import plotms
 from casatasks import *
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 
 import glob, os, logging
 
@@ -11,11 +12,8 @@ msmd = casatools.msmetadata()
 tb = casatools.table()
 ms = casatools.ms()
 
-cal_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir_d_config'
-msname = '/raid1/scratch/kelvinw/k2_18b/working_dir_d_config/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
-splitvis = msname.replace('.ms','_calibrated.ms')
-working_directory = '/raid1/scratch/kelvinw/k2_18b/pol_cal'
 
+logging.basicConfig(level=logging.INFO)
 
 def get_observing_band(msname: str) -> tuple:
 
@@ -224,40 +222,55 @@ def flagdata_split(msname):
     split(vis=msname,outputvis=splitvis,datacolumn='corrected',spw='')
 
 
-def derive_pol_properties(msname,polarisation_calibrator):
+def download_polcal_table(polarisation_calibrator='3c286'):
 
+    """ Download NRAO polarisation calibrator tables"""
 
-    from scipy.optimize import curve_fit
-    import matplotlib.pyplot as plt
-    
-    polarisation_calibrator = '3c286'
-    os.system(f"wget -c 'https://science.nrao.edu/facilities/vla/docs/manuals/obsguide/files/modes/{polarisation_calibrator}_2019' -O {polarisation_calibrator}_2019.dat")
+    polcal_file = f'{polarisation_calibrator}_2019.dat'
+    if not os.path.exists(polcal_file):
+        logging.info(f"Downloading {polcal_file}")
+        os.system(f"wget -c 'https://science.nrao.edu/facilities/vla/docs/manuals/obsguide/files/modes/{polarisation_calibrator}_2019' -O {polcal_file}")
+    else:
+        logging.info(f"{polcal_file} exists")
 
     data = np.loadtxt(f"{polarisation_calibrator}_2019.dat")
 
+    return data
+
+
+
+def calculate_pol_parameters(msname,polarisation_calibrator='3c286'):
+
+    """ Calculate the spectral index of the pol angle calibrator """
+
+    data = download_polcal_table(polarisation_calibrator)
+
     _ , mean_freq, _, _ = get_observing_band(msname)
     
-    ### Stokes I
+    spectral_index = {}
+    pol_fraction = {}
 
-    def S(f,S,alpha,beta):
-            return S*(f/round(mean_freq,1))**(alpha+beta*np.log10(f/round(mean_freq,1)))
 
     # Select the frequencies that are strictly greater than mean_freq
     higher_freq_data = data[data[:, 0] > mean_freq]
     sorted_higher_freq_data = higher_freq_data[higher_freq_data[:, 0].argsort()]
-    max_freq_to_fit = sorted_higher_freq_data[2:] ## Go two frequencies highter
+    max_freq_to_fit = sorted_higher_freq_data[2:] ## Go two frequencies higher
     max_freq_to_fit_index = np.where(data[:, 0] == max_freq_to_fit[0][0])[0][0]
+
+    ##### Spectral Index ############
+    def S(f,S,alpha,beta):
+        return S*(f/round(mean_freq,1))**(alpha+beta*np.log10(f/round(mean_freq,1)))
     popt, pcov = curve_fit(S, data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,1])
 
-    print(f"I@{round(mean_freq,1)}GHz {popt[0]} 'Jy'")
-    print('alpha', popt[1])
-    print('beta', popt[2])
-    print( 'Covariance')
-    print(pcov)
 
-    #Clear any plots that may already exist
+    spectral_index['alpha'] = popt[1]
+    spectral_index['beta'] = popt[2]
+
+    logging.info(f'The mean flux density @{round(mean_freq, 1)}GHz is {popt[0]} Jy')
+    logging.info(f"The source's spectral index is : {spectral_index}")
+    # logging.info('Covariance:')
+    # logging.info(pcov)
     plt.close()
-
     plt.plot(data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,1], 'ro', label='data')
     plt.plot(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), S(np.arange(1,np.round(max_freq_to_fit[0][0]),0.1), *popt), 'r-', label='fit')
 
@@ -267,17 +280,17 @@ def derive_pol_properties(msname,polarisation_calibrator):
     plt.ylabel('Flux Density (Jy)')
     plt.savefig('FluxvFreq.png')
 
-    ### Polarisation fraction
+    ######## Polarization fraction ##########
+
     def PF(f,a,b,c,d):
         return a+b*((f-round(mean_freq,1))/round(mean_freq,1))+c*((f-round(mean_freq,1))/round(mean_freq,1))**2+d*((f-round(mean_freq,1))/round(mean_freq,1))**3
 
-    # Fit 1 - 5 GHz data points
     popt, pcov = curve_fit(PF,data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,2])
-    print("Polfrac Polynomial: ", popt)
-    print("Covariance")
-    print(pcov)
+    pol_fraction[f'Polfrac polynomial'] = popt
+    logging.info(f"The sources polarisation fraction is: {pol_fraction}")
+    # logging.info("Covariance")
+    # logging.info(pcov)
 
-    #Clear any plots that may already exist
     plt.close()
 
     plt.plot(data[0:max_freq_to_fit_index,0], data[0:max_freq_to_fit_index,2], 'ro', label='data')
@@ -288,13 +301,23 @@ def derive_pol_properties(msname,polarisation_calibrator):
     plt.xlabel('Frequency (GHz)')
     plt.ylabel('Lin. Pol. Fraction')
     plt.savefig('LinPolFracvFreq.png')
-    plt.show()
+
+
+
+
+
+# cal_directory = '/raid1/scratch/kelvinw/k2_18b/working_dir_d_config'
+msname = '/home/kelvin/Desktop/vla_calibrated/d_config/selfcal/observation.60292.44055671296/23B-307.sb44616223.eb44905127.60292.44054972222_target.ms'
+# splitvis = msname.replace('.ms','_calibrated.ms')
+working_directory = '/home/kelvin/Desktop/vla_calibrated/d_config/selfcal/polcal'
+
 
 
 set_working_dir(working_directory)
+calculate_pol_parameters(msname)
 # remove_parang_corrections(msname)
 # flagdata_split(msname)
 
-derive_pol_properties(msname = splitvis,polarisation_calibrator='3c286')
+# derive_pol_properties(msname = splitvis,polarisation_calibrator='3c286')
 
 
