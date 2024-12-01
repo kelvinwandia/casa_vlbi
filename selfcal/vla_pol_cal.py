@@ -239,13 +239,23 @@ def download_polcal_table(polarisation_calibrator='3c286'):
 
 
 
-def calculate_pol_parameters(msname,polarisation_calibrator='3c286'):
+def calculate_pol_parameters(msname,polarisation_calibrator,centre_freq=None):
 
     """ Calculate the spectral index of the pol angle calibrator """
 
     data = download_polcal_table(polarisation_calibrator)
 
-    _ , mean_freq, _, _ = get_observing_band(msname)
+    if centre_freq is not None: 
+        logging.info(f"Using provided centre frequency: {centre_freq}")
+        mean_freq = centre_freq
+    elif msname:  
+        logging.info(f"Getting the centre frequency from the measurement set")
+        _, mean_freq, _, _ = get_observing_band(msname)
+        mean_freq = mean_freq
+    else:  
+        raise ValueError("Either msname or centre_freq must be provided.")
+
+    logging.info(f"Using frequency: {mean_freq}")
     
     spectral_index = {}
     pol_fraction = {}
@@ -321,7 +331,7 @@ def calculate_pol_parameters(msname,polarisation_calibrator='3c286'):
     plt.plot(data[2:8,0], data[2:8,3], 'ro', label='data')
     plt.plot(np.arange(1,9,0.1), PA(np.arange(1,9,0.1), *popt), 'r-', label='fit')
 
-    plt.title('3C48')
+    plt.title('3c286')
     plt.legend()
     plt.xlabel('Frequency (GHz)')
     plt.ylabel('Lin. Pol. Angle (rad)')
@@ -343,10 +353,4 @@ working_directory = '/home/kelvin/Desktop/vla_calibrated/d_config/selfcal/polcal
 
 
 set_working_dir(working_directory)
-calculate_pol_parameters(msname)
-# remove_parang_corrections(msname)
-# flagdata_split(msname)
-
-# derive_pol_properties(msname = splitvis,polarisation_calibrator='3c286')
-
-
+calculate_pol_parameters(msname,polarisation_calibrator='3c286',centre_freq=3.0)
