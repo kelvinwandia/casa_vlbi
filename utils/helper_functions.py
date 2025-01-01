@@ -10,6 +10,7 @@ from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.constants import c
+from config_file import *
 
 
 def time_execution(func):

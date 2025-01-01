@@ -1,6 +1,21 @@
 
-import logging
+import logging, zipfile, os, sys
 from utils.helper_functions import *
+import os, glob, re, logging
+from datetime import datetime
+import casatasks, casatools
+import casaplotms
+import numpy as np
+import subprocess
+import matplotlib
+# matplotlib.use('Agg')  
+import time
+from natsort import natsorted
+import zipfile
+import shutil
+
+from config_file import *
+
 
 def set_working_dir():
 
@@ -12,7 +27,7 @@ def set_working_dir():
 
     try:
         os.chdir(working_directory)
-        logging.info(f"Changed working directory to {working_directory}")
+        print(f"Changed working directory to {working_directory}")
     except Exception as e:
         logging.error(f"An error occurred while changing directory: {e}")
     
@@ -58,7 +73,8 @@ def attach_tsys_gc():
         else:
             logging.error("Extraction failed or the directory was not found.")
     else:
-        logging.info("JIVE helper scripts already downloaded: ", helper_scripts_dir)
+        logging.info("JIVE helper scripts already downloaded: %s", helper_scripts_dir)
+
 
     # Append the helper scripts directory to sys.path
     sys.path.append(helper_scripts_dir)
