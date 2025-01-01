@@ -108,3 +108,6 @@ detect_sources = configuration_file.getboolean('selfcal','detect_sources')
 # pb corrections
 do_pbcor = configuration_file.getboolean('pbcor','do_pbcor')
 pb_file = configuration_file.get('pbcor','pb_file')
+
+
+vis = experiment+'.ms'
