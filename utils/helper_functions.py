@@ -11,7 +11,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.constants import c
 from config_file import *
+import casatools
 
+msmd = casatools.msmetadata()
+tb = casatools.table()
 
 def time_execution(func):
     def wrapper(*args, **kwargs):

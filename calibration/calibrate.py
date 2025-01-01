@@ -16,6 +16,11 @@ import shutil
 
 from config_file import *
 
+global cal_tables_dict
+cal_tables_dict = {}
+
+msmd = casatools.msmetadata()
+tb = casatools.table()
 
 def set_working_dir():
 
@@ -513,9 +518,6 @@ def gencal_tsys_gc():
 
     """
     
-
-    global cal_tables_dict
-    cal_tables_dict = {}
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
 
