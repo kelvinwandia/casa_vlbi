@@ -37,7 +37,8 @@ tb = casatools.table()
 ms = casatools.ms()
 
 
-wsclean_sif = '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
+# wsclean_sif = '/raid1/scratch/kelvinw/singularity_containers/wsclean_working.simg'
+wsclean_sif = '/mirror/scratch/kelvinw/singularity_containers/wsclean_working.simg'
 
 
 
@@ -197,8 +198,12 @@ class Utils():
     def plot_caltable(caltable,coloraxis,yaxis):
         """ Plot calibration table """
 
-        ## TODO: Extract the number of antennas from the measurement set directly
-        num_ants = 27
+        tb.open(caltable)
+        antenna_ids = tb.getcol('ANTENNA1')
+        unique_antenna_ids = np.unique(antenna_ids) # Find unique antennas
+        num_unique_antennas = len(unique_antenna_ids)
+        tb.close()
+        num_ants = num_unique_antennas
         antennas_per_plot = 9  
 
         for i in range(0, num_ants, antennas_per_plot):
@@ -2226,14 +2231,14 @@ def setup_logging():
 
 def configure_parameters():
 
-    target = 'K2-18'
+    target = 'J2139+1423'
     phase_calibrator =''
 
     fieldnames = [name for name in [target, phase_calibrator] if name]
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/raid1/scratch/kelvinw/k2_18b/selfcal_d_config_wsclean'),
+        'working_directory': Path('/mirror/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
         # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
         'nloops': 5,
         # 'thresholds': [3, 3 , 3, 3, 3],
@@ -2242,10 +2247,10 @@ def configure_parameters():
         'gaintype': ['' ,'G','G', 'G','G','G'],
         'solint': ['','192s','96s','64s', '240','192s'],
         'minsnr': ['', 1,1,1,1,1],
-        'avgtime': '4s',
+        'avgtime': '',
         'width': 1,
         'fieldname':fieldnames,
-        'outlierfile': '/raid1/scratch/kelvinw/casa_vlbi/selfcal/outlier.txt',
+        'outlierfile': '',
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/selfcal/K2-18_split__1_phaseshifted.ms',
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'  
         # 'msname': '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
@@ -2253,8 +2258,9 @@ def configure_parameters():
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
         # 'msname' : '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
-        "msname":'/raid1/scratch/kelvinw/k2_18b/working_dir_d_config/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+        # "msname":'/raid1/scratch/kelvinw/k2_18b/working_dir_d_config/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
         # "msname":'/raid1/scratch/kelvinw/k2_18b/23B-307.sb44672012.eb44857902.60279.39833322917.ms'
+        'msname':'/mirror/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
     }
 
 
@@ -2303,7 +2309,7 @@ def perform_selfcalibration(vis, parameters):
         pbcorrect=False,
         use_auto_thresh_auto_mask = True,
         verbose = True,
-        # refant = 'EF' ,
+        refant = 'EF' ,
         # cell = '3arcsec' 
     )
     self_calibration_wsclean.selfcal()
