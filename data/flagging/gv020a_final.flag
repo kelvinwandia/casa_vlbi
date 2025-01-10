@@ -25410,5 +25410,7 @@ mode='manual' field='J2139+1423' antenna='WB&TR' spw='1:450~450' correlation='RR
 mode='manual' field='' antenna='' spw='1:240~511'
 mode='manual' antenna='MC&*' spw='7:400~511'
 mode='manual' antenna='' spw='7:450~511'
-
+mode='manual' spw='0:0~25;506~511' antenna=''
+mode='manual' spw='7:350~511' antenna=''
+mode='manual' spw='1:350~511' antenna='WB&*'
 
