@@ -9,6 +9,13 @@ from matplotlib.ticker import ScalarFormatter
 from typing import Union, Tuple, List
 from pathlib import Path
 
+
+try:
+   from casampi.MPIEnvironment import MPIEnvironment   
+   parallel=MPIEnvironment.is_mpi_enabled
+except:
+   parallel=False
+
 import numpy as np
 from radio_beam import Beam
 from astropy.io import fits
@@ -627,7 +634,7 @@ class MeasurementSetProcessor:
                         outputvis = os.path.join(os.getcwd(), f"{field}_split{'_' + timebin if timebin else ''}{'_' + str(split_width) if split_width != 1 else ''}.ms")
                         if not os.path.exists(outputvis):
                             logging.info(f"Splitting {msname} to {outputvis} with timebin={timebin} and width={split_width}")
-                            split(vis=msname, outputvis=outputvis, datacolumn='corrected',
+                            split(vis=msname, outputvis=outputvis, datacolumn='corrected', antenna='!AR',
                                 timebin=timebin, width=split_width, field=field)
                             listobs(vis=outputvis, listfile=outputvis.replace('.ms', '_listobs.txt'), overwrite=True)
                             logging.info("Finished splitting")
@@ -1166,10 +1173,10 @@ class tclean_Imager:
         logging.info(f"Applied primary beam correction to {self.imagename}.")
 
 
-        # if self.deconvolver == 'mtmfs':
-        #     image_ext = '.image.tt0'
-        # else:
-        #     image_ext = '.image'
+        if self.deconvolver == 'mtmfs':
+            image_ext = '.image.tt0'
+        else:
+            image_ext = '.image'
 
         # exportfits(imagename=self.imagename+image_ext,fitsimage=self.imagename+ image_ext+'.fits',overwrite=True)
         # # try:
@@ -1593,7 +1600,7 @@ class SelfCalibrationWSClean(WSClean_Imager):
                     multifreq = self.multifreq,
                     pbcorrect = self.pbcorrect,
                     use_auto_thresh_auto_mask = self.use_auto_thresh_auto_mask,
-                    niter = 1, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
+                    niter = 10, # niter will ensure you dont hit a thresh of 0.0, also note niter=0 will fail in pybdsf
                     )
                 imager_instance.imager()
 
@@ -1869,7 +1876,7 @@ class SelfCalibrationTclean(tclean_Imager):
                     nterms=self.nterms,
                     imsize=self.imsize,
                     cell=self.cell,
-                    niter=0,
+                    niter=1000,
                     deconvolver=self.deconvolver,
                     threshold=self.thresholds[selfcal_loop],
                     mask=mask,
@@ -1901,19 +1908,19 @@ class SelfCalibrationTclean(tclean_Imager):
 
                 
                 # """ Make a masking file """
-                # image_rms = imstat(fitsimage)['rms'][0]
-                # global masking_file
-                # masking_file = Utils.make_mask(fits_file=fitsimage, rms=image_rms, threshold=self.masking_threshold)
-                # # (Regrid the mask to match the image if necessary)
-                # masking_image = masking_file.replace('.fits', '.im')
-                # importfits(fitsimage=masking_file,imagename=masking_image,overwrite=True)
-                # makemask(
-                #     mode='copy',
-                #     inpimage=masking_image,
-                #     inpmask=masking_image,
-                #     output=imagename_dirty + '.mask', 
-                # )
-                # masking_file = imagename_dirty + '.mask'
+                image_rms = imstat(fitsimage)['rms'][0]
+                global masking_file
+                masking_file = Utils.make_mask(fits_file=fitsimage, rms=image_rms, threshold=self.masking_threshold)
+                # (Regrid the mask to match the image if necessary)
+                masking_image = masking_file.replace('.fits', '.im')
+                importfits(fitsimage=masking_file,imagename=masking_image,overwrite=True)
+                makemask(
+                    mode='copy',
+                    inpimage=masking_image,
+                    inpmask=masking_image,
+                    output=imagename_dirty + '.mask', 
+                )
+                masking_file = imagename_dirty + '.mask'
                                 
 
                 # # Run PYBDSF if requested
@@ -1943,7 +1950,7 @@ class SelfCalibrationTclean(tclean_Imager):
                     threshold=self.thresholds[selfcal_loop],
                     weighting = self.weighting,
                     robust = self.robust,
-                    # mask=masking_file,
+                    mask=masking_file,
                     overwrite=self.overwrite,
                     outlierfile=self.outlierfile,
                     parallel = self.parallel
@@ -2038,7 +2045,7 @@ class SelfCalibrationTclean(tclean_Imager):
                 niter=self.niter,
                 deconvolver=self.deconvolver,
                 threshold=self.thresholds[selfcal_loop],
-                # mask=masking_file,
+                mask=masking_file,
                 cell = self.cell,
                 weighting = self.weighting,
                 robust = self.robust,
@@ -2048,9 +2055,12 @@ class SelfCalibrationTclean(tclean_Imager):
             imager_instance.imager()
 
             # Export dirty map to FITS after it has been created
-            image_ext = '.image.tt0' if self.deconvolver == 'mtmfs' else '.image'
+            suffix = '.tt0' if self.deconvolver == 'mtmfs' else ''
+            image_ext = f'.image{suffix}'
+            residual_ext = f'.residual{suffix}'
+            
             exportfits(imagename=imagename_final + image_ext, fitsimage=imagename_final+ image_ext + '.fits', overwrite=True)
-            Utils.get_im_stats(imagename_final+image_ext,imagename_final+'.residual.tt0')
+            Utils.get_im_stats(imagename_final+image_ext,imagename_final+residual_ext)
 
             # Run PYBDSF if requested
             try:
@@ -2238,15 +2248,15 @@ def configure_parameters():
 
     """Configure the parameters for self-calibration."""
     return {
-        'working_directory': Path('/mirror/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
-        # 'working_directory': Path('/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal'),
-        'nloops': 5,
-        # 'thresholds': [3, 3 , 3, 3, 3],
-        'thresholds': [13, 9 , 7, 5, 3,3],
-        'calmode': ['','p','p','p','ap','ap'],
-        'gaintype': ['' ,'G','G', 'G','G','G'],
-        'solint': ['','192s','96s','64s', '240','192s'],
-        'minsnr': ['', 1,1,1,1,1],
+        'working_directory': Path('/mirror/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/selfcal_dir'),
+        # 'working_directory': Path('/mirror/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/selfcal'),
+        # 'working_directory': Path('mirror/scratch/kelvinw/selfcal_trial'),
+         'nloops': 6,
+        'thresholds': ['', 18, 9, 7, 5,3],
+        'calmode': ['', 'p', 'p', 'p', 'ap','ap'],
+        'gaintype': ['', 'G', 'G', 'G', 'G','G'],
+        'solint': ['', 'inf', '90s', '60s', 'inf','300'],
+        'minsnr': ['', 3, 3, 3, 3, 3],
         'avgtime': '',
         'width': 1,
         'fieldname':fieldnames,
@@ -2258,9 +2268,10 @@ def configure_parameters():
         # 'msname': '/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/x_band_d_config/23B-307/pipeline.60625.53603009274/23B-307.sb44672076.eb44857900.60279.378077800924.ms'
         # 'msname' : '/raid1/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
         # 'msname':'/raid1/scratch/kelvinw/k2_18b/official_pipe_cal/s_band_d_config/23B-307.sb44594812.eb44691528.60230.613198356485/23B-307.sb44594812.eb44691528.60230.613198356485.ms'
-        # "msname":'/raid1/scratch/kelvinw/k2_18b/working_dir_d_config/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
+        # "msname":'/mirror/scratch/kelvinw/vla_calibrated/s_band/d_config/23B-307.sb44594812.eb44725045.60239.588568113424/23B-307.sb44594812.eb44725045.60239.588568113424.ms'
         # "msname":'/raid1/scratch/kelvinw/k2_18b/23B-307.sb44672012.eb44857902.60279.39833322917.ms'
         'msname':'/mirror/scratch/kelvinw/gv020_working_dir/gv020b_working_dir/gv020b_3.ms'
+        # 'msname':'/mirror/scratch/kelvinw/gv020_working_dir/gv020a_working_dir/gv020a_1.ms'
     }
 
 
@@ -2312,7 +2323,7 @@ def perform_selfcalibration(vis, parameters):
         refant = 'EF' ,
         # cell = '3arcsec' 
     )
-    self_calibration_wsclean.selfcal()
+    # self_calibration_wsclean.selfcal()
 
     self_calibration_tclean = SelfCalibrationTclean(
         msname=vis,
@@ -2324,23 +2335,23 @@ def perform_selfcalibration(vis, parameters):
         minsnr=parameters['minsnr'],
         imsize=640,
         niter=100000,  
-        nterms=2,
-        deconvolver='mtmfs',
-        weighting='briggs',
-        robust=0.5,
+        nterms=1,
+        deconvolver='hogbom',
+        weighting='natural',
+        robust=0.0,
         use_pybdsf=False, # leave as False -- mask from pybdsf is weird
         masking_threshold=10,
         pybdsf_threshold=5,
         overwrite=True,
-        parallel = True,
+        parallel = parallel,
         # outlierfile = parameters['outlierfile'],
         make_final_image=True,
         pbcorrect = False,
-        # refant = 'EF' ,
+        refant = 'EF' ,
         usemask = 'auto-multithresh'
 
     )
-    # self_calibration_tclean.selfcal()
+    self_calibration_tclean.selfcal()
 
 
 
