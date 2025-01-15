@@ -234,8 +234,10 @@ def get_timetuple(ts):
         tm_min = math.modf(60*float(ts.split('.')[1]))
         tm_sec = int(60 * tm_min[0])
         tm_min = int(tm_min[1])
-    elif re.match(r"[0-9]{2}:[0-9]{2}\.[0-9]+", ts):
+    # elif re.match(r"[0-9]{2}:[0-9]{2}\.[0-9]+", ts):
+    elif re.match(r"[0-9]{1,2}:[0-9]{2}\.[0-9]+", ts):
         # hh:mm.mm 
+        # print(f"Debug: Processing time string {ts}")  # Debug print
         tm_hour = int(ts.split(':')[0])
         tm_min = math.modf(float(ts.split(':')[1]))
         tm_sec = int(60 * tm_min[0])
@@ -252,6 +254,7 @@ def get_timetuple(ts):
         tm_hour = int(ts.split(':')[0])
         tm_min = int(ts.split(':')[1])
         tm_sec = float(ts.split(':')[2])
+
     return tm_hour, tm_min, tm_sec
 
 def process_values(infp, keys, pols, idi, data):
@@ -290,6 +293,7 @@ def process_values(infp, keys, pols, idi, data):
             tm_year = year
             tm_yday = int(fields[0])
             # Get timestamp data depending on data format
+            # print(fields[1])
             tm_hour, tm_min, tm_sec = get_timetuple(fields[1])
             t = "%dy%03dd%02dh%02dm%02ds" % \
                 (tm_year, tm_yday, tm_hour, tm_min, tm_sec)
