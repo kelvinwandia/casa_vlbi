@@ -55,15 +55,35 @@ def calculate_thermal_noise(sefd_list, efficiency, bandwidth,obs_time,num_pol):
 
     formatted_noise, unit = format_thermal_noise(thermal_noise)
 
-    print(f"The rms noise for a naturally weighted image is {formatted_noise:.3f} {unit} ")
+    # Check if formatted_noise is an array and handle accordingly
+    if isinstance(formatted_noise, np.ndarray):
+            print(f"The rms noise for a naturally weighted image is {formatted_noise[0]:.3f} {unit}")
+    else:
+        print(f"The rms noise for a naturally weighted image is {formatted_noise:.3f} {unit}")
+
 
     return thermal_noise, unit
 
-sefd_list = [35,420,20,490,740,350,250,360,300,330,67]  
+# sefd_list = [40,560,19,310,700,300,740,3,10] 
+# antennas = [JB,WB,EF,ON,MC,TR,NT,AR,GB]
+
+
+sefd_list = [40,560,19,310,700,300,740,10] 
 efficiency= 0.7
-bandwidth = 8e6
+bandwidth = 31.25*1e3
 ## obs_time in list format allows unequal obs_times
-obs_time = [20,20,20,20,20,20,20,20,20,20,20] # in minutes or hours 
-obs_time = np.mean(obs_time)*60 # change to hours
+obs_time = [216,216,216,216,216,216,216,216,216] # in minutes or hours 
+obs_time = np.mean(obs_time)*60 # change to seconds
 num_pol = 2
 calculate_thermal_noise(sefd_list, efficiency, bandwidth, obs_time, num_pol)
+
+
+#### RSG12
+# sefd_list = [35,420,20,490,740,350,250,360,300,330,67]  
+# efficiency= 0.7
+# bandwidth = 8e6
+# ## obs_time in list format allows unequal obs_times
+# obs_time = [20,20,20,20,20,20,20,20,20,20,20] # in minutes or hours 
+# obs_time = np.mean(obs_time)*60 # change to hours
+# num_pol = 2
+# calculate_thermal_noise(sefd_list, efficiency, bandwidth, obs_time, num_pol)
