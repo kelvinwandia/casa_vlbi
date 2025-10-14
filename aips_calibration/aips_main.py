@@ -15,8 +15,7 @@ config.read('aips_config.ini')
 
 exec(open("./aips_functions.py").read())
 # exec(open("../utils/helper_functions.py").read())
-exec(open("./casa_functions.py").read())
-exec(open("./selfcal.py").read())
+
 
 print("Creating log dir")
 log_dir = os.path.join(os.getcwd(), 'logs')
@@ -58,81 +57,6 @@ file_extension =  config.get('process_data','file_extension')
 make_antab = config.getboolean('process_data','make_antab')
 export_data = config.getboolean('process_data','export_data')
 
-# file_extension_for_flagging = config.get('load_data','file_extension_for_flagging')
-# file_extension_for_cal = config.get('load_data','file_extension_for_cal')
-# tasav_file = config.get('load_data','tasav_file')
-# pointing = config.get('load_data','pointing')
-# integration_time=config.getfloat('load_data','integration_time')
-
-# # sources
-# phase_calibrator = config.get('sources','phase_calibrator').split(',')
-# fringe_finder = config.get('sources','fringe_finder').split(',')
-# target = config.get('sources','target').split(',')
-
-# # flagging
-
-# do_flagging = config.getboolean('flagging','do_flagging')
-# use_aoflagger = config.getboolean('flagging','use_aoflagger')
-# aoflagger_sif = config.get('flagging','aoflagger_sif')
-# flagging_strategy = config.get('flagging','flagging_strategy')
-# manual_file = config.get('flagging','manual_file')
-
-# # calibrate data
-# refant = config.get('calibrate','refant')
-# searchants=config.get('calibrate','searchants').split(',')
-# fring_solint = config.getfloat('calibrate','fring_solint')
-# fring_timerange = config.get('calibrate','fring_timerange')
-# fring_timerange_ar_down = config.get('calibrate','fring_timerange_ar_down')
-# fring_timerange_ar_up = config.get('calibrate','fring_timerange_ar_up')
-# do_amp_parang_correction = config.getboolean('calibrate','do_amp_parang_correction')
-# do_tec_correction = config.getboolean('calibrate','do_tec_correction')
-# do_singleband_fring = config.getboolean('calibrate','do_singleband_fring')
-# apply_singleband_corrections = config.getboolean('calibrate','apply_singleband_corrections')
-
-# do_global_fring = config.getboolean('calibrate','do_global_fring')
-# fring_snr = config.getfloat('calibrate','fring_snr')
-# apply_global_fring_corrections = config.getboolean('calibrate','apply_global_fring_corrections')
-
-# do_bandpass = config.getboolean('calibrate','do_bandpass')
-# apply_bpass_corrections = config.getboolean('calibrate','apply_bpass_corrections')
-
-
-
-# # split
-# do_splat = config.getboolean('split','do_splat')
-# write_fits = config.getboolean('split','write_fits')
-
-# # selfcal
-# split_selfcal = config.getboolean('selfcal','split_selfcal')
-# make_dirty_map = config.getboolean('selfcal','make_dirty_map')
-# do_selfcal = config.getboolean('selfcal','do_selfcal')
-# use_tclean = config.getboolean('selfcal','use_tclean')
-# use_wsclean = config.getboolean('selfcal','use_wsclean')
-# wsclean_sif = config.get('selfcal','wsclean_sif')
-
-# pybdsf_threshold = config.get('selfcal','pybdsf_threshold')
-# pybdsf_niter = config.getint('selfcal','pybdsf_niter')
-# imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
-# weighting = config.get('selfcal','weighting')
-# robust = config.getfloat('selfcal','robust')
-
-# nloops = config.getint('selfcal','nloops')
-# calmode = config.get('selfcal','calmode').split(',')
-# gaintype = config.get('selfcal','gaintype').split(',')
-# cell =  config.get('selfcal', 'cell')
-# threshold = config.get('selfcal','threshold').split(',')
-# minsnr = [float(part) for part in config.get('selfcal', 'minsnr').split(',')]
-# # imsize= [int(part) for part in config.get('selfcal', 'imsize').split(',')]
-# # niter = [int(part) for part in config.get('selfcal', 'niter').split(',')]
-# niter = config.get('selfcal','niter')
-# niter_final = config.getint('selfcal','niter_final')
-# threshold_final = config.getint('selfcal','threshold_final')
-# robust = config.getfloat('selfcal','robust')
-# detection_threshold = config.getfloat('selfcal','detection_threshold')
-# tclean_threshold = config.get('selfcal','tclean_threshold')
-# solint_selfcal = config.get('selfcal','solint_selfcal').split(',')
-# apply_to_target = config.getboolean('selfcal','apply_to_target')
-# detect_sources = config.getboolean('selfcal','detect_sources')
 
 
 logging.info(f"AIPS user no.:{userno}")
