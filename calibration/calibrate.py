@@ -109,12 +109,23 @@ def attach_tsys_gc():
         logging.warning("No uvflg file found")
 
 
-    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1.IDI*'))
-    fitsidifiles = natsorted(fitsfiles)
+    valid_extensions = ('IDI', 'idifits')
+    fitsfiles = [os.path.join(fitsfiles_dir, f) 
+                for f in os.listdir(fitsfiles_dir) 
+                if f.split('.')[-1].lower() in [ext.lower() for ext in valid_extensions]]
+
+    fitsfiles = natsorted(fitsfiles)
+
+    logging.info(f"Found FITS files: {fitsfiles}")
+
+    if not fitsfiles:
+        logging.error(f"No FITS files with extensions {valid_extensions} found in {fitsfiles_dir}")
+        raise FileNotFoundError("No FITS files to load!")
+
 
     # Convert flags
     try:
-        convert_flags(infile=uvflg_file, idifiles=fitsidifiles, outfp=sys.stdout, outfile='{}_apriori.flag'.format(experiment))
+        convert_flags(infile=uvflg_file, idifiles=fitsfiles, outfp=sys.stdout, outfile='{}_apriori.flag'.format(experiment))
         logging.info("Flag conversion completed.")
     except Exception as e:
         logging.warning(f"Error during flag conversion: {e}")
@@ -122,7 +133,7 @@ def attach_tsys_gc():
 
     """ To remove all GC and TSYS"""
     extension_names = ['GAIN_CURVE', 'SYSTEM_TEMPERATURE']
-    for filename in fitsidifiles:
+    for filename in fitsfiles:
         print(f"Processing file: {filename}")
         with fits.open(filename, mode='update') as hdul:
             # Find extensions to remove
@@ -149,12 +160,12 @@ def attach_tsys_gc():
             hdul.close()
 
     print("Attaching TSYS table")
-    for i in fitsidifiles:
+    for i in fitsfiles:
         append_tsys(antab_file,idifiles=i)
     print("Finished attaching TSYS table")
 
     print("Attaching GAIN_CURVE table.")
-    append_gc(antab_file, fitsidifiles[0])  # Append the GAIN_CURVE table
+    append_gc(antab_file, fitsfiles[0])  # Append the GAIN_CURVE table
     print("Finished attaching GAIN_CURVE table.")
 
     # Convert gain curves and flag files
@@ -168,7 +179,7 @@ def attach_tsys_gc():
     # Find missing system temperature extension
     extension_name = 'SYSTEM_TEMPERATURE'
     missing_extensions = []
-    for filename in fitsidifiles:
+    for filename in fitsfiles:
         hdul = fits.open(filename)
         # checks the extension through the ext.header.get ... loop ext through entire hdul
         if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
@@ -204,16 +215,28 @@ def makems(vis,splitvis=None):
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
-    fitsfiles = glob.glob(os.path.join(idifitsfiles, f'{experiment}_1.IDI*'))
-    fitsidifiles = natsorted(fitsfiles)
+
+    valid_extensions = ('IDI', 'idifits')
+
+    fitsfiles = [os.path.join(fitsfiles_dir, f) 
+                for f in os.listdir(fitsfiles_dir) 
+                if f.split('.')[-1].lower() in [ext.lower() for ext in valid_extensions]]
+
+    fitsfiles = natsorted(fitsfiles)
+
+    logging.info(f"Found FITS files: {fitsfiles}")
+
+    if not fitsfiles:
+        logging.error(f"No FITS files with extensions {valid_extensions} found in {fitsfiles_dir}")
+        raise FileNotFoundError("No FITS files to load!")
 
     if use_casa == True:
         logging.info("use CASA has been requested")
-        logging.info("Assuming TSYS and GC already attached to fitsidifiles")
+        logging.info("Assuming TSYS and GC already attached to fitsfiles")
         if not os.path.exists(vis):
             print(f"Making {vis}")
             importfitsidi(
-                vis= vis, fitsidifile=fitsidifiles,scanreindexgap_s=15.0,constobsid=True)
+                vis= vis, fitsidifile=fitsfiles,scanreindexgap_s=15.0,constobsid=True)
             listfile = vis.replace(".ms","_listobs.list")
             listobs(vis = vis, listfile = listfile, overwrite=True)
 
@@ -622,16 +645,7 @@ def sbd_fringefit():
         
         plot_sbd(sbd_plotfile_before.replace('.png',timerange)+'.png',timerange,'data')
 
-        if timerange_ar:
-            logging.info(f"Appending solutions derived when arecibo is up {timerange_ar} to {sbd_table}")
-            fringefit(
-                vis=vis, caltable=sbd_table, solint='inf',
-                zerorates=True, timerange=timerange_ar, refant=refant,
-                # antenna='AR',
-                minsnr=snr_sbd, parang=True, append=True
-            )
 
-            plot_sbd(sbd_plotfile_before.replace('.png',timerange_ar)+'.png',timerange_ar,'data')
     else:
         logging.info(f"Caltable {sbd_table} exists. Will not write a new one")
 
@@ -669,10 +683,7 @@ def applycal_sbd_fringe():
     
     plot_sbd(sbd_plotfile_after,timerange,'corrected')
 
-    if timerange_ar:
 
-        plot_sbd(sbd_plotfile_after.replace('.png',timerange_ar)+'.png',timerange_ar,'corrected')
-       
     
     sbd_flagging_summary = flagdata(vis=vis, mode='summary')
     logging.info("======>>>REPORTING FLAGGING STATS after applying sbd corrections")
@@ -854,120 +865,120 @@ def after_cal_plots():
                 gridcols=3, gridrows=3, iteraxis='baseline', plotfile=plotfile, overwrite=True, width=1920, height=1080)
 
 
-# def getimaging_params():
+def getimaging_params():
 
-    # try:
-    #     ms = casatools.ms()
-    #     tb = casatools.table()
-    #     ms.open(vis)
-    #     max_uv = ms.getdata('uvdist')['uvdist'].max()
-    #     ms.close()
+    try:
+        ms = casatools.ms()
+        tb = casatools.table()
+        ms.open(vis)
+        max_uv = ms.getdata('uvdist')['uvdist'].max()
+        ms.close()
 
-    #     tb.open(vis + '/SPECTRAL_WINDOW')
-    #     chan_freq = tb.getcol('CHAN_FREQ')
-    #     highest_freq = chan_freq.max()
-    #     tb.close()
+        tb.open(vis + '/SPECTRAL_WINDOW')
+        chan_freq = tb.getcol('CHAN_FREQ')
+        highest_freq = chan_freq.max()
+        tb.close()
 
-    #     # 3.6e6 converts the degrees to mas
-    #     # 5 is the sampling
-    #     cell_size = ((c.value / highest_freq) / max_uv) * (180. / np.pi) * (3.6e6 / 5)
-    #     cell_size = np.round(cell_size)
-    #     logging.info("You are using a cell size of:", cell_size)
+        # 3.6e6 converts the degrees to mas
+        # 5 is the sampling
+        cell_size = ((c.value / highest_freq) / max_uv) * (180. / np.pi) * (3.6e6 / 5)
+        cell_size = np.round(cell_size)
+        logging.info("You are using a cell size of:", cell_size)
 
-    # except Exception as e:
-    #     logging.critical(f"An unexpected error occurred: {e}")
+    except Exception as e:
+        logging.critical(f"An unexpected error occurred: {e}")
 
-    # return cell_size
+    return cell_size
 
 
-"""
-Yu need to remove this function and use wsclean here
-"""
+# """
+# Yu need to remove this function and use wsclean here
+# """
 
-@time_execution
-def dirty_map(vis,source):
+# @time_execution
+# def dirty_map(vis,source):
     
-    msmd.open(vis)
-    field_id = msmd.fieldsforname(source)[0]
-    # print(field_id)
-    msmd.close()
+#     msmd.open(vis)
+#     field_id = msmd.fieldsforname(source)[0]
+#     # print(field_id)
+#     msmd.close()
 
 
     
-    dirty_maps_dir = os.path.join(working_directory,'dirty_maps')
-    if not os.path.exists(dirty_maps_dir):
-        os.makedirs(dirty_maps_dir)
+#     dirty_maps_dir = os.path.join(working_directory,'dirty_maps')
+#     if not os.path.exists(dirty_maps_dir):
+#         os.makedirs(dirty_maps_dir)
 
-    imagename = f"{dirty_maps_dir}/{source}_dirty_map"
+#     imagename = f"{dirty_maps_dir}/{source}_dirty_map"
 
-    if use_tclean == True:
-        if not os.path.exists(imagename):
-            tclean(vis= vis, imagename=imagename,imsize=imsize, cell=cell,
-                gridder='standard',weighting='natural',niter=0, field = str(field_id)
-                )
-            fitsname = imagename+'.fits'
-            exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
-            get_im_stats(fitsname)
-            plot_fits(fitsname)
+#     if use_tclean == True:
+#         if not os.path.exists(imagename):
+#             tclean(vis= vis, imagename=imagename,imsize=imsize, cell=cell,
+#                 gridder='standard',weighting='natural',niter=0, field = str(field_id)
+#                 )
+#             fitsname = imagename+'.fits'
+#             exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
+#             get_im_stats(fitsname)
+#             plot_fits(fitsname)
 
 
-    if use_wsclean == True:
-        if not os.path.exists(imagename+'-image.fits'):
+#     if use_wsclean == True:
+#         if not os.path.exists(imagename+'-image.fits'):
                 
-            logging.info(f"Making {imagename}")
-            # Insert the verbosity flag at the specified position if verbosity is enabled
+#             logging.info(f"Making {imagename}")
+#             # Insert the verbosity flag at the specified position if verbosity is enabled
             
-            wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
-                                '-mgain', '0.8', '-niter', '0' , '-field',f'{field_id}',f'{vis}']
-            insert_position = 2
-            if verbosity==True:
-                wsclean_cmd.insert(insert_position, '-quiet')
+#             wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
+#                                 '-mgain', '0.8', '-niter', '0' , '-field',f'{field_id}',f'{vis}']
+#             insert_position = 2
+#             if verbosity==True:
+#                 wsclean_cmd.insert(insert_position, '-quiet')
             
-            run_wsclean(wsclean_sif,wsclean_cmd)
+#             run_wsclean(wsclean_sif,wsclean_cmd)
 
-        wsclean_fitsfile = imagename+'-image.fits'
-        get_im_stats(wsclean_fitsfile)
-        plot_fits(wsclean_fitsfile)
-
-
-def convert_to_list(*args):
-    if all(isinstance(arg, str) for arg in args):
-        return list(args)
-    else:
-        raise ValueError("All inputs must be strings")
+#         wsclean_fitsfile = imagename+'-image.fits'
+#         get_im_stats(wsclean_fitsfile)
+#         plot_fits(wsclean_fitsfile)
 
 
-@time_execution
-def split_calibrated_ms(*args):
+# def convert_to_list(*args):
+#     if all(isinstance(arg, str) for arg in args):
+#         return list(args)
+#     else:
+#         raise ValueError("All inputs must be strings")
 
-    sources = args
+
+# @time_execution
+# def split_calibrated_ms(*args):
+
+#     sources = args
     
-    _,nchan = get_msinfo()
-    nchan = nchan[0] # assuming equal chans per spw
-    if nchan >=4:
-        width = int(nchan)
-    else:
-        width = nchan
+#     _,nchan = get_msinfo()
+#     nchan = nchan[0] # assuming equal chans per spw
+#     if nchan >=4:
+#         width = int(nchan)
+#     else:
+#         width = nchan
     
-    timebin = int(solint/10)
+#     timebin = int(solint/10)
 
-    for source in sources:
-        outputvis = source+f'_{nchan}_chan_{timebin}s.ms'
-        if not os.path.exists(outputvis):
-            logging.info(f"======>>>Splitting {vis} to {outputvis}")
-            logging.info(f"Averaging to width {width} channels and timebin {timebin} seconds ")
-            #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-            # split(vis = vis_to_split, outputvis = outputvis, datacolumn='data',field=source) 
-            split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source,
-            width=width,timebin=str(timebin)+'s') 
+#     for source in sources:
+#         outputvis = source+f'_{nchan}_chan_{timebin}s.ms'
+#         if not os.path.exists(outputvis):
+#             logging.info(f"======>>>Splitting {vis} to {outputvis}")
+#             logging.info(f"Averaging to width {width} channels and timebin {timebin} seconds ")
+#             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
+#             # split(vis = vis_to_split, outputvis = outputvis, datacolumn='data',field=source) 
+#             split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source,
+#             width=width,timebin=str(timebin)+'s') 
 
-            if make_dirty_map == True:
-                dirty_map(vis=outputvis,source=source)
+#             if make_dirty_map == True:
+#                 dirty_map(vis=outputvis,source=source)
 
-        else:
-            logging.info(f"======>>>{outputvis} exists. Will not make a new one")
-            if make_dirty_map == True:
-                dirty_map(vis=outputvis,source=source)
+#         else:
+#             logging.info(f"======>>>{outputvis} exists. Will not make a new one")
+#             if make_dirty_map == True:
+#                 dirty_map(vis=outputvis,source=source)
 
     
 
