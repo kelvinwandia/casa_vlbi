@@ -24,7 +24,7 @@ This pipeline performs the following operations:
 | Software | Purpose | Installation |
 |-----------|----------|---------------|
 | **AIPS** | Astronomical Image Processing System (installed system-wide) | [NRAO AIPS](https://www.aips.nrao.edu/) |
-| **ParselTongue** | Python interface for AIPS | Installed inside a conda environment | https://www.jive.eu/jivewiki/doku.php?id=parseltongue:parseltongue
+| **ParselTongue** | Python interface for AIPS | Installed inside a conda environment | [ParselTongue](https://www.jive.eu/jivewiki/doku.php?id=parseltongue:parseltongue/) |
 | **CASA** | Common Astronomy Software Applications | Installed inside a conda environment |
 
 ### Recommended Environment Setup
