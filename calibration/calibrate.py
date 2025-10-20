@@ -64,28 +64,28 @@ def attach_tsys_gc():
     helper_scripts_dir = helper_scripts_dir = os.path.join(base_dir, 'casa-vlbi')
     print(f"Using JIVE helper scripts: {helper_scripts_dir}")
 
-    # helper_scripts = 'casa-vlbi-master.zip'
-    # helper_scripts_dir = 'casa-vlbi'
-    # repo_url = 'https://github.com/jive-vlbi/casa-vlbi/archive/refs/heads/master.zip'
+    helper_scripts = 'casa-vlbi-master.zip'
+    helper_scripts_dir = 'casa-vlbi'
+    repo_url = 'https://github.com/jive-vlbi/casa-vlbi/archive/refs/heads/master.zip'
 
-    # # Download and extract the helper scripts if not already done
-    # if not os.path.exists(helper_scripts_dir):
-    #     if not os.path.exists(helper_scripts):
-    #         subprocess.run(['wget', '-c', repo_url, '-O', helper_scripts], check=True)
+    # Download and extract the helper scripts if not already done
+    if not os.path.exists(helper_scripts_dir):
+        if not os.path.exists(helper_scripts):
+            subprocess.run(['wget', '-c', repo_url, '-O', helper_scripts], check=True)
 
-    #     with zipfile.ZipFile(helper_scripts, 'r') as zip_ref:
-    #         zip_ref.extractall()
-    #         logging.info("Zipped file extracted")
+        with zipfile.ZipFile(helper_scripts, 'r') as zip_ref:
+            zip_ref.extractall()
+            logging.info("Zipped file extracted")
 
-    #     # Move the extracted folder to the desired directory
-    #     extracted_dir = helper_scripts.strip('.zip')
-    #     if os.path.exists(extracted_dir):
-    #         shutil.move(extracted_dir, helper_scripts_dir)
-    #         logging.info("renamed to casa-vlbi")
-    #     else:
-    #         logging.error("Extraction failed or the directory was not found.")
-    # else:
-    #     logging.info("JIVE helper scripts already downloaded: %s", helper_scripts_dir)
+        # Move the extracted folder to the desired directory
+        extracted_dir = helper_scripts.strip('.zip')
+        if os.path.exists(extracted_dir):
+            shutil.move(extracted_dir, helper_scripts_dir)
+            logging.info("renamed to casa-vlbi")
+        else:
+            logging.error("Extraction failed or the directory was not found.")
+    else:
+        logging.info("JIVE helper scripts already downloaded: %s", helper_scripts_dir)
 
 
     # Append the helper scripts directory to sys.path
