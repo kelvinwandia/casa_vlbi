@@ -70,15 +70,15 @@ solint = configuration_file.getfloat('calibrate','solint')
 do_bpass = configuration_file.getboolean('calibrate','do_bpass')
 apply_bpass = configuration_file.getboolean('calibrate','apply_bpass')
 
-# make_dirty_map = configuration_file.getboolean('calibrate','make_dirty_map')
-# split_calibrated = configuration_file.getboolean('calibrate','split_calibrated')
-# imsize= [int(part) for part in configuration_file.get('calibrate', 'imsize').split(',')]
-# detection_threshold = configuration_file.getfloat('selfcal','detection_threshold')
+make_dirty_map = configuration_file.getboolean('calibrate','make_dirty_map')
+split_calibrated = configuration_file.getboolean('calibrate','split_calibrated')
+imsize= [int(part) for part in configuration_file.get('calibrate', 'imsize').split(',')]
+detection_threshold = configuration_file.getfloat('selfcal','detection_threshold')
 
-# # selfcal
-# do_selfcal = configuration_file.getboolean('selfcal','do_selfcal')
-# use_tclean = configuration_file.getboolean('selfcal','use_tclean')
-# use_wsclean = configuration_file.getboolean('selfcal','use_wsclean')
+# selfcal
+do_selfcal = configuration_file.getboolean('selfcal','do_selfcal')
+use_tclean = configuration_file.getboolean('selfcal','use_tclean')
+use_wsclean = configuration_file.getboolean('selfcal','use_wsclean')
 
 # pybdsf_threshold = configuration_file.get('selfcal','pybdsf_threshold')
 # pybdsf_niter = configuration_file.getint('selfcal','pybdsf_niter')

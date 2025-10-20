@@ -22,6 +22,7 @@ msmd = casatools.msmetadata()
 tb = casatools.table()
 
 
+
 # import configparser
 # # Load the configuration file
 # current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -89,6 +90,8 @@ from calibration.calibrate import *
 from calibration.pbcor import *
 
 from config_file import *
+
+
 
 # from config_file import configuration_file
 # # Print all sections and options in the config
@@ -221,79 +224,79 @@ if apply_bpass == True:
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
-# if make_dirty_map == True:
+# # if make_dirty_map == True:
+# #     try:
+# #         logging.info("Making dirty map")
+# #         dirty_map(target)
+# #         dirty_map(phase_calibrator)
+# #     except Exception as e:
+# #         logging.warning(f"Encountered error {e}")
+
+# if split_calibrated == True:
 #     try:
 #         logging.info("Making dirty map")
-#         dirty_map(target)
-#         dirty_map(phase_calibrator)
+#         split_calibrated_ms(phase_calibrator,target)
 #     except Exception as e:
 #         logging.warning(f"Encountered error {e}")
 
-if split_calibrated == True:
-    try:
-        logging.info("Making dirty map")
-        split_calibrated_ms(phase_calibrator,target)
-    except Exception as e:
-        logging.warning(f"Encountered error {e}")
 
-
-if do_selfcal == True:
-    # try:
-        logging.info("Self calibrating the data")
+# if do_selfcal == True:
+#     # try:
+#         logging.info("Self calibrating the data")
         
-        selfcal_dir = os.path.join(working_directory,'selfcal_dir')
-        logging.info(f"Making and switching to {selfcal_dir}")
-        if not os.path.exists(selfcal_dir):
-            os.makedirs(selfcal_dir)
-        os.chdir(selfcal_dir)
-        split_selfcal()
-        selfcal_part1()
-        selfcal_part2()
-        os.chdir(working_directory)
-    # except Exception as e:
-    #     logging.warning(f"Encountered error {e}")
-
-if apply_to_target == True:
-    selfcal_dir = os.path.join(working_directory,'selfcal_dir')
-    try:
-        logging.info(f"Switching to {selfcal_dir}")
-        os.chdir(selfcal_dir)
-        logging.info("Applying calibrations to science target")
-        applycal_target()
-        os.chdir(working_directory)
-    except Exception as e:
-        logging.warning(f"Encountered error {e}")
-
-# if detect_sources == True:
-
-#     selfcal_dir = os.path.join(working_directory,'selfcal_dir')
-#     target_ms = os.path.join(selfcal_dir,target+'.ms')
-#     detected_sources = os.path.join(working_directory,'detected_sources')
-#     logging.info(f"Making and switching to {detected_sources}")
-#     if not os.path.exists(detected_sources):
-#         os.makedirs(detected_sources)
- 
-#     try:
-#         logging.info(f"Switching to {detected_sources}")
-#         os.chdir(detected_sources)
-#         logging.info("Detecting sources")
-#         m15_sources()
+#         selfcal_dir = os.path.join(working_directory,'selfcal_dir')
+#         logging.info(f"Making and switching to {selfcal_dir}")
+#         if not os.path.exists(selfcal_dir):
+#             os.makedirs(selfcal_dir)
+#         os.chdir(selfcal_dir)
+#         split_selfcal()
+#         selfcal_part1()
+#         selfcal_part2()
 #         os.chdir(working_directory)
+#     # except Exception as e:
+#     #     logging.warning(f"Encountered error {e}")
 
+# if apply_to_target == True:
+#     selfcal_dir = os.path.join(working_directory,'selfcal_dir')
+#     try:
+#         logging.info(f"Switching to {selfcal_dir}")
+#         os.chdir(selfcal_dir)
+#         logging.info("Applying calibrations to science target")
+#         applycal_target()
+#         os.chdir(working_directory)
 #     except Exception as e:
 #         logging.warning(f"Encountered error {e}")
 
-if do_pbcor == True:
-    try:
-        logging.info(f"You are about to perform pb corrections")
-        pbcor_dir = os.path.join(working_directory,'pbcor_dir')
-        logging.info(f"Making and switching to {pbcor_dir}")
-        selfcal_dir = os.path.join(working_directory,'selfcal_dir')
-        target_ms = os.path.join(selfcal_dir,target+'.ms')
-        if not os.path.exists(pbcor_dir):
-            os.makedirs(pbcor_dir)
-        os.chdir(pbcor_dir)
-        gencal_pb_table()
-        os.chdir(working_directory)
-    except Exception as e:
-        logging.warning(f"Encountered error {e}")
+# # if detect_sources == True:
+
+# #     selfcal_dir = os.path.join(working_directory,'selfcal_dir')
+# #     target_ms = os.path.join(selfcal_dir,target+'.ms')
+# #     detected_sources = os.path.join(working_directory,'detected_sources')
+# #     logging.info(f"Making and switching to {detected_sources}")
+# #     if not os.path.exists(detected_sources):
+# #         os.makedirs(detected_sources)
+ 
+# #     try:
+# #         logging.info(f"Switching to {detected_sources}")
+# #         os.chdir(detected_sources)
+# #         logging.info("Detecting sources")
+# #         m15_sources()
+# #         os.chdir(working_directory)
+
+# #     except Exception as e:
+# #         logging.warning(f"Encountered error {e}")
+
+# if do_pbcor == True:
+#     try:
+#         logging.info(f"You are about to perform pb corrections")
+#         pbcor_dir = os.path.join(working_directory,'pbcor_dir')
+#         logging.info(f"Making and switching to {pbcor_dir}")
+#         selfcal_dir = os.path.join(working_directory,'selfcal_dir')
+#         target_ms = os.path.join(selfcal_dir,target+'.ms')
+#         if not os.path.exists(pbcor_dir):
+#             os.makedirs(pbcor_dir)
+#         os.chdir(pbcor_dir)
+#         gencal_pb_table()
+#         os.chdir(working_directory)
+#     except Exception as e:
+#         logging.warning(f"Encountered error {e}")
