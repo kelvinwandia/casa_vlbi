@@ -5,7 +5,7 @@ It automates the process of loading FITS-IDI files into AIPS, generating antenna
 
 ---
 
-## 📘 Overview
+## Overview
 
 This pipeline performs the following operations:
 
@@ -17,7 +17,7 @@ This pipeline performs the following operations:
 
 ---
 
-## 🧩 Dependencies
+##  Dependencies
 
 ### Core Requirements
 
