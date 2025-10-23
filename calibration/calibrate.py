@@ -23,6 +23,12 @@ msmd = casatools.msmetadata()
 tb = casatools.table()
 
 
+try:
+   from casampi.MPIEnvironment import MPIEnvironment   
+   parallel=MPIEnvironment.is_mpi_enabled
+except:
+   parallel=False
+   
 
 
 
@@ -369,37 +375,40 @@ def get_number_of_threads():
     return num_threads
 
 
+def flag_autocorr():
+    log_message("Flagging the auto-correlations")
+    flagdata(
+            vis = vis, autocorr=True )
+    log_message("Auto-correlations flagged successfully")
+    autocorr_flagging_summary = flagdata(vis=vis, mode='summary')
+    log_message("======>>>REPORTING FLAGGING STATS after flagging autocorr")
+    report_flag(autocorr_flagging_summary, 'field')
+
+    
+
+
 @time_execution
 def flagging():
-
+    
      
-    if not use_aoflagger:
-        log_message("Flagging the auto-correlations")
-        flagdata(
-                vis = vis, autocorr=True )
-        log_message("Auto-correlations flagged successfully")
+    # if not use_aoflagger:
 
-        autocorr_flagging_summary = flagdata(vis=vis, mode='summary')
-        log_message("======>>>REPORTING FLAGGING STATS after flagging autocorr")
-        report_flag(autocorr_flagging_summary, 'field')
+    log_message(f"Quacking every {integration_time}s from each scan")
+    flagdata(
+        vis = vis, mode='quack', quackinterval=integration_time, quackmode='beg',
+        quackincrement=True,
+        )
+    flagdata(
+        vis = vis, mode='quack', quackinterval=integration_time, quackmode='endb',
+        quackincrement=True,
+        )
+    log_message("Finished quacking")
 
+    flagmanager(vis=vis, mode='save', versionname="after_quacking")
 
-    # log_message(f"Quacking every {integration_time}s from each scan")
-    # flagdata(
-    #     vis = vis, mode='quack', quackinterval=integration_time, quackmode='beg',
-    #     quackincrement=True,
-    #     )
-    # flagdata(
-    #     vis = vis, mode='quack', quackinterval=integration_time, quackmode='endb',
-    #     quackincrement=True,
-    #     )
-    # log_message("Finished quacking")
-
-    # flagmanager(vis=vis, mode='save', versionname="after_quacking")
-
-    # quacking_flagging_summary = flagdata(vis=vis, mode='summary')
-    # log_message("======>>>REPORTING FLAGGING STATS after quacking")
-    # report_flag(quacking_flagging_summary, 'field')
+    quacking_flagging_summary = flagdata(vis=vis, mode='summary')
+    log_message("======>>>REPORTING FLAGGING STATS after quacking")
+    report_flag(quacking_flagging_summary, 'field')
 
     if os.path.exists(manual_file):
         log_message(f"Flagging file {manual_file} exists")
@@ -588,7 +597,7 @@ def run_accor():
     accor_caltable = vis.replace('.ms','.accor')
     
     if not os.path.exists(accor_caltable):
-        log_message("----> Running task accor ")
+        log_message("Running task accor ")
         accor(vis=vis, caltable=accor_caltable, solint='30s')
         
     plotms(vis=accor_caltable, xaxis='time', yaxis = 'amp', iteraxis='antenna',coloraxis='spw',
@@ -599,6 +608,7 @@ def run_accor():
     plotfile_smoothcal = os.path.join(plots_dir, f"{vis.replace('.ms', f'_smooth_accor.png')}")
     
     if not os.path.exists(smoothcal_caltable):
+        log_message("Running smoothcal")
         smoothcal(vis=vis, tablein=accor_caltable, caltable=smoothcal_caltable, smoothtype='median', smoothtime=1800.0)
     
     plotms(vis=smoothcal_caltable, xaxis='time', yaxis = 'amp', iteraxis='antenna',coloraxis='spw',
@@ -930,6 +940,61 @@ def getimaging_params():
         logging.critical(f"An unexpected error occurred: {e}")
 
     return cell_size
+
+
+
+
+def make_dirty_map(vis=vis,imsize=320, niter=0, timerange=None,
+               stokes_params=['I'], cell=None, parallel=parallel, nterms=1,
+               weighting='briggs', robust=0.5, noisethreshold=1.75, usemask='auto-multithresh'):
+
+    print(f"Imaging {vis_basename}")
+    vis_basename = os.path.basename(vis).replace('.ms','')
+
+    for stokes in stokes_params:
+        global imagename
+        imagename = f"{vis_basename}_stokes_{stokes}"
+        print(imagename)
+        # Safely remove previous images
+        for suffix in ['.image', '.model', '.residual', '.psf', '.mask', '.sumwt']:
+            path = f"{imagename}{suffix}"
+            if os.path.exists(path):
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+
+        # Run tclean
+        tclean(
+            vis=vis,
+            imagename=imagename,
+            cell=cell,
+            imsize=imsize,
+            niter=niter,
+            nterms=nterms,
+            deconvolver='mtmfs',
+            weighting=weighting,
+            robust=robust,
+            parallel=parallel,
+            interactive=False,
+            stokes=stokes,
+            usemask=usemask,
+            noisethreshold=noisethreshold,
+           field = phase_calibrator,
+        )
+
+    for suffix in ['.image.tt0', '.residual.tt0']:
+        casa_image = imagename + suffix
+        fits_out = casa_image+'.fits'
+    
+        try:
+            exportfits(imagename=casa_image, fitsimage=fits_out, overwrite=True)
+            print(f"Exported {fits_out}")
+        except Exception as e:
+            print(f"Failed to export {casa_image}: {e}")
+
+
+
 
 
 # """

@@ -142,6 +142,8 @@ if do_flagging == True:
         # plot_check_baddata(save_as="_before_flagging")
         if use_aoflagger == True:
             execute_aoflagger_strategy()
+        if telescope.strip().upper() != "VLBA":
+            flag_autocorr()
         flagging()
         # flag_edge_channels()
         if flag_antenna == True:
@@ -229,13 +231,12 @@ if apply_bpass == True:
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
-# # if make_dirty_map == True:
-# #     try:
-# #         logging.info("Making dirty map")
-# #         dirty_map(target)
-# #         dirty_map(phase_calibrator)
-# #     except Exception as e:
-# #         logging.warning(f"Encountered error {e}")
+if make_dirty_map == True:
+    try:
+        logging.info("Making dirty map")
+        make_dirty_map()
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
 
 # if split_calibrated == True:
 #     try:
