@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 from astropy.constants import c
 from config_file import *
 import casatools
+from casatools import msmetadata, table
+import datetime
 
 msmd = casatools.msmetadata()
 tb = casatools.table()
@@ -33,7 +35,7 @@ def time_execution(func):
             time_unit = "hours"
             formatted_time = execution_time / 3600
             
-        print(f"======>>>EXECUTION TIME for {func.__name__}: {formatted_time:.2f} {time_unit}")
+        log_message(f"======>>>EXECUTION TIME for {func.__name__}: {formatted_time:.2f} {time_unit}")
         return result
     return wrapper
 
@@ -81,7 +83,7 @@ def get_im_stats(imagename):
 
     rms=imstat(imagename=imagename,box='60,60,580,240')['rms'][0]  # for 640x640 px
     peak=imstat(imagename=imagename,box='300,300,340,340')['max'][0]
-    print('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
+    log_message('For %s, the peak %.3f mJy/beam, rms %.3f mJy/beam, S/N %6.0f\n\n' %
                 (imagename, peak*1e3, rms*1e3, peak/rms))
     
     logfile = 'imstat.txt'
@@ -131,20 +133,20 @@ def run_wsclean(wsclean_sif,command):
     command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
 
     try:
-        print("Executing: %s", ' '.join(command_to_execute))
+        log_message("Executing: %s", ' '.join(command_to_execute))
         process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout, stderr = process.communicate()
-        print("stdout: %s", stdout)
-        print("stderr: %s", stderr)
+        log_message("stdout: %s", stdout)
+        log_message("stderr: %s", stderr)
 
         return_code = process.returncode
         if return_code == 0:
-            print(f"Strategy executed successfully. Output:\n{stdout}")
+            log_message(f"Strategy executed successfully. Output:\n{stdout}")
         else:
-            print(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")  
+            log_message(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")  
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        log_message(f"An error occurred: {e}")
 
 
 def get_imaging_params(vis):
@@ -167,6 +169,89 @@ def get_imaging_params(vis):
 
     cell_size = ((c.value/highest_freq)/max_uv)*(180./np.pi)*(3.6e6/5)
     cell_size = np.round(cell_size)
-    print("The imaging cell size is:", cell_size)
+    log_message("The imaging cell size is:", cell_size)
 
     return cell_size
+
+
+
+
+def search_sbd_fringefit_soln(vis,field,refant,minsnr,interval,sbd_search):
+
+    # current_directory = os.getcwd()
+    # os.chdir(sbd_search)
+    
+    msmd = msmetadata()
+    msmd.open(vis)
+    scanlist = msmd.scansforfield(field)
+    log_message(f"Scans for field {field}: {scanlist}")
+
+    # Collect time ranges (in seconds since ref)
+    scan_times = []
+    for scan in scanlist:
+        times = msmd.timesforscan(scan)
+        scan_times.append(times)
+    msmd.close()
+
+    # Helper: convert MJD seconds to time string HH:MM:SS
+    def mjdsec_to_str(t):
+        dt = datetime.datetime.utcfromtimestamp(t)
+        return dt.strftime('%H:%M:%S')
+
+    # Build list of timeranges
+    chunks = []
+    for scan in scan_times:
+        t0, t1 = scan[0], scan[-1]
+        t_edges = np.arange(t0, t1, interval)
+        for start, end in zip(t_edges[:-1], t_edges[1:]):
+            chunks.append(f"{mjdsec_to_str(start)}~{mjdsec_to_str(end)}")
+
+    log_message(f"Testing {len(chunks)} time ranges...")
+
+    # Run fringefit and record median SNR for each timerange
+    tb = table()
+    results = []
+
+    for tr in chunks:
+        caltable = f"{sbd_search}/fringe_{tr.replace(':','').replace('~','_')}.cal"
+        try:
+            log_message(f"Running fringefit for timerange {tr}...")
+            fringefit(vis=vis,
+                    caltable=caltable,
+                    field=field,
+                    refant=refant,
+                    timerange=tr,
+                    minsnr=minsnr,
+                    )   
+            
+
+            # Open caltable and measure SNR
+            tb.open(caltable)
+            snr = tb.getcol('SNR')
+            tb.close()
+            median_snr = np.nanmedian(snr)
+            results.append((tr, median_snr))
+        except Exception as e:
+            log_message(f"Failed for {tr}: {e}")
+            results.append((tr, 0.0))
+
+    # Select best timerange
+    if len(results) > 0:
+        best_tr, best_snr = max(results, key=lambda x: x[1])
+        log_message(f"\n Best timerange: {best_tr} (median SNR = {best_snr:.2f})")
+
+        plotfile = f"{sbd_search}/fringe_snr_vs_timerange ({field}).png"
+        plt.figure(figsize=(8,6))
+        plt.plot([r[0] for r in results], [r[1] for r in results], marker='o')
+        plt.xticks(rotation=90)
+        plt.ylabel('Median SNR')
+        plt.savefig(plotfile)
+        
+        plt.tight_layout()
+        
+        return best_tr
+
+    else:
+        log_message("No valid results found.")
+        
+    # os.chdir(current_directory)

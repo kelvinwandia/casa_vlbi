@@ -657,17 +657,24 @@ def plot_sbd(plotfile,timerange,datacolumn):
         )
     except Exception as plotms_error:
         logging.critical(f"Error occurred during plotms: {plotms_error}")
+        
 
 
 @time_execution
 def sbd_fringefit():
 
     plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
-
-
+    
+    ##### Search a good timerange to use for sbd 
+    sbd_search = os.path.join(working_directory).rstrip('/') + '/' + 'sbd_search_plots'
+    if not os.path.exists(sbd_search):
+        os.makedirs(sbd_search)
+    timerange = search_sbd_fringefit_soln(vis,fringe_finder,refant=refant,minsnr=5.0,interval=60.0,sbd_search=sbd_search)
+    
+    
     sbd_plotfile_before = f"{plots_dir}/before_sbd_fringefit.png"
-
     sbd_table = vis.replace('.ms', '.sbd')
+
     
     if not os.path.exists(sbd_table):
         log_message(f"Fringefitting and writing caltable: {sbd_table}")
