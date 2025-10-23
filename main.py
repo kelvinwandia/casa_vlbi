@@ -152,6 +152,11 @@ if do_flagging == True:
 
 if use_casa == True:
     logging.info(f"Using CASA to do apriori cal")
+    
+    if telescope.strip().upper() == "VLBA":
+        log_message("Selected telescope is VLBA!")
+        run_accor()
+    
     if do_apriori_cal == True:
         try:
             logging.info("Doing amplitude calibration using TSYS and GC tables")

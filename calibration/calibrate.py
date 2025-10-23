@@ -22,6 +22,10 @@ cal_tables_dict = {}
 msmd = casatools.msmetadata()
 tb = casatools.table()
 
+
+
+
+
 def set_working_dir():
 
     """
@@ -575,18 +579,48 @@ def gencal_tsys_gc():
     cal_tables_dict[gcal_caltable] = "nearest"
     logging.info(f"Cal tables {tsys_caltable} and {gcal_caltable} added to cal_tables_dict {cal_tables_dict}")
     
+
+
+   
+   
+def run_accor():
+    plots_dir = os.path.join(working_directory).rstrip('/') + '/' + 'plots'
+    plotfile = os.path.join(plots_dir, f"{vis.replace('.ms', f'_accor.png')}")
+    accor_caltable = vis.replace('.ms','.accor')
+    
+    if not os.path.exists(accor_caltable):
+        log_message("----> Running task accor ")
+        accor(vis=vis, caltable=accor_caltable, solint='30s')
+        
+    plotms(vis=accor_caltable, xaxis='time', yaxis = 'amp', iteraxis='antenna',coloraxis='spw',
+           highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=plotfile,
+            overwrite=True)
+    
+    smoothcal_caltable =  vis.replace('.ms','_smmoth.accor')
+    plotfile_smoothcal = os.path.join(plots_dir, f"{vis.replace('.ms', f'_smooth_accor.png')}")
+    
+    if not os.path.exists(smoothcal_caltable):
+        smoothcal(vis=vis, tablein=accor_caltable, caltable=smoothcal_caltable, smoothtype='median', smoothtime=1800.0)
+    
+    plotms(vis=smoothcal_caltable, xaxis='time', yaxis = 'amp', iteraxis='antenna',coloraxis='spw',
+           highres=True, showgui=False, dpi=800, width=1500, height=750, plotfile=plotfile_smoothcal,
+            overwrite=True)
+    
+    cal_tables_dict[smoothcal_caltable] = 'nearest'
+    
 def applycal_tsys_gc():
+    
 
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
     # print(table,interp)
     # print(os.getcwd())
-    logging.info(f"======>>>Applying {table} using interpolation {interp}")  
+    log_message(f"======>>>Applying {table} using interpolation {interp}")  
     applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
     tsys_gc_flagging_summary = flagdata(vis=vis, mode='summary')
-    logging.info("======>>>REPORTING FLAGGING STATS after applying tsys and gc")
+    log_message(f"======>>>REPORTING FLAGGING STATS after applying {table}")
     report_flag(tsys_gc_flagging_summary, 'field')
 
 def tec_corrections():
