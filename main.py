@@ -234,7 +234,7 @@ if apply_bpass == True:
 if make_dirty_map == True:
     try:
         logging.info("Making dirty map")
-        make_dirty_map()
+        make_map()
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 

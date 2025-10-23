@@ -679,7 +679,9 @@ def sbd_fringefit():
     sbd_search = os.path.join(working_directory).rstrip('/') + '/' + 'sbd_search_plots'
     if not os.path.exists(sbd_search):
         os.makedirs(sbd_search)
-    timerange = search_sbd_fringefit_soln(vis,fringe_finder,refant=refant,minsnr=5.0,interval=60.0,sbd_search=sbd_search)
+        
+    global timerange_sbd
+    timerange_sbd = search_sbd_fringefit_soln(vis,fringe_finder,refant=refant,minsnr=5.0,interval=60.0,sbd_search=sbd_search)
     
     
     sbd_plotfile_before = f"{plots_dir}/before_sbd_fringefit.png"
@@ -690,11 +692,11 @@ def sbd_fringefit():
         log_message(f"Fringefitting and writing caltable: {sbd_table}")
         fringefit(
             vis=vis, caltable=sbd_table, solint='inf',
-            zerorates=True, timerange=timerange, refant=refant,
+            zerorates=True, timerange=timerange_sbd, refant=refant,
             minsnr=snr_sbd, parang=True
         )
         
-        plot_sbd(sbd_plotfile_before.replace('.png',timerange)+'.png',timerange,'data')
+        plot_sbd(sbd_plotfile_before.replace('.png',timerange_sbd)+'.png',timerange_sbd,'data')
 
 
     else:
@@ -732,10 +734,7 @@ def applycal_sbd_fringe():
     )
 
     
-    plot_sbd(sbd_plotfile_after,timerange,'corrected')
-
-
-    
+    plot_sbd(sbd_plotfile_after,timerange_sbd,'corrected')
     sbd_flagging_summary = flagdata(vis=vis, mode='summary')
     log_message("======>>>REPORTING FLAGGING STATS after applying sbd corrections")
     report_flag(sbd_flagging_summary, 'field')
@@ -793,7 +792,7 @@ def applycal_mbd_fringe():
 
     ## Fix this by checking the position of the dictionary
     ## also dont hardcode the num spw
-    nspw,_ = get_msinfo()
+    nspw,nchan = get_msinfo()
     print(f"Applying to spws: {nspw}")
     
     if use_casa == True:
@@ -810,7 +809,7 @@ def applycal_mbd_fringe():
 
     plotms(
             vis=vis, xaxis='frequency', yaxis='phase', antenna = f"{refant.split(',')[0].strip()}&*", ydatacolumn='corrected',
-            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw', iteraxis='baseline',
+            correlation='LL', gridcols=3, gridrows=3,showgui=False, coloraxis='spw', iteraxis='baseline', avgchannel=nchan,
             plotfile=mbd_plotfile,overwrite=True, width=1920, height=1080, avgtime='9999',
         ) 
     
@@ -943,55 +942,70 @@ def getimaging_params():
 
 
 
+@time_execution
+def make_map(vis=vis,source=phase_calibrator):
 
-def make_dirty_map(vis=vis,imsize=320, niter=0, timerange=None,
-               stokes_params=['I'], cell=None, parallel=parallel, nterms=1,
-               weighting='briggs', robust=0.5, noisethreshold=1.75, usemask='auto-multithresh'):
-
-    print(f"Imaging {vis_basename}")
-    vis_basename = os.path.basename(vis).replace('.ms','')
-
-    for stokes in stokes_params:
-        global imagename
-        imagename = f"{vis_basename}_stokes_{stokes}"
-        print(imagename)
-        # Safely remove previous images
-        for suffix in ['.image', '.model', '.residual', '.psf', '.mask', '.sumwt']:
-            path = f"{imagename}{suffix}"
-            if os.path.exists(path):
-                if os.path.isdir(path):
-                    shutil.rmtree(path)
-                else:
-                    os.remove(path)
-
-        # Run tclean
-        tclean(
-            vis=vis,
-            imagename=imagename,
-            cell=cell,
-            imsize=imsize,
-            niter=niter,
-            nterms=nterms,
-            deconvolver='mtmfs',
-            weighting=weighting,
-            robust=robust,
-            parallel=parallel,
-            interactive=False,
-            stokes=stokes,
-            usemask=usemask,
-            noisethreshold=noisethreshold,
-           field = phase_calibrator,
-        )
-
-    for suffix in ['.image.tt0', '.residual.tt0']:
-        casa_image = imagename + suffix
-        fits_out = casa_image+'.fits'
+                
+    if use_tclean == True:
+        pass
     
-        try:
-            exportfits(imagename=casa_image, fitsimage=fits_out, overwrite=True)
-            print(f"Exported {fits_out}")
-        except Exception as e:
-            print(f"Failed to export {casa_image}: {e}")
+    if use_wsclean == True:
+        log_message("Using WSCLEAN for imaging")
+        imsize = 80
+
+        sources = [phase_calibrator, fringe_finder, target]
+        
+        dirty_maps_dir = os.path.join(working_directory, 'dirty_maps')
+        if not os.path.exists(dirty_maps_dir):
+            os.makedirs(dirty_maps_dir)
+        
+        msmd.open(vis)
+        all_fields = {i: n for i, n in enumerate(msmd.fieldnames())}
+        msmd.close()
+        
+        for source in sources:
+            
+            matched_field_ids = [fid for fid, name in all_fields.items() if name == source]
+            if not matched_field_ids:
+                log_message(f"Source {source} not found in MS")
+                continue
+            field_id = matched_field_ids[0]
+            
+            cell = get_imaging_cellsize(vis)
+            log_message(f"Imaging field '{source}' (field ID {field_id}) using cell size {cell}")
+            
+            imagename = os.path.join(dirty_maps_dir, f"{source}_dirty_map")
+            
+            if not os.path.exists(imagename + '-image.fits'):
+                log_message(f"Making {imagename}")
+                
+                wsclean_cmd = [
+                    'wsclean', '-log-time',
+                    '-size', str(imsize), str(imsize),
+                    '-name', imagename,
+                    '-scale', str(cell),
+                    '-mgain', '0.8',
+                    '-niter', '0',
+                    '-field', str(field_id),
+                ]
+                
+                if verbosity:
+                    # If verbosity is True, insert '-quiet' at the second position
+                    wsclean_cmd.insert(2, '-quiet')
+                    
+                num_threads = get_number_of_threads()
+                threads_to_use = str(int(num_threads / 4))
+                wsclean_cmd += ["-j", threads_to_use] 
+                
+                wsclean_cmd = wsclean_cmd + [vis]
+                
+                run_wsclean(wsclean_sif, wsclean_cmd)
+            
+            wsclean_fitsfile = imagename + '-image.fits'
+            # get_im_stats(wsclean_fitsfile)
+            plot_fits(wsclean_fitsfile)
+        
+
 
 
 
@@ -1001,8 +1015,7 @@ def make_dirty_map(vis=vis,imsize=320, niter=0, timerange=None,
 # Yu need to remove this function and use wsclean here
 # """
 
-# @time_execution
-# def dirty_map(vis,source):
+
     
 #     msmd.open(vis)
 #     field_id = msmd.fieldsforname(source)[0]

@@ -120,11 +120,22 @@ def pybdsf(input_image):
 
     return regionfile
 
+def get_number_of_threads():
+    try:
+        num_threads = os.cpu_count()
+        if num_threads is None:
+            print("Could not determine the number of threads.")
+        else:
+            print(f"Number of threads (logical processors) available: {num_threads}")
+    except Exception as e:
+        print(f"An error occurred while determining the number of threads: {e}")
+    
+    return int(num_threads)
 
-def run_wsclean(wsclean_sif,command):
 
+def run_wsclean(wsclean_sif, command):
     """
-    Runs wsclean commands 
+    Runs wsclean commands
     """
     container = wsclean_sif
     if os.path.exists(container):
@@ -133,11 +144,11 @@ def run_wsclean(wsclean_sif,command):
     command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + command
 
     try:
-        log_message("Executing: %s", ' '.join(command_to_execute))
+        log_message(f"Executing: {' '.join(command_to_execute)}")
         process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         stdout, stderr = process.communicate()
-        log_message("stdout: %s", stdout)
-        log_message("stderr: %s", stderr)
+        log_message(f"stdout: {stdout}")
+        log_message(f"stderr: {stderr}")
 
         return_code = process.returncode
         if return_code == 0:
@@ -147,6 +158,7 @@ def run_wsclean(wsclean_sif,command):
 
     except Exception as e:
         log_message(f"An error occurred: {e}")
+
 
 
 

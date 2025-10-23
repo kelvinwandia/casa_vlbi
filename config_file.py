@@ -71,7 +71,8 @@ solint = configuration_file.getfloat('calibrate','solint')
 do_bpass = configuration_file.getboolean('calibrate','do_bpass')
 apply_bpass = configuration_file.getboolean('calibrate','apply_bpass')
 make_dirty_map = configuration_file.getboolean('calibrate','make_dirty_map')
-
+use_tclean = configuration_file.getboolean('calibrate','use_tclean')
+use_wsclean = configuration_file.getboolean('calibrate','use_wsclean')
 
 # split_calibrated = configuration_file.getboolean('calibrate','split_calibrated')
 # imsize= [int(part) for part in configuration_file.get('calibrate', 'imsize').split(',')]
