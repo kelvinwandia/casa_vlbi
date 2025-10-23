@@ -462,82 +462,95 @@ def execute_aoflagger_strategy():
     """
     Flags using aoflagger
     """
+    
+    main_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(main_dir)
+    strategy = os.path.join(project_root, 'data', 'flagging', 'generic_strategy.lua')
 
-    try:
+    if not os.path.exists(strategy):
+        raise FileNotFoundError(f"Strategy file not found at {strategy}")
 
-        container = aoflagger_path
-        print(f"Checking for container at: {container}")
-        if os.path.exists(container):
-            log_message(f"Found {container}")
-            singularity_bind = os.path.join(os.path.dirname(os.path.dirname(aoflagger_path)))
-            log_message(f"You are binding singularity to {singularity_bind}")
-        else:
-            print(f"{container} not found")
-    except FileNotFoundError:
-        logging.critical(f"Singularity container not found")
-
-    fields  = getfields()
-    num_threads = get_number_of_threads()
-
-
-    # phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
-    # fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
-    # target_keys = [key for key, value in fields.items() if value in target]
-    # bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
-    # faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
-    # bright_strategy_fringefinder = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, fringe_finder_keys)), '-strategy', bright_source_strategy, vis]
+    log_message(f"Loaded strategy file: {strategy}")
+    
     
 
-    aoflagger_cmds = ['aoflagger', '-j', f'{num_threads}', '-indirect-read', '-strategy', flagging_strategy, vis]
+    # try:
 
-    insert_position = 1  # Insert after 'aoflagger'
-    # Insert the verbosity flag at the specified position if verbosity is enabled
-    if verbosity==True:
-        aoflagger_cmds.insert(insert_position, '-v')
-
-
-    # for field in fields.values():
-        
-    #     # Determine the appropriate strategy based on the type of field
-    #     if field in phase_calibrator:
-    #         strategy = bright_strategy_phasecal
-    #     elif field in fringe_finder:
-    #         strategy = bright_strategy_fringefinder
-    #     elif field in target:
-    #         strategy = faint_strategy
+    #     container = aoflagger_path
+    #     print(f"Checking for container at: {container}")
+    #     if os.path.exists(container):
+    #         log_message(f"Found {container}")
+    #         singularity_bind = os.path.join(os.path.dirname(os.path.dirname(aoflagger_path)))
+    #         log_message(f"You are binding singularity to {singularity_bind}")
     #     else:
-    #         logging.critical(f"No strategy defined for field {field}")
+    #         print(f"{container} not found")
+    # except FileNotFoundError:
+    #     logging.critical(f"Singularity container not found")
+
+    # fields  = getfields()
+    # num_threads = get_number_of_threads()
+    
+    
+
+
+    # # phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
+    # # fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
+    # # target_keys = [key for key, value in fields.items() if value in target]
+    # # bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
+    # # faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
+    # # bright_strategy_fringefinder = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, fringe_finder_keys)), '-strategy', bright_source_strategy, vis]
+    
+
+    # aoflagger_cmds = ['aoflagger', '-j', f'{num_threads}', '-indirect-read', '-strategy', flagging_strategy, vis]
+
+    # insert_position = 1  # Insert after 'aoflagger'
+    # # Insert the verbosity flag at the specified position if verbosity is enabled
+    # if verbosity==True:
+    #     aoflagger_cmds.insert(insert_position, '-v')
+
+
+    # # for field in fields.values():
+        
+    # #     # Determine the appropriate strategy based on the type of field
+    # #     if field in phase_calibrator:
+    # #         strategy = bright_strategy_phasecal
+    # #     elif field in fringe_finder:
+    # #         strategy = bright_strategy_fringefinder
+    # #     elif field in target:
+    # #         strategy = faint_strategy
+    # #     else:
+    # #         logging.critical(f"No strategy defined for field {field}")
             
 
-        # log_message(f"Flagging {field}")
-    log_message(f"Using strategy {flagging_strategy}")
-    command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + aoflagger_cmds
+    #     # log_message(f"Flagging {field}")
+    # log_message(f"Using strategy {flagging_strategy}")
+    # command_to_execute = ['singularity', 'exec', '-B', singularity_bind, container] + aoflagger_cmds
 
-    try:
-        log_message("Executing: %s", ' '.join(command_to_execute))
-        process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        stdout, stderr = process.communicate()
-        log_message("stdout: %s", stdout)
-        log_message("stderr: %s", stderr)
+    # try:
+    #     log_message("Executing: %s", ' '.join(command_to_execute))
+    #     process = subprocess.Popen(command_to_execute, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    #     stdout, stderr = process.communicate()
+    #     log_message("stdout: %s", stdout)
+    #     log_message("stderr: %s", stderr)
 
-        return_code = process.returncode
-        if return_code == 0:
-            log_message(f"Strategy executed successfully. Output:\n{stdout}")
-        else:
-            logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
+    #     return_code = process.returncode
+    #     if return_code == 0:
+    #         log_message(f"Strategy executed successfully. Output:\n{stdout}")
+    #     else:
+    #         logging.critical(f"Error executing strategy. Return code: {return_code}\nError message: {stderr}")
 
-        # log_message(f"Finished flagging field {field}")
+    #     # log_message(f"Finished flagging field {field}")
 
-    except Exception as e:
-        logging.critical(f"An error occurred: {e}")
+    # except Exception as e:
+    #     logging.critical(f"An error occurred: {e}")
 
-    flagmanager(vis=vis, mode='save', versionname="after_automatic_flagging")
+    # flagmanager(vis=vis, mode='save', versionname="after_automatic_flagging")
 
-    aoflagger_flagging_summary = flagdata(vis=vis, mode='summary')
-    log_message("======>>>REPORTING FLAGGING STATS after automatic flagging")
-    # calc_flagged_data(phase_calibrator)
-    calc_flagged_data(target)
-    report_flag(aoflagger_flagging_summary, 'field')
+    # aoflagger_flagging_summary = flagdata(vis=vis, mode='summary')
+    # log_message("======>>>REPORTING FLAGGING STATS after automatic flagging")
+    # # calc_flagged_data(phase_calibrator)
+    # calc_flagged_data(target)
+    # report_flag(aoflagger_flagging_summary, 'field')
 
 
 
