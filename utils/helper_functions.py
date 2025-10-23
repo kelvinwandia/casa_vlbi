@@ -149,32 +149,6 @@ def run_wsclean(wsclean_sif,command):
         log_message(f"An error occurred: {e}")
 
 
-def get_imaging_params(vis):
-
-    
-
-    ms = casatools.ms()
-    tb = casatools.table()
-    ms.open(vis)
-    max_uv = ms.getdata('uvdist')['uvdist'].max()
-    ms.close()
-
-    tb.open(vis+'/SPECTRAL_WINDOW')
-    chan_freq = tb.getcol('CHAN_FREQ')
-    highest_freq = chan_freq.max()
-    tb.close()
-
-    # 3.6e6 converts the degrees to mas
-    # 5 is the sampling
-
-    cell_size = ((c.value/highest_freq)/max_uv)*(180./np.pi)*(3.6e6/5)
-    cell_size = np.round(cell_size)
-    log_message("The imaging cell size is:", cell_size)
-
-    return cell_size
-
-
-
 
 def search_sbd_fringefit_soln(vis,field,refant,minsnr,interval,sbd_search):
 
@@ -186,19 +160,16 @@ def search_sbd_fringefit_soln(vis,field,refant,minsnr,interval,sbd_search):
     scanlist = msmd.scansforfield(field)
     log_message(f"Scans for field {field}: {scanlist}")
 
-    # Collect time ranges (in seconds since ref)
     scan_times = []
     for scan in scanlist:
         times = msmd.timesforscan(scan)
         scan_times.append(times)
     msmd.close()
 
-    # Helper: convert MJD seconds to time string HH:MM:SS
     def mjdsec_to_str(t):
         dt = datetime.datetime.utcfromtimestamp(t)
         return dt.strftime('%H:%M:%S')
 
-    # Build list of timeranges
     chunks = []
     for scan in scan_times:
         t0, t1 = scan[0], scan[-1]
@@ -208,7 +179,6 @@ def search_sbd_fringefit_soln(vis,field,refant,minsnr,interval,sbd_search):
 
     log_message(f"Testing {len(chunks)} time ranges...")
 
-    # Run fringefit and record median SNR for each timerange
     tb = table()
     results = []
 
@@ -235,7 +205,6 @@ def search_sbd_fringefit_soln(vis,field,refant,minsnr,interval,sbd_search):
             log_message(f"Failed for {tr}: {e}")
             results.append((tr, 0.0))
 
-    # Select best timerange
     if len(results) > 0:
         best_tr, best_snr = max(results, key=lambda x: x[1])
         log_message(f"\n Best timerange: {best_tr} (median SNR = {best_snr:.2f})")
@@ -255,3 +224,134 @@ def search_sbd_fringefit_soln(vis,field,refant,minsnr,interval,sbd_search):
         log_message("No valid results found.")
         
     # os.chdir(current_directory)
+    
+    
+
+def get_msinfo(msname):
+
+    nchan = []
+    msmd = casatools.msmetadata()
+    msmd.open(msname)
+    bandwidth = msmd.bandwidths()
+    nspw = len(bandwidth)
+    for spw in range(nspw):
+        nchan.append(msmd.nchan(spw))
+    msmd.close()
+    # log_message(f"The measurement set contains {len(nspw)} spectral windows divided into {len(nchan)} channels")
+    return nspw,nchan
+
+def get_observing_band(msname: str) -> tuple:
+
+    """
+    Identify the frequency band of the data and return relevant frequency information.
+    
+    Parameters:
+        vis (str): Path to the visibility data file.
+    
+    Returns:
+        tuple: Band name, mean frequency, maximum frequency, and minimum frequency (in GHz).
+    """
+
+    band_name = None
+    freq_ranges = {(1, 2): "L",(2, 4): "S",(4, 8): "C",(8, 12): 
+                "X",(12, 18): "U",(18, 26.5): "K", (26.5, 
+                    40): "A",(40, 50): "Q",
+                            }
+    msmd = casatools.msmetadata()
+    msmd.open(msname)
+    nspw = msmd.nspw()
+    
+    # Calculate mean frequency for each spectral window
+    spws_freq = np.array([np.nanmean(msmd.chanfreqs(spw)) for spw in range(nspw)])
+    msmd.done()
+    
+    # Calculate mean, max, and min frequencies across all spectral windows in GHz
+    mean_freq = np.nanmean(spws_freq) * 1e-9
+    max_freq = np.nanmax(spws_freq) * 1e-9
+    min_freq = np.nanmin(spws_freq) * 1e-9
+    
+    # Identify band based on mean frequency
+    for freq_range, band in freq_ranges.items():
+        if freq_range[0] <= mean_freq <= freq_range[1]:
+            band_name = band
+            break
+
+    log_message(f"Band: {band_name}, Mean Frequency: {mean_freq:.2f} GHz, "
+        f"Min Frequency: {min_freq:.2f} GHz, Max Frequency: {max_freq:.2f} GHz")
+    
+    return band_name, mean_freq, max_freq, min_freq
+
+def get_longest_baseline(msname:str) ->str:
+    """
+    Calculate the longest baseline in terms of wavelength (lambda).
+    
+    Parameters:
+        vis (str): Path to the visibility data file.
+    
+    Returns:
+        float: Longest baseline in units of wavelength.
+    """
+
+    from astropy.constants import c as LIGHT_SPEED
+
+    # Open measurement set and retrieve uvw data
+    ms = casatools.ms()
+    ms.open(msname)
+    # ms.selectinit(datadescid=0)
+    # ms.selectinit()
+    uvw = ms.getdata('uvw')['uvw']
+    ms.close()
+    
+    # Compute baseline in meters
+    uvdist_meters = np.sqrt(uvw[0] ** 2 + uvw[1] ** 2)
+    longest_baseline_meters = np.nanmax(uvdist_meters)
+    
+    # Get frequency data
+    band_name, mean_freq, max_freq, min_freq = get_observing_band(msname)
+    frequency_hz = max_freq * 1e9
+    wavelength_meters = LIGHT_SPEED.value / frequency_hz
+    
+    # Calculate longest baseline in terms of wavelength
+    longest_baseline_lambda = longest_baseline_meters / wavelength_meters
+    if longest_baseline_lambda >= 1e6:
+        scaled_baseline = longest_baseline_lambda / 1e6
+        unit = "Mλ"  # Mega wavelengths
+    elif longest_baseline_lambda >= 1e3:
+        scaled_baseline = longest_baseline_lambda / 1e3
+        unit = "kλ"  # Kilo wavelengths
+    else:
+        scaled_baseline = longest_baseline_lambda
+        unit = "λ"    # Wavelengths
+
+    log_message(f"Longest Baseline: {scaled_baseline:.2f} {unit}")
+    return longest_baseline_lambda
+
+def get_imaging_cellsize(msname) -> str:
+    """
+    Calculate the cell size for imaging based on the longest baseline.
+
+    Parameters:
+    ----------
+    msname : str
+        The name of the measurement set.
+
+    Returns:
+    -------
+    str
+        The size of the imaging cell, either in arcseconds or milliarcseconds, depending on the value.
+    """
+    # Get the longest baseline in wavelength units, accounting for flags if needed
+    longest_baseline_lambda = get_longest_baseline(msname)
+    
+    # Calculate cell size in arcseconds
+    cell_float = (180.0 * 3600 / (np.pi * 5)) * (1.0 / longest_baseline_lambda)
+    
+    # Convert to mas if the value is very small (e.g., <1 arcsecond)
+    if cell_float < 0.01:
+        cell_float *= 1000  # convert to mas
+        cell = f'{cell_float:.2f} mas'
+    else:
+        cell = f'{cell_float:.2f} arcsec'
+    
+    log_message(f"Imaging with a cell size of {cell}")
+    return cell
