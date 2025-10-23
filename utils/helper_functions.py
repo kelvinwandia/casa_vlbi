@@ -38,6 +38,17 @@ def time_execution(func):
     return wrapper
 
 
+def log_message(msg, level="INFO"):
+    if level.upper() == "INFO":
+        color = "\033[92m"  # Green
+    elif level.upper() == "ERROR":
+        color = "\033[91m"  # Red
+    else:
+        color = "\033[0m"   # Default
+
+    casalog.post(msg, priority=level.upper())
+    print(f"{color}{msg}\033[0m")
+
 def plot_fits(fitsname):
     """
     Plots fitsfiles using astropy
