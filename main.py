@@ -144,7 +144,7 @@ if do_flagging == True:
             execute_aoflagger_strategy()
         if telescope.strip().upper() != "VLBA":
             flag_autocorr()
-        flagging()
+        # flagging()
         # flag_edge_channels()
         if flag_antenna == True:
             antenna_flag(antenna_to_flag)
