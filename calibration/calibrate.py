@@ -122,7 +122,7 @@ def attach_tsys_gc():
     valid_extensions = ('IDI', 'idifits')
     fitsfiles = [os.path.join(fitsfiles_dir, f) 
                 for f in os.listdir(fitsfiles_dir) 
-                if f.split('.')[-1].lower() in [ext.lower() for ext in valid_extensions]]
+                    if any(f.split('.')[-1].lower().startswith(ext.lower()) for ext in valid_extensions)]
 
     fitsfiles = natsorted(fitsfiles)
 
@@ -229,8 +229,9 @@ def makems(vis,splitvis=None):
     valid_extensions = ('IDI', 'idifits')
 
     fitsfiles = [os.path.join(fitsfiles_dir, f) 
-                for f in os.listdir(fitsfiles_dir) 
-                if f.split('.')[-1].lower() in [ext.lower() for ext in valid_extensions]]
+    for f in os.listdir(fitsfiles_dir) 
+        if any(f.split('.')[-1].lower().startswith(ext.lower()) for ext in valid_extensions)]
+
 
     fitsfiles = natsorted(fitsfiles)
 
@@ -308,14 +309,13 @@ def getfields():
         return fields
 
 
-
 def report_flag(summary, axis):
     # log_message("REPORTING FLAGGING STATS")
     try:
         for id, stats in summary[axis].items():
             log_message('%s %s: %5.1f percent flagged' % (axis, id, 100. * stats['flagged'] / stats['total']))
     except Exception as e:
-        log_message(f"Exception {e} while reporting flags")
+        log_message(f"Exception {e} while reporting flags",level="ERROR")
     
 def get_msinfo():
 
@@ -554,16 +554,17 @@ def execute_aoflagger_strategy():
 
             log_message(f"Finished flagging field {field}")
 
+            flagmanager(vis=vis, mode='save', versionname=f"after_automatic_flagging_{field}")
+            aoflagger_flagging_summary = flagdata(vis=vis, mode='summary',field=field)
+            log_message("======>>>REPORTING FLAGGING STATS after automatic flagging")
+            # calc_flagged_data(phase_calibrator)
+            # calc_flagged_data(target)
+            report_flag(aoflagger_flagging_summary, 'field')
+
         except Exception as e:
             logging.critical(f"An error occurred: {e}")
 
-        flagmanager(vis=vis, mode='save', versionname="after_automatic_flagging")
 
-        aoflagger_flagging_summary = flagdata(vis=vis, mode='summary')
-        log_message("======>>>REPORTING FLAGGING STATS after automatic flagging")
-        calc_flagged_data(phase_calibrator)
-        calc_flagged_data(target)
-        report_flag(aoflagger_flagging_summary, 'field')
 
 
 
@@ -736,7 +737,7 @@ def sbd_fringefit():
         log_message(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
     else:
         cal_tables_dict[sbd_table] = "nearest"
-        log_message(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
+        log_message(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}",level="ERROR")
 
 @time_execution
 def applycal_sbd_fringe():
