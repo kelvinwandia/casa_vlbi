@@ -143,9 +143,7 @@ if do_flagging == True:
         if telescope.strip().upper() != "VLBA":
             flag_autocorr()
         flagging()
-        # flag_edge_channels()
-        if flag_antenna == True:
-            antenna_flag(antenna_to_flag)
+        flag_edge_channels()
         # plot_check_baddata(save_as="_after_flagging")
     except Exception as e:
         logging.critical(f"Exception {e} occurred")

@@ -36,7 +36,6 @@ apply_apriori_cal = configuration_file.getboolean('apriori','apply_apriori_cal')
 target = configuration_file.get('basic','target')
 phase_calibrator = configuration_file.get('basic','phase_calibrator')
 fringe_finder = configuration_file.get('basic','fringe_finder')
-integration_time = configuration_file.getfloat('basic','integration_time')
 do_split = configuration_file.getboolean('basic','do_split')
 timebin = configuration_file.get('basic','timebin')
 width = configuration_file.getint('basic','width')
@@ -48,8 +47,7 @@ manual_file = configuration_file.get('flagging','manual_file')
 edge_channel_fraction = configuration_file.getfloat('flagging','edge_channel_fraction')
 use_aoflagger = configuration_file.getboolean('flagging','use_aoflagger')
 flagging_strategy = configuration_file.get('flagging','flagging_strategy')
-flag_antenna = configuration_file.getboolean('flagging','flag_antenna')
-antenna_to_flag = configuration_file.get('flagging','antenna_to_flag')
+
 
 
 # calibrate

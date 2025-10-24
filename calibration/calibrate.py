@@ -393,13 +393,13 @@ def flagging():
      
     # if not use_aoflagger:
 
-    log_message(f"Quacking every {integration_time}s from each scan")
+    log_message(f"Quacking 2s from each scan")
     flagdata(
-        vis = vis, mode='quack', quackinterval=integration_time, quackmode='beg',
+        vis = vis, mode='quack', quackinterval=2.0, quackmode='beg',
         quackincrement=True,
         )
     flagdata(
-        vis = vis, mode='quack', quackinterval=integration_time, quackmode='endb',
+        vis = vis, mode='quack', quackinterval=2.0, quackmode='endb',
         quackincrement=True,
         )
     log_message("Finished quacking")
@@ -422,16 +422,6 @@ def flagging():
     else:
         log_message("Manual flagging file not supplied")
 
-def antenna_flag(antenna):
-    """
-    Use this if you wish to flag some antennas
-    """
-    log_message(f"You are flagging antennas {antenna}")
-    flagdata(vis=vis,mode='manual',antenna=antenna)
-
-    antenna_flagging_summary = flagdata(vis=vis, mode='summary')
-    log_message(f"======>>>REPORTING FLAGGING STATS after flagging {antenna}")
-    report_flag(antenna_flagging_summary, 'field')
 
 def calc_flagged_data(field):
 
@@ -988,57 +978,74 @@ def make_map(vis=vis,source=phase_calibrator):
         log_message("Using WSCLEAN for imaging")
         imsize = 640
 
-        sources = [phase_calibrator, fringe_finder, target]
-        
+        sources = [phase_calibrator, fringe_finder]
+
+        # If 'target' is a comma-separated list, split and combine
+        if isinstance(target, str) and ',' in target:
+            combined_targets = [t.strip() for t in target.split(',')]
+            sources.append(combined_targets)
+        else:
+            sources.append([target])
+
         dirty_maps_dir = os.path.join(working_directory, 'maps')
-        if not os.path.exists(dirty_maps_dir):
-            os.makedirs(dirty_maps_dir)
+        os.makedirs(dirty_maps_dir, exist_ok=True)
         
         msmd.open(vis)
         all_fields = {i: n for i, n in enumerate(msmd.fieldnames())}
         msmd.close()
-        
-        for source in sources:
-            
-            matched_field_ids = [fid for fid, name in all_fields.items() if name == source]
+
+        for source_group in sources:
+            # If it's a list (combined fields), join into one map name
+            if isinstance(source_group, list):
+                source_names = "_".join(source_group)
+                matched_field_ids = [
+                    fid for fid, name in all_fields.items() if name in source_group
+                ]
+            else:
+                source_names = source_group
+                matched_field_ids = [
+                    fid for fid, name in all_fields.items() if name == source_group
+                ]
+
             if not matched_field_ids:
-                log_message(f"Source {source} not found in MS")
+                log_message(f"Source(s) {source_group} not found in MS")
                 continue
-            field_id = matched_field_ids[0]
-            
+
             cell = get_imaging_cellsize(vis)
-            log_message(f"Imaging field '{source}' (field ID {field_id}) using cell size {cell}")
-            
-            imagename = os.path.join(dirty_maps_dir, f"{source}_map")
-            
+            log_message(f"Imaging field(s) {source_group} using cell size {cell}")
+
+            imagename = os.path.join(dirty_maps_dir, f"{source_names}_map")
+
             if not os.path.exists(imagename + '-image.fits'):
                 log_message(f"Making {imagename}")
-                
+
                 wsclean_cmd = [
                     'wsclean', '-log-time',
                     '-size', str(imsize), str(imsize),
                     '-name', imagename,
                     '-scale', str(cell),
                     '-mgain', '0.8',
-                    '-niter', '1000',
-                    '-field', str(field_id),
+                    '-niter', '1',
                 ]
-                
+
+                # Add all fields (combined)
+                for fid in matched_field_ids:
+                    wsclean_cmd += ['-field', str(fid)]
+
                 if verbosity:
-                    # If verbosity is True, insert '-quiet' at the second position
                     wsclean_cmd.insert(2, '-quiet')
-                    
+
                 num_threads = get_number_of_threads()
                 threads_to_use = str(int(num_threads / 4))
-                wsclean_cmd += ["-j", threads_to_use] 
-                
+                wsclean_cmd += ["-j", threads_to_use]
+
                 wsclean_cmd = wsclean_cmd + [vis]
-                
                 run_wsclean(wsclean_sif, wsclean_cmd)
-            
+
             wsclean_fitsfile = imagename + '-image.fits'
             get_im_stats(wsclean_fitsfile)
             plot_fits(wsclean_fitsfile)
+
         
 
 
