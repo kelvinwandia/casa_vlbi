@@ -44,17 +44,12 @@ verbosity = configuration_file.getboolean('basic','verbosity')
 
 # flag
 do_flagging = configuration_file.getboolean('flagging','do_flagging')
-# aoflagger_strategies = configuration_file.get('flagging','aoflagger_strategies')
-# faint_source_strategy = configuration_file.get('flagging','faint_source_strategy')
-# bright_source_strategy = configuration_file.get('flagging','bright_source_strategy')
 manual_file = configuration_file.get('flagging','manual_file')
 edge_channel_fraction = configuration_file.getfloat('flagging','edge_channel_fraction')
 use_aoflagger = configuration_file.getboolean('flagging','use_aoflagger')
 flagging_strategy = configuration_file.get('flagging','flagging_strategy')
-
 flag_antenna = configuration_file.getboolean('flagging','flag_antenna')
 antenna_to_flag = configuration_file.get('flagging','antenna_to_flag')
-export_uvfits = configuration_file.getboolean('flagging','export_uvfits')
 
 
 # calibrate

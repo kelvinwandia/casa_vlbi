@@ -55,8 +55,6 @@ sys.path.append(os.path.join(current_dir, 'data'))
 
 
 
-
-
 ### This is important for running the sif container
 ### it allows the logfiles to be placed in the same dir as main.py
 ### do not touch !!
@@ -144,7 +142,7 @@ if do_flagging == True:
             execute_aoflagger_strategy()
         if telescope.strip().upper() != "VLBA":
             flag_autocorr()
-        # flagging()
+        flagging()
         # flag_edge_channels()
         if flag_antenna == True:
             antenna_flag(antenna_to_flag)
@@ -173,11 +171,6 @@ if use_casa == True:
         except Exception as e:
             logging.warning(f"Encountered error {e}")
 
-if export_uvfits == True:
-    try:
-        export_to_uvfits(vis)
-    except Exception as e:
-        logging.warning(f"Encountered error {e}")
 
 if do_tec_corrections == True:
     try:
