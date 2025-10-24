@@ -465,8 +465,14 @@ def execute_aoflagger_strategy():
     
     main_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(main_dir)
-    bright_source_strategy = os.path.join(project_root, 'data', 'flagging', '4C.rfis')
-    faint_source_strategy = os.path.join(project_root,'data','flagging','faint_sources.rfis')
+    # bright_source_strategy = os.path.join(project_root, 'data', 'flagging', '4C.rfis')
+    # faint_source_strategy = os.path.join(project_root,'data','flagging','faint_sources.rfis')
+    
+    """ For AOflagger 3 """
+    lua_strategy = os.path.join(project_root,'data','flagging','generic_strategy.lua')
+
+    bright_source_strategy = faint_source_strategy = lua_strategy
+    """ End """
 
     strategies = {
         "bright_source_strategy": bright_source_strategy,
@@ -503,6 +509,8 @@ def execute_aoflagger_strategy():
     phase_calibrator_keys = [key for key, value in fields.items() if value in phase_calibrator]
     fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
     target_keys = [key for key, value in fields.items() if value in target]
+    
+    # print(phase_calibrator_keys,fringe_finder_keys,target_keys)
 
     bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
     faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
@@ -528,10 +536,10 @@ def execute_aoflagger_strategy():
             flagging_strategy = faint_strategy
         else:
             log_message(f"No strategy defined for field {field}",level="ERROR")
+            continue
                 
         strategy_index = flagging_strategy.index('-strategy') + 1
         strategy_file = flagging_strategy[strategy_index]
-
         log_message(f"Flagging {field} using strategy: {strategy_file}")
         
         flagging_strategy.insert(1, '-j')
@@ -978,7 +986,7 @@ def make_map(vis=vis,source=phase_calibrator):
     
     if use_wsclean == True:
         log_message("Using WSCLEAN for imaging")
-        imsize = 80
+        imsize = 640
 
         sources = [phase_calibrator, fringe_finder, target]
         
@@ -1012,7 +1020,7 @@ def make_map(vis=vis,source=phase_calibrator):
                     '-name', imagename,
                     '-scale', str(cell),
                     '-mgain', '0.8',
-                    '-niter', '0',
+                    '-niter', '1000',
                     '-field', str(field_id),
                 ]
                 
@@ -1029,7 +1037,7 @@ def make_map(vis=vis,source=phase_calibrator):
                 run_wsclean(wsclean_sif, wsclean_cmd)
             
             wsclean_fitsfile = imagename + '-image.fits'
-            # get_im_stats(wsclean_fitsfile)
+            get_im_stats(wsclean_fitsfile)
             plot_fits(wsclean_fitsfile)
         
 
