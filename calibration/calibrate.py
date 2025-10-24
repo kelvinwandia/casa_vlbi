@@ -745,7 +745,7 @@ def sbd_fringefit():
         log_message(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
     else:
         cal_tables_dict[sbd_table] = "nearest"
-        log_message(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}",level="ERROR")
+        log_message(f"Cal table {sbd_table} added to cal_tables_dict {cal_tables_dict}")
 
 @time_execution
 def applycal_sbd_fringe():
@@ -990,7 +990,7 @@ def make_map(vis=vis,source=phase_calibrator):
 
         sources = [phase_calibrator, fringe_finder, target]
         
-        dirty_maps_dir = os.path.join(working_directory, 'dirty_maps')
+        dirty_maps_dir = os.path.join(working_directory, 'maps')
         if not os.path.exists(dirty_maps_dir):
             os.makedirs(dirty_maps_dir)
         
@@ -1009,7 +1009,7 @@ def make_map(vis=vis,source=phase_calibrator):
             cell = get_imaging_cellsize(vis)
             log_message(f"Imaging field '{source}' (field ID {field_id}) using cell size {cell}")
             
-            imagename = os.path.join(dirty_maps_dir, f"{source}_dirty_map")
+            imagename = os.path.join(dirty_maps_dir, f"{source}_map")
             
             if not os.path.exists(imagename + '-image.fits'):
                 log_message(f"Making {imagename}")
