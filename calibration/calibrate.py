@@ -977,76 +977,73 @@ def make_map(vis=vis,source=phase_calibrator):
         pass
     
     if use_wsclean == True:
+
         log_message("Using WSCLEAN for imaging")
-        imsize = 640
 
-        sources = [phase_calibrator, fringe_finder]
+        """
+        Find all Measurement Sets in 'split_ms' and make images for each.
+        """
+        split_dir = os.path.join(working_directory, 'split_ms')
 
-        # If 'target' is a comma-separated list, split and combine
-        if isinstance(target, str) and ',' in target:
-            combined_targets = [t.strip() for t in target.split(',')]
-            sources.append(combined_targets)
-        else:
-            sources.append([target])
+        if not os.path.exists(split_dir):
+            log_message("'split_ms' directory not found. Run split_calibrated_ms() first.")
+            return
 
-        dirty_maps_dir = os.path.join(working_directory, 'maps')
-        os.makedirs(dirty_maps_dir, exist_ok=True)
-        
-        msmd.open(vis)
-        all_fields = {i: n for i, n in enumerate(msmd.fieldnames())}
-        msmd.close()
+        ms_files = sorted([f for f in os.listdir(split_dir) if f.endswith('.ms')])
+        if not ms_files:
+            log_message("No .ms files found in 'split_ms' — nothing to image.",level="ERROR")
+            return
 
-        for source_group in sources:
-            # If it's a list (combined fields), join into one map name
-            if isinstance(source_group, list):
-                source_names = "_".join(source_group)
-                matched_field_ids = [
-                    fid for fid, name in all_fields.items() if name in source_group
-                ]
-            else:
-                source_names = source_group
-                matched_field_ids = [
-                    fid for fid, name in all_fields.items() if name == source_group
-                ]
+        log_message(f"Found {len(ms_files)} measurement sets to image: {ms_files}")
 
-            if not matched_field_ids:
-                log_message(f"Source(s) {source_group} not found in MS")
-                continue
+        # Create the maps directory if needed
+        maps_dir = os.path.join(working_directory, "images")
+        os.makedirs(maps_dir, exist_ok=True)
 
-            cell = get_imaging_cellsize(vis)
-            log_message(f"Imaging field(s) {source_group} using cell size {cell}")
+        # Loop through each split MS file
+        for msfile in ms_files:
+            vis_path = os.path.join(split_dir, msfile)
+            imagename = os.path.join(maps_dir, msfile.replace('.ms', ''))
+            log_message(f"Starting imaging for {vis_path}")
 
-            imagename = os.path.join(dirty_maps_dir, f"{source_names}_map")
+            try:
+                cell = get_imaging_cellsize(vis_path)
+                imsize = 640
+                if not os.path.exists(imagename + '-image.fits'):
+                    log_message(f"Making {imagename}")
 
-            if not os.path.exists(imagename + '-image.fits'):
-                log_message(f"Making {imagename}")
+                    wsclean_cmd = [
+                        'wsclean', '-log-time',
+                        '-size', str(imsize), str(imsize),
+                        '-name', imagename,
+                        '-scale', str(cell),
+                        '-mgain', '0.8',
+                        '-niter', '1',
+                    ]
 
-                wsclean_cmd = [
-                    'wsclean', '-log-time',
-                    '-size', str(imsize), str(imsize),
-                    '-name', imagename,
-                    '-scale', str(cell),
-                    '-mgain', '0.8',
-                    '-niter', '1',
-                ]
+                    if verbosity:
+                        wsclean_cmd.insert(2, '-quiet')
 
-                # Add all fields (combined)
-                for fid in matched_field_ids:
-                    wsclean_cmd += ['-field', str(fid)]
+                    num_threads = get_number_of_threads()
+                    threads_to_use = str(int(num_threads / 4))
+                    wsclean_cmd += ["-j", threads_to_use]
 
-                if verbosity:
-                    wsclean_cmd.insert(2, '-quiet')
+                    wsclean_cmd = wsclean_cmd + [vis_path]
+                    run_wsclean(wsclean_sif, wsclean_cmd)
 
-                num_threads = get_number_of_threads()
-                threads_to_use = str(int(num_threads / 4))
-                wsclean_cmd += ["-j", threads_to_use]
+                    wsclean_fitsfile = imagename + '-image.fits'
+                    get_im_stats(wsclean_fitsfile)
+                    plot_fits(wsclean_fitsfile)
 
-                wsclean_cmd = wsclean_cmd + [vis]
-                run_wsclean(wsclean_sif, wsclean_cmd)
+            except Exception as e:
+                log_message(f"Error imaging {msfile}: {e}",level="ERROR")
+                # continue
 
-            wsclean_fitsfile = imagename + '-image.fits'
-            get_im_stats(wsclean_fitsfile)
-            plot_fits(wsclean_fitsfile)
+        log_message("All split Measurement Sets imaged successfully.")
+
+
+
+    
 
         
 def split_calibrated_ms():
@@ -1068,7 +1065,7 @@ def split_calibrated_ms():
     split_dir = "split_ms"
     if not os.path.exists(split_dir):
         os.makedirs(split_dir)
-        log_message(f"📁 Created directory: {split_dir}")
+        log_message(f" Created directory: {split_dir}")
 
     original_dir = os.getcwd()
 
@@ -1077,28 +1074,31 @@ def split_calibrated_ms():
     msmd.close()
 
     os.chdir(split_dir)
-    log_message(f"📂 Changed to directory: {os.getcwd()}")
+    log_message(f" Changed to directory: {os.getcwd()}")
 
     # --- Split each source ---
     for src in sources_to_split:
         if src not in available_sources:
-            log_message(f"⚠️ Source '{src}' not found in {vis}, skipping.")
+            log_message(f"Source '{src}' not found in {vis}, skipping.")
             continue
 
         outputvis = f"{src}.ms"
         log_message(f"Splitting source '{src}' ---> {outputvis}")
 
-        split(
-            vis=os.path.abspath(os.path.join("..", vis)),  # ensure full path
-            outputvis=outputvis,
-            field=src,
-            datacolumn=datacolumn,
-        )
+        if not os.path.exists(outputvis):
+            split(
+                vis=os.path.abspath(os.path.join("..", vis)),  # ensure full path
+                outputvis=outputvis,
+                field=src,
+                datacolumn=datacolumn,
+            )
 
-        log_message(f"✅ Saved source {src} as {outputvis}")
+            log_message(f"Saved source {src} as {outputvis}")
+        else:
+            log_message(f"Split source {outputvis} exists.")
 
     # --- Return to original directory ---
     os.chdir(original_dir)
-    log_message(f"🔙 Returned to directory: {original_dir}")
+    log_message(f"Returned to directory: {original_dir}")
 
     log_message("All specified sources processed successfully.")
