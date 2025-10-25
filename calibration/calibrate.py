@@ -79,11 +79,11 @@ def attach_tsys_gc():
     helper_scripts = 'casa-vlbi-master.zip'
     helper_scripts_dir = 'casa-vlbi'
     repo_url = 'https://github.com/jive-vlbi/casa-vlbi/archive/refs/heads/master.zip'
-
+    os.system(f"rm -r {helper_scripts}")
     # Download and extract the helper scripts if not already done
     if not os.path.exists(helper_scripts_dir):
         if not os.path.exists(helper_scripts):
-            subprocess.run(['wget', '-c', repo_url, '-O', helper_scripts], check=True)
+            subprocess.run(['wget', '-c', '--no-check-certificate', repo_url, '-O', helper_scripts], check=True)
 
         with zipfile.ZipFile(helper_scripts, 'r') as zip_ref:
             zip_ref.extractall()
