@@ -1052,8 +1052,6 @@ def make_map(vis=vis,source=phase_calibrator):
 def split_calibrated_ms():
 
 
-    from casatasks import split
-
     msmd = msmdtool()
     tb = tbtool()
 
@@ -1066,29 +1064,41 @@ def split_calibrated_ms():
 
     log_message(f"Sources to split: {sources_to_split}")
 
-    # --- Get available sources in the MS ---
+    # --- Create output directory ---
+    split_dir = "split_ms"
+    if not os.path.exists(split_dir):
+        os.makedirs(split_dir)
+        log_message(f"📁 Created directory: {split_dir}")
+
+    original_dir = os.getcwd()
+
     msmd.open(vis)
     available_sources = msmd.namesforfields()
     msmd.close()
 
+    os.chdir(split_dir)
+    log_message(f"📂 Changed to directory: {os.getcwd()}")
+
+    # --- Split each source ---
     for src in sources_to_split:
         if src not in available_sources:
-            log_message(f" Source '{src}' not found in {vis}, skipping.")
+            log_message(f"⚠️ Source '{src}' not found in {vis}, skipping.")
             continue
 
         outputvis = f"{src}.ms"
         log_message(f"Splitting source '{src}' ---> {outputvis}")
 
         split(
-            vis=vis,
+            vis=os.path.abspath(os.path.join("..", vis)),  # ensure full path
             outputvis=outputvis,
             field=src,
             datacolumn=datacolumn,
         )
 
-        log_message(f"Saved source {src} as {outputvis}")
+        log_message(f"✅ Saved source {src} as {outputvis}")
+
+    # --- Return to original directory ---
+    os.chdir(original_dir)
+    log_message(f"🔙 Returned to directory: {original_dir}")
 
     log_message("All specified sources processed successfully.")
-
-
-       
