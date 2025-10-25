@@ -1041,8 +1041,6 @@ def make_map(vis=vis,source=phase_calibrator):
 
         log_message("All split Measurement Sets imaged successfully.")
 
-
-
     
 
         
