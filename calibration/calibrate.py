@@ -13,6 +13,8 @@ import time
 from natsort import natsorted
 import zipfile
 import shutil
+from casatools import msmetadata as msmdtool
+from casatools import table as tbtool
 
 from config_file import *
 
@@ -42,7 +44,7 @@ def set_working_dir():
 
     try:
         os.chdir(working_directory)
-        print(f"Changed working directory to {working_directory}")
+        log_message(f"Changed working directory to {working_directory}")
     except Exception as e:
         logging.error(f"An error occurred while changing directory: {e}")
     
@@ -72,7 +74,7 @@ def attach_tsys_gc():
     """
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     helper_scripts_dir = helper_scripts_dir = os.path.join(base_dir, 'casa-vlbi')
-    print(f"Using JIVE helper scripts: {helper_scripts_dir}")
+    log_message(f"Using JIVE helper scripts: {helper_scripts_dir}")
 
     helper_scripts = 'casa-vlbi-master.zip'
     helper_scripts_dir = 'casa-vlbi'
@@ -112,7 +114,7 @@ def attach_tsys_gc():
         logging.error(f"importing casa-vlbi tools: {e}")
         sys.exit(1)
 
-    # Check for UVFLG file and print
+    # Check for UVFLG file and log_message
     if os.path.exists(uvflg_file):
         log_message(f"UVFLG File: {uvflg_file}")
     else:
@@ -144,7 +146,7 @@ def attach_tsys_gc():
     """ To remove all GC and TSYS"""
     extension_names = ['GAIN_CURVE', 'SYSTEM_TEMPERATURE']
     for filename in fitsfiles:
-        print(f"Processing file: {filename}")
+        log_message(f"Processing file: {filename}")
         with fits.open(filename, mode='update') as hdul:
             # Find extensions to remove
             extensions_to_remove = [i for i, ext in enumerate(hdul) if ext.header.get('EXTNAME') in extension_names]
@@ -162,21 +164,21 @@ def attach_tsys_gc():
         extension_name = 'SYSTEM_TEMPERATURE'
 
         if any(extension_name == ext.header.get('EXTNAME') for ext in hdul):
-            print(f"'{extension_name}' exists in the FITS file.")
+            log_message(f"'{extension_name}' exists in the FITS file.")
             hdul.close()
         else:
-            print(f"Extension '{extension_name}' does not exist in the FITS file.")
+            log_message(f"Extension '{extension_name}' does not exist in the FITS file.")
         
             hdul.close()
 
-    print("Attaching TSYS table")
+    log_message("Attaching TSYS table")
     for i in fitsfiles:
         append_tsys(antab_file,idifiles=i)
-    print("Finished attaching TSYS table")
+    log_message("Finished attaching TSYS table")
 
-    print("Attaching GAIN_CURVE table.")
+    log_message("Attaching GAIN_CURVE table.")
     append_gc(antab_file, fitsfiles[0])  # Append the GAIN_CURVE table
-    print("Finished attaching GAIN_CURVE table.")
+    log_message("Finished attaching GAIN_CURVE table.")
 
     # Convert gain curves and flag files
     log_message("Converting gain curves")
@@ -201,7 +203,7 @@ def attach_tsys_gc():
         # Close the FITS file
         hdul.close()
         
-    # # Print the filenames that do not contain the 'SYSTEM_TEMPERATURE' extension
+    # # log_message the filenames that do not contain the 'SYSTEM_TEMPERATURE' extension
     # log_message("Filenames with missing 'SYSTEM_TEMPERATURE' extension:", missing_extensions)
 
 
@@ -245,7 +247,7 @@ def makems(vis,splitvis=None):
         log_message("use CASA has been requested")
         log_message("Assuming TSYS and GC already attached to fitsfiles")
         if not os.path.exists(vis):
-            print(f"Making {vis}")
+            log_message(f"Making {vis}")
             importfitsidi(
                 vis= vis, fitsidifile=fitsfiles,scanreindexgap_s=15.0,constobsid=True)
             listfile = vis.replace(".ms","_listobs.list")
@@ -366,13 +368,13 @@ def get_number_of_threads():
     try:
         num_threads = os.cpu_count()
         if num_threads is None:
-            print("Could not determine the number of threads.")
+            log_message("Could not determine the number of threads.")
         else:
-            print(f"Number of threads (logical processors) available: {num_threads}")
+            log_message(f"Number of threads (logical processors) available: {num_threads}")
     except Exception as e:
-        print(f"An error occurred while determining the number of threads: {e}")
+        log_message(f"An error occurred while determining the number of threads: {e}")
     
-    return num_threads
+    return num_threads/8
 
 
 def flag_autocorr():
@@ -482,13 +484,13 @@ def execute_aoflagger_strategy():
     try:
 
         container = aoflagger_path
-        print(f"Checking for container at: {container}")
+        log_message(f"Checking for container at: {container}")
         if os.path.exists(container):
             log_message(f"Found {container}")
             singularity_bind = os.path.join(os.path.dirname(os.path.dirname(aoflagger_path)))
             log_message(f"You are binding singularity to {singularity_bind}")
         else:
-            print(f"{container} not found")
+            log_message(f"{container} not found")
     except FileNotFoundError:
         log_message(f"Singularity container not found",level="ERROR")
 
@@ -500,7 +502,7 @@ def execute_aoflagger_strategy():
     fringe_finder_keys = [key for key, value in fields.items() if value in fringe_finder]
     target_keys = [key for key, value in fields.items() if value in target]
     
-    # print(phase_calibrator_keys,fringe_finder_keys,target_keys)
+    # log_message(phase_calibrator_keys,fringe_finder_keys,target_keys)
 
     bright_strategy_phasecal = ['aoflagger', '-v', '-indirect-read', '-fields', ','.join(map(str, phase_calibrator_keys)), '-strategy', bright_source_strategy, vis]
     faint_strategy = ['aoflagger', '-v', '-indirect-read', '-fields',','.join(map(str, target_keys)), '-strategy', faint_source_strategy, vis]
@@ -648,8 +650,8 @@ def applycal_tsys_gc():
 
     table = list(cal_tables_dict.keys())
     interp = list(cal_tables_dict.values())
-    # print(table,interp)
-    # print(os.getcwd())
+    # log_message(table,interp)
+    # log_message(os.getcwd())
     log_message(f"======>>>Applying {table} using interpolation {interp}")  
     applycal(vis = vis, field = '',gaintable=table,interp = interp, parang = True,
     )
@@ -818,7 +820,7 @@ def applycal_mbd_fringe():
     ## Fix this by checking the position of the dictionary
     ## also dont hardcode the num spw
     nspw,nchan = get_msinfo()
-    print(f"Applying to spws: {nspw}")
+    log_message(f"Applying to spws: {nspw}")
     
     if use_casa == True:
         spwmap = [[],[],[], nspw*[0]]
@@ -1047,100 +1049,46 @@ def make_map(vis=vis,source=phase_calibrator):
             plot_fits(wsclean_fitsfile)
 
         
+def split_calibrated_ms():
 
 
+    from casatasks import split
 
+    msmd = msmdtool()
+    tb = tbtool()
 
+    tb.open(vis)
+    datacolumn = "corrected" if "CORRECTED_DATA" in tb.colnames() else "data"
+    tb.close()
 
+    targets = [t.strip() for t in target.split(',') if t.strip()]
+    sources_to_split = targets + [phase_calibrator.strip(), fringe_finder.strip()]
 
-# """
-# Yu need to remove this function and use wsclean here
-# """
+    log_message(f"Sources to split: {sources_to_split}")
 
+    # --- Get available sources in the MS ---
+    msmd.open(vis)
+    available_sources = msmd.namesforfields()
+    msmd.close()
 
-    
-#     msmd.open(vis)
-#     field_id = msmd.fieldsforname(source)[0]
-#     # print(field_id)
-#     msmd.close()
+    for src in sources_to_split:
+        if src not in available_sources:
+            log_message(f" Source '{src}' not found in {vis}, skipping.")
+            continue
 
+        outputvis = f"{src}.ms"
+        log_message(f"Splitting source '{src}' ---> {outputvis}")
 
-    
-#     dirty_maps_dir = os.path.join(working_directory,'dirty_maps')
-#     if not os.path.exists(dirty_maps_dir):
-#         os.makedirs(dirty_maps_dir)
+        split(
+            vis=vis,
+            outputvis=outputvis,
+            field=src,
+            datacolumn=datacolumn,
+        )
 
-#     imagename = f"{dirty_maps_dir}/{source}_dirty_map"
+        log_message(f"Saved source {src} as {outputvis}")
 
-#     if use_tclean == True:
-#         if not os.path.exists(imagename):
-#             tclean(vis= vis, imagename=imagename,imsize=imsize, cell=cell,
-#                 gridder='standard',weighting='natural',niter=0, field = str(field_id)
-#                 )
-#             fitsname = imagename+'.fits'
-#             exportfits(imagename=imagename+'.image',fitsimage=fitsname,overwrite=True)
-#             get_im_stats(fitsname)
-#             plot_fits(fitsname)
+    log_message("All specified sources processed successfully.")
 
-
-#     if use_wsclean == True:
-#         if not os.path.exists(imagename+'-image.fits'):
-                
-#             log_message(f"Making {imagename}")
-#             # Insert the verbosity flag at the specified position if verbosity is enabled
-            
-#             wsclean_cmd = ['wsclean', '-log-time','-size', f'{imsize[0]}', f'{imsize[1]}','-name',f'{imagename}','-scale', f'{cell}',\
-#                                 '-mgain', '0.8', '-niter', '0' , '-field',f'{field_id}',f'{vis}']
-#             insert_position = 2
-#             if verbosity==True:
-#                 wsclean_cmd.insert(insert_position, '-quiet')
-            
-#             run_wsclean(wsclean_sif,wsclean_cmd)
-
-#         wsclean_fitsfile = imagename+'-image.fits'
-#         get_im_stats(wsclean_fitsfile)
-#         plot_fits(wsclean_fitsfile)
-
-
-# def convert_to_list(*args):
-#     if all(isinstance(arg, str) for arg in args):
-#         return list(args)
-#     else:
-#         raise ValueError("All inputs must be strings")
-
-
-# @time_execution
-# def split_calibrated_ms(*args):
-
-#     sources = args
-    
-#     _,nchan = get_msinfo()
-#     nchan = nchan[0] # assuming equal chans per spw
-#     if nchan >=4:
-#         width = int(nchan)
-#     else:
-#         width = nchan
-    
-#     timebin = int(solint/10)
-
-#     for source in sources:
-#         outputvis = source+f'_{nchan}_chan_{timebin}s.ms'
-#         if not os.path.exists(outputvis):
-#             log_message(f"======>>>Splitting {vis} to {outputvis}")
-#             log_message(f"Averaging to width {width} channels and timebin {timebin} seconds ")
-#             #TODO : CHECK DATA COLUMN CAREFULLY - USING DATA IF FULLY CALIBRATED IN AIPS 
-#             # split(vis = vis_to_split, outputvis = outputvis, datacolumn='data',field=source) 
-#             split(vis = vis, outputvis = outputvis, datacolumn='corrected',field=source,
-#             width=width,timebin=str(timebin)+'s') 
-
-#             if make_dirty_map == True:
-#                 dirty_map(vis=outputvis,source=source)
-
-#         else:
-#             log_message(f"======>>>{outputvis} exists. Will not make a new one")
-#             if make_dirty_map == True:
-#                 dirty_map(vis=outputvis,source=source)
-
-    
 
        

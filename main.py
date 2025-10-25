@@ -222,6 +222,13 @@ if apply_bpass == True:
     except Exception as e:
         logging.warning(f"Encountered error {e}")
 
+if split_cal_ms == True:
+    try:
+        logging.info(f"Splitting calibrated ms")
+        split_calibrated_ms()
+    except Exception as e:
+        logging.warning(f"Encountered error {e}")
+
 if make_dirty_map == True:
     try:
         logging.info("Making dirty map")
