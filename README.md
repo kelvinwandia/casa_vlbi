@@ -13,7 +13,7 @@ This pipeline performs the following operations:
 2. **Generate ANTAB tables** containing system temperature and gain curve information.  
 3. **Download and apply JIVE scripts** to attach system and gain curves to the FITS files  
 4. **Download and apply JIVE scripts**
-5. ** Perform VLBI Calibration in CASA **
+5. **Perform VLBI Calibration in CASA**
 
 ---
 
